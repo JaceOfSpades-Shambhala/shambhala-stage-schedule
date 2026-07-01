@@ -8,6 +8,16 @@
     { id: "village", label: "Village" }
   ];
   const DAYS = ["Thursday", "Friday", "Saturday", "Sunday"];
+  const FESTIVAL_TIME_ZONE = "America/Vancouver";
+  const FESTIVAL_DATES = {
+    Thursday: "2026-07-23",
+    Friday: "2026-07-24",
+    Saturday: "2026-07-25",
+    Sunday: "2026-07-26"
+  };
+  // The source schedule gives start times, not explicit end times. This keeps
+  // a final listed set from being shown as active indefinitely.
+  const FINAL_SET_WINDOW_MINUTES = 180;
   const data = window.SCHEDULE_DATA || {};
   const elements = {
     stageTabs: document.querySelector("#stage-tabs"),
@@ -19,7 +29,11 @@
     setList: document.querySelector("#set-list"),
     noResults: document.querySelector("#no-results"),
     search: document.querySelector("#artist-search"),
-    copyLink: document.querySelector("#copy-link")
+    copyLink: document.querySelector("#copy-link"),
+    nowPlaying: document.querySelector("#now-playing"),
+    nowPlayingLabel: document.querySelector("#now-playing-label"),
+    nowPlayingTitle: document.querySelector("#now-playing-title"),
+    nowPlayingDetails: document.querySelector("#now-playing-details")
   };
   const appState = { stage: "amp", day: "Thursday", term: "" };
 
@@ -35,7 +49,7 @@
     return String(value ?? "")
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[’‘]/g, "'")
+      .replace(/[\u2019\u2018]/g, "'")
       .toLowerCase()
       .trim();
   }
@@ -112,8 +126,6 @@
     });
   }
 
-  // Deliberately reads every entry from the schedule data, rather than the
-  // currently selected stage/day. This avoids search being limited by tabs.
   function getGlobalMatches(term) {
     const query = normaliseForSearch(term);
     if (!query) return [];
@@ -153,7 +165,7 @@
     if (day && stage) {
       const meta = document.createElement("span");
       meta.className = "set-meta";
-      meta.textContent = `${day} · ${stage}`;
+      meta.textContent = `${day} - ${stage}`;
       details.append(meta);
     }
 
@@ -173,7 +185,7 @@
     if (term) {
       const matches = getGlobalMatches(term);
       elements.dayLabel.textContent = "ALL DAYS & STAGES";
-      elements.scheduleTitle.textContent = `Search results for “${term}”`;
+      elements.scheduleTitle.textContent = `Search results for "${term}"`;
       elements.scheduleNote.textContent = `${matches.length} matching set${matches.length === 1 ? "" : "s"} across all listed stages and days.`;
       elements.noResults.textContent = "No matching artist was found across the listed stages and days.";
       matches.forEach(appendSet);
@@ -188,9 +200,162 @@
     entries.forEach(([time, artist]) => appendSet({ time, artist }));
   }
 
+  function parseSetTime(time) {
+    const match = String(time).match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!match) return 0;
+
+    let hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const meridiem = match[3].toUpperCase();
+    if (meridiem === "AM" && hour === 12) hour = 0;
+    if (meridiem === "PM" && hour !== 12) hour += 12;
+    return hour * 60 + minute;
+  }
+
+  function dateToSerial(date) {
+    const [year, month, day] = date.split("-").map(Number);
+    return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+  }
+
+  function addDays(date, days) {
+    const [year, month, day] = date.split("-").map(Number);
+    const result = new Date(Date.UTC(year, month - 1, day + days));
+    return result.toISOString().slice(0, 10);
+  }
+
+  function formatDate(date) {
+    const [year, month, day] = date.split("-").map(Number);
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "UTC",
+      weekday: "short",
+      month: "short",
+      day: "numeric"
+    }).format(new Date(Date.UTC(year, month - 1, day)));
+  }
+
+  function buildStageTimeline(stageId) {
+    const timeline = [];
+
+    DAYS.forEach(day => {
+      const entries = data[day]?.[stageId] || [];
+      const baseDate = FESTIVAL_DATES[day];
+      if (!baseDate) return;
+
+      let rolloverDays = 0;
+      let previousMinutes = -1;
+
+      entries.forEach(([time, artist]) => {
+        const minutes = parseSetTime(time);
+        if (previousMinutes !== -1 && minutes < previousMinutes) rolloverDays += 1;
+        previousMinutes = minutes;
+
+        const date = addDays(baseDate, rolloverDays);
+        timeline.push({
+          day,
+          date,
+          time,
+          artist,
+          minutes,
+          key: dateToSerial(date) * 1440 + minutes
+        });
+      });
+    });
+
+    return timeline.sort((a, b) => a.key - b.key);
+  }
+
+  function getFestivalNow() {
+    const preview = new URLSearchParams(window.location.search).get("preview");
+    const previewMatch = preview && preview.match(/^(2026-07-\d{2})T(\d{2}):(\d{2})$/);
+    if (previewMatch) {
+      const date = previewMatch[1];
+      const hour = Number(previewMatch[2]);
+      const minute = Number(previewMatch[3]);
+      return { date, minutes: hour * 60 + minute, isPreview: true };
+    }
+
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: FESTIVAL_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts
+      .filter(part => part.type !== "literal")
+      .map(part => [part.type, part.value]));
+    const hour = Number(values.hour) % 24;
+    const minute = Number(values.minute);
+    return {
+      date: `${values.year}-${values.month}-${values.day}`,
+      minutes: hour * 60 + minute,
+      isPreview: false
+    };
+  }
+
+  function getNowPlayingStatus(stageId) {
+    const now = getFestivalNow();
+    const nowKey = dateToSerial(now.date) * 1440 + now.minutes;
+    const timeline = buildStageTimeline(stageId);
+    const nextIndex = timeline.findIndex(item => item.key > nowKey);
+    const previous = nextIndex === -1 ? timeline.at(-1) : timeline[nextIndex - 1];
+    const next = nextIndex === -1 ? null : timeline[nextIndex];
+
+    if (previous && previous.key <= nowKey) {
+      const followsSameScheduleDay = next && previous.day === next.day;
+      if (followsSameScheduleDay) {
+        return { type: "active", current: previous, next, now };
+      }
+
+      const minutesSinceFinalStart = nowKey - previous.key;
+      if (minutesSinceFinalStart <= FINAL_SET_WINDOW_MINUTES) {
+        return { type: "final", current: previous, next, now };
+      }
+    }
+
+    if (next) return { type: "upcoming", next, now };
+    return { type: "unavailable", now };
+  }
+
+  function renderNowPlaying() {
+    const stageLabel = titleCaseStage(appState.stage);
+    const status = getNowPlayingStatus(appState.stage);
+    const timeBasis = status.now.isPreview ? "Preview time (Salmo, BC)" : "Salmo, BC time";
+
+    elements.nowPlaying.dataset.status = status.type;
+
+    if (status.type === "active") {
+      elements.nowPlayingLabel.textContent = `NOW PLAYING - ${stageLabel.toUpperCase()}`;
+      elements.nowPlayingTitle.textContent = status.current.artist;
+      elements.nowPlayingDetails.textContent = `Started at ${status.current.time} - Up next: ${status.next.artist} at ${status.next.time} - ${timeBasis}`;
+      return;
+    }
+
+    if (status.type === "final") {
+      elements.nowPlayingLabel.textContent = `FINAL LISTED SET - ${stageLabel.toUpperCase()}`;
+      elements.nowPlayingTitle.textContent = status.current.artist;
+      elements.nowPlayingDetails.textContent = `Started at ${status.current.time}. The source schedule does not list an end time - ${timeBasis}`;
+      return;
+    }
+
+    if (status.type === "upcoming") {
+      elements.nowPlayingLabel.textContent = `NO SET SCHEDULED RIGHT NOW - ${stageLabel.toUpperCase()}`;
+      elements.nowPlayingTitle.textContent = `Next: ${status.next.artist}`;
+      elements.nowPlayingDetails.textContent = `${status.next.day} schedule - ${formatDate(status.next.date)} at ${status.next.time} - ${timeBasis}`;
+      return;
+    }
+
+    elements.nowPlayingLabel.textContent = `NO MORE LISTED SETS - ${stageLabel.toUpperCase()}`;
+    elements.nowPlayingTitle.textContent = "No scheduled set right now";
+    elements.nowPlayingDetails.textContent = `The live status is only based on the 2026 schedule listed in this guide - ${timeBasis}`;
+  }
+
   function render() {
     renderTabs();
     renderSchedule();
+    renderNowPlaying();
   }
 
   function handleSearch(event) {
@@ -198,7 +363,6 @@
     renderSchedule();
   }
 
-  // input covers typing/pasting; search catches the clear button on mobile browsers.
   elements.search.addEventListener("input", handleSearch);
   elements.search.addEventListener("search", handleSearch);
 
@@ -219,8 +383,13 @@
     if (stage && stage.id !== appState.stage) switchStage(stage.id);
   });
 
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) renderNowPlaying();
+  });
+
   getInitialState();
   render();
+  window.setInterval(renderNowPlaying, 30000);
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
