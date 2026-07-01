@@ -32,10 +32,12 @@
   }
 
   function normaliseForSearch(value) {
-    return String(value)
+    return String(value ?? "")
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
+      .replace(/[’‘]/g, "'")
+      .toLowerCase()
+      .trim();
   }
 
   function clearSearch() {
@@ -110,21 +112,25 @@
     });
   }
 
+  // Deliberately reads every entry from the schedule data, rather than the
+  // currently selected stage/day. This avoids search being limited by tabs.
   function getGlobalMatches(term) {
-    const query = normaliseForSearch(term.trim());
+    const query = normaliseForSearch(term);
     if (!query) return [];
 
     const matches = [];
-    DAYS.forEach(day => {
-      STAGES.forEach(stage => {
-        const entries = data[day]?.[stage] || [];
-        entries.forEach(([time, artist]) => {
+    Object.entries(data).forEach(([day, stages]) => {
+      Object.entries(stages || {}).forEach(([stageId, entries]) => {
+        const stageLabel = titleCaseStage(stageId);
+        (entries || []).forEach(entry => {
+          const [time, artist] = entry;
           if (normaliseForSearch(artist).includes(query)) {
-            matches.push({ day, stage: stage.label, time, artist });
+            matches.push({ day, stage: stageLabel, time, artist });
           }
         });
       });
     });
+
     return matches;
   }
 
@@ -159,13 +165,12 @@
     const stageLabel = titleCaseStage(appState.stage);
     const entries = data[appState.day]?.[appState.stage] || [];
     const term = appState.term.trim();
-    const isGlobalSearch = term.length > 0;
 
     document.body.className = `stage-${appState.stage}`;
     elements.stageTitle.textContent = stageLabel;
     elements.setList.innerHTML = "";
 
-    if (isGlobalSearch) {
+    if (term) {
       const matches = getGlobalMatches(term);
       elements.dayLabel.textContent = "ALL DAYS & STAGES";
       elements.scheduleTitle.textContent = `Search results for “${term}”`;
@@ -179,9 +184,8 @@
     elements.dayLabel.textContent = appState.day.toUpperCase();
     elements.scheduleTitle.textContent = `${stageLabel} set times`;
     elements.scheduleNote.textContent = `${entries.length} listed set${entries.length === 1 ? "" : "s"}. All times are shown as published.`;
-    elements.noResults.textContent = "No matching artist was found for this stage and day.";
-    entries.forEach(([time, artist]) => appendSet({ time, artist }));
     elements.noResults.hidden = true;
+    entries.forEach(([time, artist]) => appendSet({ time, artist }));
   }
 
   function render() {
@@ -189,10 +193,14 @@
     renderSchedule();
   }
 
-  elements.search.addEventListener("input", event => {
-    appState.term = event.target.value;
+  function handleSearch(event) {
+    appState.term = event.target.value || "";
     renderSchedule();
-  });
+  }
+
+  // input covers typing/pasting; search catches the clear button on mobile browsers.
+  elements.search.addEventListener("input", handleSearch);
+  elements.search.addEventListener("search", handleSearch);
 
   elements.copyLink.addEventListener("click", async () => {
     try {
