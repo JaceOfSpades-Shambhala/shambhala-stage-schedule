@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111321">
-  <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times list.">
+  <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
   <title>Shambhala 2026 Stage Set Times</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
   <a class="skip-link" href="#schedule">Skip to schedule</a>
@@ -18,7 +18,7 @@
     <header class="hero">
       <p class="eyebrow">FAN-MADE NFC SCHEDULE GUIDE</p>
       <h1><span id="stage-title">AMP</span><span class="title-subtitle">2026 Set Times</span></h1>
-      <p class="intro">Tap a stage, pick a day, and keep the set times close.</p>
+      <p class="intro">Tap a stage, pick a day, or search every listed artist.</p>
       <div class="notice" role="note">
         Unofficial guide. Set times can change - confirm important plans in the official festival schedule or app.
       </div>
@@ -35,7 +35,7 @@
       </div>
       <label class="search-wrap" for="artist-search">
         <span>Search all stages and days</span>
-        <input id="artist-search" type="search" placeholder="Artist name (all stages)" autocomplete="off">
+        <input id="artist-search" type="search" placeholder="Artist name (all stages)" autocomplete="off" enterkeyhint="search">
       </label>
     </section>
 
@@ -49,7 +49,7 @@
       </div>
       <p id="schedule-note" class="schedule-note"></p>
       <ol id="set-list" class="set-list"></ol>
-      <p id="no-results" class="empty-state" hidden>No matching artist was found for this stage and day.</p>
+      <p id="no-results" class="empty-state" hidden>No matching artist was found across the listed stages and days.</p>
     </section>
 
     <footer>
@@ -58,7 +58,7 @@
     </footer>
   </main>
 
-  <script src="schedule-data.js"></script>
-  <script src="app.js"></script>
+  <script src="schedule-data.js?v=4"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
