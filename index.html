@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111321">
+  <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
+  <title>Shambhala 2026 Stage Set Times</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#schedule">Skip to schedule</a>
+  <div class="aurora aurora-one" aria-hidden="true"></div>
+  <div class="aurora aurora-two" aria-hidden="true"></div>
+
+  <main class="shell">
+    <header class="hero">
+      <p class="eyebrow">FAN-MADE NFC SCHEDULE GUIDE</p>
+      <h1><span id="stage-title">AMP</span><span class="title-subtitle">2026 Set Times</span></h1>
+      <p class="intro">Tap a stage, pick a day, and keep the set times close.</p>
+      <div class="notice" role="note">
+        Unofficial guide. Set times can change - confirm important plans in the official festival schedule or app.
+      </div>
+    </header>
+
+    <section class="controls" aria-label="Schedule filters">
+      <div>
+        <p class="control-label">Stage</p>
+        <nav id="stage-tabs" class="tabs stage-tabs" aria-label="Select a stage"></nav>
+      </div>
+      <div>
+        <p class="control-label">Day</p>
+        <nav id="day-tabs" class="tabs day-tabs" aria-label="Select a day"></nav>
+      </div>
+      <label class="search-wrap" for="artist-search">
+        <span>Search this stage</span>
+        <input id="artist-search" type="search" placeholder="Artist name" autocomplete="off">
+      </label>
+    </section>
+
+    <section id="schedule" class="schedule-card" aria-live="polite">
+      <div class="schedule-heading">
+        <div>
+          <p id="day-label" class="eyebrow">THURSDAY</p>
+          <h2 id="schedule-title">AMP set times</h2>
+        </div>
+        <button id="copy-link" class="copy-link" type="button">Copy this stage link</button>
+      </div>
+      <p id="schedule-note" class="schedule-note"></p>
+      <ol id="set-list" class="set-list"></ol>
+      <p id="no-results" class="empty-state" hidden>No matching artist was found for this stage and day.</p>
+    </section>
+
+    <footer>
+      <p>Made as a fan project for Shambhala 2026. Schedule information was transcribed from the official downloadable set-times schedule.</p>
+      <p><a href="https://www.shambhalamusicfestival.com/lineup" target="_blank" rel="noreferrer">Open the official lineup and schedule</a></p>
+    </footer>
+  </main>
+
+  <script src="schedule-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
