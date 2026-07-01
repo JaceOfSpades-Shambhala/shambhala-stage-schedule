@@ -31,6 +31,18 @@
     return Array.isArray(data[day]?.[stage]) && data[day][stage].length > 0;
   }
 
+  function normaliseForSearch(value) {
+    return String(value)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  }
+
+  function clearSearch() {
+    appState.term = "";
+    elements.search.value = "";
+  }
+
   function getInitialState() {
     const hash = decodeURIComponent(window.location.hash.replace(/^#/, "")).toLowerCase();
     const matchedStage = STAGES.find(stage => stage.id === hash);
@@ -57,8 +69,7 @@
     if (!isAvailable(appState.day, appState.stage)) {
       appState.day = DAYS.find(day => isAvailable(day, appState.stage)) || "Friday";
     }
-    appState.term = "";
-    elements.search.value = "";
+    clearSearch();
     updateUrl();
     render();
   }
@@ -66,6 +77,7 @@
   function switchDay(day) {
     if (!isAvailable(day, appState.stage)) return;
     appState.day = day;
+    clearSearch();
     updateUrl();
     render();
   }
@@ -98,26 +110,78 @@
     });
   }
 
+  function getGlobalMatches(term) {
+    const query = normaliseForSearch(term.trim());
+    if (!query) return [];
+
+    const matches = [];
+    DAYS.forEach(day => {
+      STAGES.forEach(stage => {
+        const entries = data[day]?.[stage] || [];
+        entries.forEach(([time, artist]) => {
+          if (normaliseForSearch(artist).includes(query)) {
+            matches.push({ day, stage: stage.label, time, artist });
+          }
+        });
+      });
+    });
+    return matches;
+  }
+
+  function appendSet({ time, artist, day, stage }) {
+    const item = document.createElement("li");
+    item.className = "set";
+
+    const timeElement = document.createElement("span");
+    timeElement.className = "set-time";
+    timeElement.textContent = time;
+
+    const details = document.createElement("span");
+    details.className = "set-details";
+
+    const artistElement = document.createElement("span");
+    artistElement.className = "set-artist";
+    artistElement.textContent = artist;
+    details.append(artistElement);
+
+    if (day && stage) {
+      const meta = document.createElement("span");
+      meta.className = "set-meta";
+      meta.textContent = `${day} · ${stage}`;
+      details.append(meta);
+    }
+
+    item.append(timeElement, details);
+    elements.setList.append(item);
+  }
+
   function renderSchedule() {
     const stageLabel = titleCaseStage(appState.stage);
     const entries = data[appState.day]?.[appState.stage] || [];
-    const term = appState.term.trim().toLowerCase();
-    const filtered = term ? entries.filter(([, artist]) => artist.toLowerCase().includes(term)) : entries;
+    const term = appState.term.trim();
+    const isGlobalSearch = term.length > 0;
 
     document.body.className = `stage-${appState.stage}`;
     elements.stageTitle.textContent = stageLabel;
+    elements.setList.innerHTML = "";
+
+    if (isGlobalSearch) {
+      const matches = getGlobalMatches(term);
+      elements.dayLabel.textContent = "ALL DAYS & STAGES";
+      elements.scheduleTitle.textContent = `Search results for “${term}”`;
+      elements.scheduleNote.textContent = `${matches.length} matching set${matches.length === 1 ? "" : "s"} across all listed stages and days.`;
+      elements.noResults.textContent = "No matching artist was found across the listed stages and days.";
+      matches.forEach(appendSet);
+      elements.noResults.hidden = matches.length !== 0;
+      return;
+    }
+
     elements.dayLabel.textContent = appState.day.toUpperCase();
     elements.scheduleTitle.textContent = `${stageLabel} set times`;
     elements.scheduleNote.textContent = `${entries.length} listed set${entries.length === 1 ? "" : "s"}. All times are shown as published.`;
-    elements.setList.innerHTML = "";
-
-    filtered.forEach(([time, artist]) => {
-      const item = document.createElement("li");
-      item.className = "set";
-      item.innerHTML = `<span class="set-time">${time}</span><span class="set-artist">${artist}</span>`;
-      elements.setList.append(item);
-    });
-    elements.noResults.hidden = filtered.length !== 0;
+    elements.noResults.textContent = "No matching artist was found for this stage and day.";
+    entries.forEach(([time, artist]) => appendSet({ time, artist }));
+    elements.noResults.hidden = true;
   }
 
   function render() {
