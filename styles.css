@@ -47,6 +47,7 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.15rem, 11vw, 4.2
 .now-playing-label { margin: 0; color: var(--accent); font-size: .73rem; font-weight: 900; letter-spacing: .11em; }
 .now-playing-title { margin: .35rem 0 .22rem; font-size: clamp(1.25rem, 5vw, 1.72rem); line-height: 1.08; letter-spacing: -.025em; }
 .now-playing-details { margin: 0; color: var(--muted); font-size: .86rem; }
+.now-playing-next { color: var(--ink); font-weight: 900; }
 .controls { display: grid; gap: 1.2rem; padding: 1.15rem; border-radius: 1.1rem; }
 .controls, .controls > div, .search-wrap, .tabs { min-width: 0; max-width: 100%; }
 .control-label { margin-bottom: .55rem; color: var(--muted); font-size: .74rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
@@ -70,10 +71,13 @@ h2 { margin-bottom: 0; font-size: clamp(1.4rem, 5.6vw, 2rem); letter-spacing: -.
 .set-list { margin: 0; padding: 0; list-style: none; }
 .set { display: grid; grid-template-columns: minmax(5.4rem, auto) minmax(0, 1fr); gap: .8rem; padding: .84rem 1.2rem; border-bottom: 1px solid var(--line); }
 .set:last-child { border-bottom: none; }
+.set-current { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, transparent), rgba(255, 255, 255, .03)); box-shadow: inset 3px 0 0 var(--accent); }
+.set-current .set-time { color: #fff; }
 .set-time { color: var(--accent); font-variant-numeric: tabular-nums; font-size: .91rem; font-weight: 850; white-space: nowrap; }
 .set-details { min-width: 0; display: grid; gap: .16rem; }
 .set-artist { overflow-wrap: anywhere; font-size: 1rem; font-weight: 775; letter-spacing: .005em; }
 .set-meta { color: var(--muted); font-size: .78rem; font-weight: 650; }
+.now-badge { width: max-content; padding: .12rem .42rem; border-radius: 999px; color: #161120; background: var(--accent); font-size: .66rem; font-weight: 950; letter-spacing: .08em; }
 .empty-state { padding: 1.2rem; margin: 0; color: var(--muted); }
 footer { padding: 1.65rem .45rem 0; color: var(--muted); font-size: .8rem; }
 footer p:last-child { margin-bottom: 0; }
