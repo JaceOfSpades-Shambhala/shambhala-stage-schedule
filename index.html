@@ -7,7 +7,7 @@
   <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
   <title>Shambhala 2026 Stage Set Times</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
   <a class="skip-link" href="#schedule">Skip to schedule</a>
@@ -23,6 +23,15 @@
         Unofficial guide. Set times can change - confirm important plans in the official festival schedule or app.
       </div>
     </header>
+
+    <section id="now-playing" class="now-playing" data-status="checking" aria-live="polite" aria-atomic="true">
+      <div class="now-playing-topline">
+        <span class="status-dot" aria-hidden="true"></span>
+        <p id="now-playing-label" class="now-playing-label">NOW AT AMP</p>
+      </div>
+      <h2 id="now-playing-title" class="now-playing-title">Checking the schedule...</h2>
+      <p id="now-playing-details" class="now-playing-details">Using Salmo, BC time.</p>
+    </section>
 
     <section class="controls" aria-label="Schedule filters">
       <div>
@@ -54,11 +63,12 @@
 
     <footer>
       <p>Made as a fan project for Shambhala 2026. Schedule information was transcribed from the official downloadable set-times schedule.</p>
+      <p>"Now playing" uses the clock on your device and displays it in Salmo, BC time. Open the site once while connected so it can be used offline later.</p>
       <p><a href="https://www.shambhalamusicfestival.com/lineup" target="_blank" rel="noreferrer">Open the official lineup and schedule</a></p>
     </footer>
   </main>
 
-  <script src="schedule-data.js?v=4"></script>
-  <script src="app.js?v=4"></script>
+  <script src="schedule-data.js?v=5"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
