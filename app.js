@@ -146,9 +146,13 @@
     return matches;
   }
 
-  function appendSet({ time, artist, day, stage }) {
+  function appendSet({ time, artist, day, stage, isCurrent = false }) {
     const item = document.createElement("li");
     item.className = "set";
+    if (isCurrent) {
+      item.classList.add("set-current");
+      item.setAttribute("aria-current", "true");
+    }
 
     const timeElement = document.createElement("span");
     timeElement.className = "set-time";
@@ -161,6 +165,13 @@
     artistElement.className = "set-artist";
     artistElement.textContent = artist;
     details.append(artistElement);
+
+    if (isCurrent) {
+      const badge = document.createElement("span");
+      badge.className = "now-badge";
+      badge.textContent = "NOW";
+      details.append(badge);
+    }
 
     if (day && stage) {
       const meta = document.createElement("span");
@@ -193,11 +204,18 @@
       return;
     }
 
+    const status = getNowPlayingStatus(appState.stage);
+    const current = ["active", "final"].includes(status.type) ? status.current : null;
+
     elements.dayLabel.textContent = appState.day.toUpperCase();
     elements.scheduleTitle.textContent = `${stageLabel} set times`;
     elements.scheduleNote.textContent = `${entries.length} listed set${entries.length === 1 ? "" : "s"}. All times are shown as published.`;
     elements.noResults.hidden = true;
-    entries.forEach(([time, artist]) => appendSet({ time, artist }));
+    entries.forEach(([time, artist]) => appendSet({
+      time,
+      artist,
+      isCurrent: Boolean(current && current.day === appState.day && current.time === time && current.artist === artist)
+    }));
   }
 
   function parseSetTime(time) {
@@ -231,6 +249,36 @@
       month: "short",
       day: "numeric"
     }).format(new Date(Date.UTC(year, month - 1, day)));
+  }
+
+  function formatStartsIn(minutes) {
+    const safeMinutes = Math.max(0, minutes);
+    if (safeMinutes < 1) return "Starts now";
+
+    const hours = Math.floor(safeMinutes / 60);
+    const remainingMinutes = safeMinutes % 60;
+    if (hours && remainingMinutes) return `Starts in ${hours} hr ${remainingMinutes} min`;
+    if (hours) return `Starts in ${hours} hr`;
+    return `Starts in ${remainingMinutes} min`;
+  }
+
+  function nowToKey(now) {
+    return dateToSerial(now.date) * 1440 + now.minutes;
+  }
+
+  function setNowPlayingDetails(parts) {
+    elements.nowPlayingDetails.textContent = "";
+    parts.forEach(part => {
+      if (typeof part === "string") {
+        elements.nowPlayingDetails.append(document.createTextNode(part));
+        return;
+      }
+
+      const element = document.createElement(part.tag || "span");
+      element.className = part.className || "";
+      element.textContent = part.text;
+      elements.nowPlayingDetails.append(element);
+    });
   }
 
   function buildStageTimeline(stageId) {
@@ -297,7 +345,7 @@
 
   function getNowPlayingStatus(stageId) {
     const now = getFestivalNow();
-    const nowKey = dateToSerial(now.date) * 1440 + now.minutes;
+    const nowKey = nowToKey(now);
     const timeline = buildStageTimeline(stageId);
     const nextIndex = timeline.findIndex(item => item.key > nowKey);
     const previous = nextIndex === -1 ? timeline.at(-1) : timeline[nextIndex - 1];
@@ -306,7 +354,7 @@
     if (previous && previous.key <= nowKey) {
       const followsSameScheduleDay = next && previous.day === next.day;
       if (followsSameScheduleDay) {
-        return { type: "active", current: previous, next, now };
+        return { type: "active", current: previous, next, now, minutesUntilNext: next.key - nowKey };
       }
 
       const minutesSinceFinalStart = nowKey - previous.key;
@@ -315,7 +363,7 @@
       }
     }
 
-    if (next) return { type: "upcoming", next, now };
+    if (next) return { type: "upcoming", next, now, minutesUntilNext: next.key - nowKey };
     return { type: "unavailable", now };
   }
 
@@ -329,33 +377,45 @@
     if (status.type === "active") {
       elements.nowPlayingLabel.textContent = `NOW PLAYING - ${stageLabel.toUpperCase()}`;
       elements.nowPlayingTitle.textContent = status.current.artist;
-      elements.nowPlayingDetails.textContent = `Started at ${status.current.time} - Up next: ${status.next.artist} at ${status.next.time} - ${timeBasis}`;
+      setNowPlayingDetails([
+        `Started at ${status.current.time} - Up next: `,
+        { tag: "strong", className: "now-playing-next", text: status.next.artist },
+        ` at ${status.next.time} - ${timeBasis}`
+      ]);
       return;
     }
 
     if (status.type === "final") {
       elements.nowPlayingLabel.textContent = `FINAL LISTED SET - ${stageLabel.toUpperCase()}`;
       elements.nowPlayingTitle.textContent = status.current.artist;
-      elements.nowPlayingDetails.textContent = `Started at ${status.current.time}. The source schedule does not list an end time - ${timeBasis}`;
+      setNowPlayingDetails([`Started at ${status.current.time}. The source schedule does not list an end time - ${timeBasis}`]);
       return;
     }
 
     if (status.type === "upcoming") {
       elements.nowPlayingLabel.textContent = `NO SET SCHEDULED RIGHT NOW - ${stageLabel.toUpperCase()}`;
       elements.nowPlayingTitle.textContent = `Next: ${status.next.artist}`;
-      elements.nowPlayingDetails.textContent = `${status.next.day} schedule - ${formatDate(status.next.date)} at ${status.next.time} - ${timeBasis}`;
+      setNowPlayingDetails([
+        `${status.next.day} schedule - ${formatDate(status.next.date)} at ${status.next.time} - `,
+        { tag: "strong", className: "now-playing-next", text: formatStartsIn(status.minutesUntilNext) },
+        ` - ${timeBasis}`
+      ]);
       return;
     }
 
     elements.nowPlayingLabel.textContent = `NO MORE LISTED SETS - ${stageLabel.toUpperCase()}`;
     elements.nowPlayingTitle.textContent = "No scheduled set right now";
-    elements.nowPlayingDetails.textContent = `The live status is only based on the 2026 schedule listed in this guide - ${timeBasis}`;
+    setNowPlayingDetails([`The live status is only based on the 2026 schedule listed in this guide - ${timeBasis}`]);
+  }
+
+  function renderLiveStatus() {
+    renderSchedule();
+    renderNowPlaying();
   }
 
   function render() {
     renderTabs();
-    renderSchedule();
-    renderNowPlaying();
+    renderLiveStatus();
   }
 
   function handleSearch(event) {
@@ -384,12 +444,12 @@
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) renderNowPlaying();
+    if (!document.hidden) renderLiveStatus();
   });
 
   getInitialState();
   render();
-  window.setInterval(renderNowPlaying, 30000);
+  window.setInterval(renderLiveStatus, 30000);
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
