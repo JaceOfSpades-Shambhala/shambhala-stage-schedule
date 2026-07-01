@@ -1,10 +1,10 @@
-const CACHE_NAME = "stage-schedule-v4";
+const CACHE_NAME = "stage-schedule-v5";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=4",
-  "./schedule-data.js?v=4",
-  "./app.js?v=4",
+  "./styles.css?v=5",
+  "./schedule-data.js?v=5",
+  "./app.js?v=5",
   "./manifest.webmanifest"
 ];
 
@@ -22,8 +22,8 @@ self.addEventListener("activate", event => {
   self.clients.claim();
 });
 
-// Prefer fresh files when the phone is online; use the saved copy only when it
-// is not. This prevents a previous version of the search code being held in cache.
+// Prefer fresh files while online, but retain a complete cached copy for
+// offline use after the first successful visit.
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
 
