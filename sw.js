@@ -1,10 +1,10 @@
-const CACHE_NAME = "stage-schedule-v5";
+const CACHE_NAME = "stage-schedule-v6";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=5",
-  "./schedule-data.js?v=5",
-  "./app.js?v=5",
+  "./styles.css?v=6",
+  "./schedule-data.js?v=6",
+  "./app.js?v=6",
   "./manifest.webmanifest"
 ];
 
