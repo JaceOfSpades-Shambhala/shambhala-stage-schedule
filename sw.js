@@ -1,4 +1,4 @@
-const CACHE_NAME = "stage-schedule-v1";
+const CACHE_NAME = "stage-schedule-v2";
 const ASSETS = ["./", "./index.html", "./styles.css", "./schedule-data.js", "./app.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", event => {
