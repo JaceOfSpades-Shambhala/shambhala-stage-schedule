@@ -32,6 +32,9 @@ a:hover { color: #ffb5d9; }
 .shell { width: min(calc(100% - 2rem), 720px); margin: 0 auto; padding: 3.25rem 0 2.5rem; }
 .hero { margin-bottom: 1.15rem; }
 .eyebrow { margin: 0 0 .42rem; color: var(--accent); font-size: .74rem; font-weight: 900; letter-spacing: .13em; }
+.camp-eyebrow { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .28rem; row-gap: .16rem; }
+.camp-eyebrow a { color: #fff; text-underline-offset: .2rem; }
+.camp-eyebrow a:hover { color: #ffb5d9; }
 h1, h2, p { margin-top: 0; }
 h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.15rem, 11vw, 4.25rem); line-height: .93; letter-spacing: -.052em; }
 .title-subtitle { display: block; color: var(--muted); font-size: .42em; letter-spacing: -.025em; margin-top: .3rem; }
