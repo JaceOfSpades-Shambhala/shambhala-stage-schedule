@@ -71,3 +71,61 @@ body.stage-pagoda { --accent: #6573d7; --accent-deep: #3947a0; }
 body.stage-village { --accent: #a981e1; --accent-deep: #7654af; }
 @media (min-width: 650px) { .shell { padding-top: 5rem; } .controls { padding: 1.35rem; } .schedule-heading { padding: 1.6rem 1.55rem 1.15rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem 1fr; padding-left: 1.55rem; padding-right: 1.55rem; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tab { transition: none; } }
+/* Mobile layout fix: prevent the stage tabs from widening the controls panel. */
+body {
+  overflow-x: hidden;
+}
+
+.shell {
+  width: min(calc(100% - 2rem), 720px);
+}
+
+.controls,
+.controls > div,
+.search-wrap,
+.tabs {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.stage-tabs,
+.day-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: visible;
+}
+
+.tabs .tab {
+  min-width: 0;
+  width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+
+.set {
+  grid-template-columns: minmax(5.4rem, auto) minmax(0, 1fr);
+}
+
+.set-artist {
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 520px) {
+  .stage-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .day-tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .schedule-heading {
+    flex-direction: column;
+  }
+
+  .copy-link {
+    width: 100%;
+  }
+}
