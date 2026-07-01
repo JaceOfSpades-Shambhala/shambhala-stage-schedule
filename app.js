@@ -30,6 +30,7 @@
     noResults: document.querySelector("#no-results"),
     search: document.querySelector("#artist-search"),
     copyLink: document.querySelector("#copy-link"),
+    campLocation: document.querySelector("#camp-location-link"),
     nowPlaying: document.querySelector("#now-playing"),
     nowPlayingLabel: document.querySelector("#now-playing-label"),
     nowPlayingTitle: document.querySelector("#now-playing-title"),
@@ -43,6 +44,31 @@
 
   function isAvailable(day, stage) {
     return Array.isArray(data[day]?.[stage]) && data[day][stage].length > 0;
+  }
+
+  function updateCampLocationLink() {
+    if (!elements.campLocation) return;
+
+    const config = window.CAMP_LOCATION || {};
+    const googleMapsUrl = String(config.googleMapsUrl || "").trim();
+    const latitude = String(config.latitude || "").trim();
+    const longitude = String(config.longitude || "").trim();
+
+    if (googleMapsUrl) {
+      elements.campLocation.href = googleMapsUrl;
+      elements.campLocation.title = "Open Camp Hexadecibel in Google Maps";
+      return;
+    }
+
+    if (latitude && longitude) {
+      const query = encodeURIComponent(`${latitude},${longitude}`);
+      elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${query}`;
+      elements.campLocation.title = "Open Camp Hexadecibel in Google Maps";
+      return;
+    }
+
+    elements.campLocation.href = "https://www.google.com/maps/search/?api=1&query=Shambhala%20Music%20Festival%20Salmo%20BC";
+    elements.campLocation.title = "Camp coordinates will be added when available";
   }
 
   function normaliseForSearch(value) {
@@ -448,6 +474,7 @@
   });
 
   getInitialState();
+  updateCampLocationLink();
   render();
   window.setInterval(renderLiveStatus, 30000);
 
