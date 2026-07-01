@@ -71,6 +71,7 @@ body.stage-pagoda { --accent: #6573d7; --accent-deep: #3947a0; }
 body.stage-village { --accent: #a981e1; --accent-deep: #7654af; }
 @media (min-width: 650px) { .shell { padding-top: 5rem; } .controls { padding: 1.35rem; } .schedule-heading { padding: 1.6rem 1.55rem 1.15rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem 1fr; padding-left: 1.55rem; padding-right: 1.55rem; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tab { transition: none; } }
+
 /* Mobile layout fix: prevent the stage tabs from widening the controls panel. */
 body {
   overflow-x: hidden;
@@ -128,4 +129,18 @@ body {
   .copy-link {
     width: 100%;
   }
+}
+
+
+/* Global artist search results */
+.set-details {
+  min-width: 0;
+  display: grid;
+  gap: .16rem;
+}
+
+.set-meta {
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 650;
 }
