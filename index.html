@@ -7,10 +7,10 @@
   <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
   <title>Shambhala 2026 Stage Set Times</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
-  <!-- v10 -->
+  <!-- v11 -->
   <a class="skip-link" href="#schedule">Skip to schedule</a>
   <div class="aurora aurora-one" aria-hidden="true"></div>
   <div class="aurora aurora-two" aria-hidden="true"></div>
@@ -22,34 +22,39 @@
       <p class="camp-credit"><span>Made by Camp Hexadecibel</span><span aria-hidden="true"> - </span><a id="camp-location-link" href="https://www.google.com/maps/search/?api=1&query=Shambhala%20Music%20Festival%20Salmo%20BC" target="_blank" rel="noreferrer">Come visit us</a></p>
     </header>
 
-    <section id="now-playing" class="now-playing" data-status="checking" aria-live="polite" aria-atomic="true">
-      <div class="now-playing-topline">
-        <span class="status-dot" aria-hidden="true"></span>
-        <p id="now-playing-label" class="now-playing-label">NOW AT AMP</p>
+    <section class="live-panel" aria-label="Live stage controls">
+      <section id="now-playing" class="now-playing" data-status="checking" aria-live="polite" aria-atomic="true">
+        <div class="now-playing-topline">
+          <span class="status-dot" aria-hidden="true"></span>
+          <p id="now-playing-label" class="now-playing-label">NOW AT AMP</p>
+        </div>
+        <h2 id="now-playing-title" class="now-playing-title">Checking the schedule...</h2>
+        <p id="now-playing-details" class="now-playing-details">Using Salmo, BC time.</p>
+      </section>
+
+      <div class="controls" aria-label="Schedule filters">
+        <p class="controls-intro">Tap a stage or pick a day.</p>
+        <div>
+          <p class="control-label">Stage</p>
+          <nav id="stage-tabs" class="tabs stage-tabs" aria-label="Select a stage"></nav>
+        </div>
+        <div>
+          <p class="control-label">Day</p>
+          <nav id="day-tabs" class="tabs day-tabs" aria-label="Select a day"></nav>
+        </div>
       </div>
-      <h2 id="now-playing-title" class="now-playing-title">Checking the schedule...</h2>
-      <p id="now-playing-details" class="now-playing-details">Using Salmo, BC time.</p>
     </section>
 
-    <div class="notice" role="note">
-      Unofficial guide. Set times can change - confirm important plans in the official festival schedule or app.
-    </div>
-
-    <section class="controls" aria-label="Schedule filters">
-      <p class="controls-intro">Tap a stage, pick a day, or search every listed artist.</p>
-      <div>
-        <p class="control-label">Stage</p>
-        <nav id="stage-tabs" class="tabs stage-tabs" aria-label="Select a stage"></nav>
-      </div>
-      <div>
-        <p class="control-label">Day</p>
-        <nav id="day-tabs" class="tabs day-tabs" aria-label="Select a day"></nav>
-      </div>
+    <section class="search-panel" aria-label="Artist search">
       <label class="search-wrap" for="artist-search">
         <span>Search all stages and days</span>
         <input id="artist-search" type="search" placeholder="Artist name (all stages)" autocomplete="off" enterkeyhint="search">
       </label>
     </section>
+
+    <div class="notice" role="note">
+      Unofficial guide. Set times can change - confirm important plans in the official festival schedule or app.
+    </div>
 
     <section id="schedule" class="schedule-card" aria-live="polite">
       <div class="schedule-heading">
