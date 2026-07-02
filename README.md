@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-Current deployed version: `v13`
+Current deployed version: `v14`
 
 Rollback point before the custom set-list experiment: `2490e3b9b08138d549f9ec10174ca6c4a818961c` or branch `rollback-before-set-list`.
 
@@ -119,16 +119,16 @@ The site uses a network-first service worker. While online, it tries to fetch fr
 
 When changing `index.html`, `styles.css`, `app.js`, `planner.js`, `schedule-data.js`, `camp-location.js`, or `sw.js`:
 
-1. Bump the asset query strings in `index.html`, for example `?v=14`.
-2. Bump the service worker registration in `app.js` or `planner.js` to the same version, for example `sw.js?v=14`.
-3. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v14`.
+1. Bump the asset query strings in `index.html`, for example `?v=15`.
+2. Bump the service worker registration in `app.js` or `planner.js` to the same version, for example `sw.js?v=15`.
+3. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v15`.
 4. Update the cached asset query strings in `sw.js` to the same version.
 5. Open the site once while online after publishing so the device receives the new cache.
 
 Current cache name:
 
 ```js
-const CACHE_NAME = "stage-schedule-v13";
+const CACHE_NAME = "stage-schedule-v14";
 ```
 
 ## Schedule data model
