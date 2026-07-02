@@ -1,6 +1,6 @@
 # Shambhala 2026 NFC Stage Schedule
 
-A small, static, phone-friendly schedule page for six Shambhala stage necklaces. Each NFC tag opens its matching stage from a short URL hash. The site has no build step, backend, database, accounts, analytics, or external API dependency.
+A small, static, phone-friendly schedule page for seven Shambhala stage necklaces. Each NFC tag opens its matching stage from a short URL hash. The site has no build step, backend, database, accounts, analytics, or external API dependency.
 
 Live site:
 
@@ -8,13 +8,13 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-Current deployed version: `v12`
+Current deployed version: `v13`
 
 Rollback point before the custom set-list experiment: `2490e3b9b08138d549f9ec10174ca6c4a818961c` or branch `rollback-before-set-list`.
 
 ## Current features
 
-- Stage and day filtering
+- Stage and day filtering across seven stages, including Secret Garden
 - Automatic current schedule-day selection when no `?day=` is provided
 - Subtle Today marker on the current schedule-day tab
 - Global artist search across all stages and days
@@ -36,6 +36,7 @@ https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#fractal-fores
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#grove
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#living-room
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#pagoda
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#secret-garden
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#village
 ```
 
@@ -96,6 +97,14 @@ https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-
 
 Expected: Thursday is auto-selected, `Next: VCTRE`, and `Starts in 2 hr`.
 
+Secret Garden test:
+
+```text
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-24T21:30#secret-garden
+```
+
+Expected: Friday is auto-selected and `CHACHO` is now playing.
+
 Do not put `preview=...` in NFC tag URLs.
 
 ## My Set List behavior
@@ -110,16 +119,16 @@ The site uses a network-first service worker. While online, it tries to fetch fr
 
 When changing `index.html`, `styles.css`, `app.js`, `planner.js`, `schedule-data.js`, `camp-location.js`, or `sw.js`:
 
-1. Bump the asset query strings in `index.html`, for example `?v=13`.
-2. Bump the service worker registration in `app.js` or `planner.js` to the same version, for example `sw.js?v=13`.
-3. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v13`.
+1. Bump the asset query strings in `index.html`, for example `?v=14`.
+2. Bump the service worker registration in `app.js` or `planner.js` to the same version, for example `sw.js?v=14`.
+3. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v14`.
 4. Update the cached asset query strings in `sw.js` to the same version.
 5. Open the site once while online after publishing so the device receives the new cache.
 
 Current cache name:
 
 ```js
-const CACHE_NAME = "stage-schedule-v12";
+const CACHE_NAME = "stage-schedule-v13";
 ```
 
 ## Schedule data model
@@ -144,6 +153,7 @@ fractal-forest
 grove
 living-room
 pagoda
+secret-garden
 village
 ```
 
