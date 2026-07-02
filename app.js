@@ -87,8 +87,19 @@
 
   function getCurrentScheduleDay(stageId) {
     const status = getNowPlayingStatus(stageId);
-    const day = status.current?.day || status.next?.day;
-    return DAYS.includes(day) && isAvailable(day, stageId) ? day : null;
+
+    if (status.current?.day && isAvailable(status.current.day, stageId)) {
+      return status.current.day;
+    }
+
+    if (status.next?.day && isAvailable(status.next.day, stageId)) {
+      const nowSerial = dateToSerial(status.now.date);
+      const festivalStart = dateToSerial(FESTIVAL_DATES.Thursday);
+      const festivalEnd = dateToSerial(addDays(FESTIVAL_DATES.Sunday, 1));
+      if (nowSerial >= festivalStart && nowSerial <= festivalEnd) return status.next.day;
+    }
+
+    return null;
   }
 
   function getInitialState() {
