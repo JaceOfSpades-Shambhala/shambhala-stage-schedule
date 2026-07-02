@@ -38,8 +38,7 @@ a:hover { color: #ffb5d9; }
 h1, h2, p { margin-top: 0; }
 h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.15rem, 11vw, 4.25rem); line-height: .93; letter-spacing: -.052em; }
 .title-subtitle { display: block; color: var(--muted); font-size: .42em; letter-spacing: -.025em; margin-top: .3rem; }
-.intro { max-width: 48ch; color: var(--muted); font-size: 1.02rem; }
-.notice { max-width: 62ch; margin-top: 1.25rem; padding: .78rem .92rem; border-left: 3px solid var(--accent); color: #e6e3ee; background: rgba(15, 17, 31, .48); border-radius: 0 .55rem .55rem 0; font-size: .88rem; }
+.notice { max-width: 62ch; margin: 0 0 1rem; padding: .78rem .92rem; border-left: 3px solid var(--accent); color: #e6e3ee; background: rgba(15, 17, 31, .48); border-radius: 0 .55rem .55rem 0; font-size: .88rem; }
 .controls, .schedule-card, .now-playing { background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); backdrop-filter: blur(16px); }
 .now-playing { margin-bottom: 1rem; padding: 1rem 1.12rem; border-left: 3px solid var(--accent); border-radius: 1.1rem; }
 .now-playing-topline { display: flex; align-items: center; gap: .48rem; }
@@ -53,6 +52,7 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.15rem, 11vw, 4.2
 .now-playing-next { color: var(--ink); font-weight: 900; }
 .controls { display: grid; gap: 1.2rem; padding: 1.15rem; border-radius: 1.1rem; }
 .controls, .controls > div, .search-wrap, .tabs { min-width: 0; max-width: 100%; }
+.controls-intro { margin: 0; color: var(--muted); font-size: .93rem; }
 .control-label { margin-bottom: .55rem; color: var(--muted); font-size: .74rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
 .tabs { display: grid; gap: .48rem; overflow: visible; }
 .stage-tabs, .day-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
