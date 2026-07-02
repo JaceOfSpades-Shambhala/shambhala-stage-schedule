@@ -7,10 +7,10 @@
   <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
   <title>Shambhala 2026 Stage Set Times</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=11">
+  <link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
-  <!-- v11 -->
+  <!-- v12 -->
   <a class="skip-link" href="#schedule">Skip to schedule</a>
   <div class="aurora aurora-one" aria-hidden="true"></div>
   <div class="aurora aurora-two" aria-hidden="true"></div>
@@ -52,6 +52,22 @@
       </label>
     </section>
 
+    <section id="planner" class="planner-panel" aria-label="My set list">
+      <div class="planner-heading">
+        <div>
+          <p class="control-label">My Set List</p>
+          <p id="planner-count" class="planner-count">0 sets saved</p>
+        </div>
+        <div class="planner-actions">
+          <button id="planner-copy" class="planner-action" type="button" hidden>Copy</button>
+          <button id="planner-clear" class="planner-action" type="button" hidden>Clear</button>
+        </div>
+      </div>
+      <ol id="planner-list" class="planner-list"></ol>
+      <p id="planner-empty" class="planner-empty">Tap + beside a set to save it here.</p>
+      <p id="planner-feedback" class="planner-feedback" role="status" aria-live="polite"></p>
+    </section>
+
     <div class="notice" role="note">
       Unofficial guide. Set times can change - confirm important plans in the official festival schedule or app.
     </div>
@@ -78,5 +94,6 @@
   <script src="camp-location.js?v=10"></script>
   <script src="schedule-data.js?v=10"></script>
   <script src="app.js?v=10"></script>
+  <script src="planner.js?v=12"></script>
 </body>
 </html>

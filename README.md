@@ -8,7 +8,9 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-Current deployed version: `v10`
+Current deployed version: `v12`
+
+Rollback point before the custom set-list experiment: `2490e3b9b08138d549f9ec10174ca6c4a818961c` or branch `rollback-before-set-list`.
 
 ## Current features
 
@@ -22,6 +24,7 @@ Current deployed version: `v10`
 - Current set highlight in the schedule list
 - Up-next and starts-in timing in the Now Playing card
 - Camp Hexadecibel link under the stage heading that can open Google Maps to camp coordinates
+- Phone-local My Set List planner with tap-to-add, remove, clear, and copy controls
 
 ## Stable NFC URLs
 
@@ -44,6 +47,7 @@ Each URL is far below a 504-byte NFC-tag limit.
 - `styles.css` - mobile-first styling
 - `schedule-data.js` - schedule data in `window.SCHEDULE_DATA`
 - `app.js` - tabs, search, Now Playing, preview mode, current-day selection, camp link behavior, and URL handling
+- `planner.js` - phone-local My Set List feature
 - `camp-location.js` - easy-to-edit camp coordinates for the header Google Maps link
 - `sw.js` - service worker cache for offline use
 - `manifest.webmanifest` - installable app metadata
@@ -94,22 +98,28 @@ Expected: Thursday is auto-selected, `Next: VCTRE`, and `Starts in 2 hr`.
 
 Do not put `preview=...` in NFC tag URLs.
 
+## My Set List behavior
+
+The My Set List planner is stored in the phone browser's local storage. It does not sync between devices, does not require an account, and remains available offline as long as the browser keeps the site's local data.
+
+Selected sets are sorted by festival timeline, including post-midnight rollover inside each schedule day. Use `Copy` for a text version that can be sent in chat, or screenshot the My Set List panel directly.
+
 ## Offline cache rules
 
 The site uses a network-first service worker. While online, it tries to fetch fresh same-origin files and update the cache. While offline, it falls back to the saved copy.
 
-When changing `index.html`, `styles.css`, `app.js`, `schedule-data.js`, `camp-location.js`, or `sw.js`:
+When changing `index.html`, `styles.css`, `app.js`, `planner.js`, `schedule-data.js`, `camp-location.js`, or `sw.js`:
 
-1. Bump the asset query strings in `index.html`, for example `?v=11`.
-2. Bump the service worker registration in `app.js` to the same version, for example `sw.js?v=11`.
-3. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v11`.
+1. Bump the asset query strings in `index.html`, for example `?v=13`.
+2. Bump the service worker registration in `app.js` or `planner.js` to the same version, for example `sw.js?v=13`.
+3. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v13`.
 4. Update the cached asset query strings in `sw.js` to the same version.
 5. Open the site once while online after publishing so the device receives the new cache.
 
 Current cache name:
 
 ```js
-const CACHE_NAME = "stage-schedule-v10";
+const CACHE_NAME = "stage-schedule-v12";
 ```
 
 ## Schedule data model
