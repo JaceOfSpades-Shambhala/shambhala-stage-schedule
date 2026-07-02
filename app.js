@@ -85,6 +85,12 @@
     elements.search.value = "";
   }
 
+  function getCurrentScheduleDay(stageId) {
+    const status = getNowPlayingStatus(stageId);
+    const day = status.current?.day || status.next?.day;
+    return DAYS.includes(day) && isAvailable(day, stageId) ? day : null;
+  }
+
   function getInitialState() {
     const hash = decodeURIComponent(window.location.hash.replace(/^#/, "")).toLowerCase();
     const matchedStage = STAGES.find(stage => stage.id === hash);
@@ -95,7 +101,7 @@
     if (DAYS.includes(requestedDay) && isAvailable(requestedDay, appState.stage)) {
       appState.day = requestedDay;
     } else {
-      appState.day = DAYS.find(day => isAvailable(day, appState.stage)) || "Friday";
+      appState.day = getCurrentScheduleDay(appState.stage) || DAYS.find(day => isAvailable(day, appState.stage)) || "Friday";
     }
   }
 
@@ -109,7 +115,7 @@
   function switchStage(stageId) {
     appState.stage = stageId;
     if (!isAvailable(appState.day, appState.stage)) {
-      appState.day = DAYS.find(day => isAvailable(day, appState.stage)) || "Friday";
+      appState.day = getCurrentScheduleDay(appState.stage) || DAYS.find(day => isAvailable(day, appState.stage)) || "Friday";
     }
     clearSearch();
     updateUrl();
@@ -125,6 +131,8 @@
   }
 
   function renderTabs() {
+    const currentScheduleDay = getCurrentScheduleDay(appState.stage);
+
     elements.stageTabs.innerHTML = "";
     STAGES.forEach(stage => {
       const button = document.createElement("button");
@@ -143,11 +151,24 @@
       const available = isAvailable(day, appState.stage);
       button.className = "tab";
       button.type = "button";
-      button.textContent = day;
       button.disabled = !available;
       button.setAttribute("role", "tab");
       button.setAttribute("aria-selected", String(day === appState.day));
       button.addEventListener("click", () => switchDay(day));
+
+      const label = document.createElement("span");
+      label.textContent = day;
+      button.append(label);
+
+      if (available && day === currentScheduleDay) {
+        button.classList.add("tab-today");
+        button.setAttribute("aria-label", `${day} - current schedule day`);
+        const marker = document.createElement("span");
+        marker.className = "today-marker";
+        marker.textContent = "Today";
+        button.append(marker);
+      }
+
       elements.dayTabs.append(button);
     });
   }
