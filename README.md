@@ -8,18 +8,20 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-Current deployed version: `v8`
+Current deployed version: `v9`
 
 ## Current features
 
 - Stage and day filtering
+- Automatic current schedule-day selection when no `?day=` is provided
+- Subtle Today marker on the current schedule-day tab
 - Global artist search across all stages and days
 - Offline browsing after the site has been opened online once
 - Stage-specific Now Playing card using Salmo, BC / Pacific time
 - Early-morning rollover support, so Friday-list 2:00 AM sets are treated as Saturday morning while still belonging to Friday's schedule
 - Current set highlight in the schedule list
 - Up-next and starts-in timing in the Now Playing card
-- Camp Hexadecibel header link that can open Google Maps to camp coordinates
+- Camp Hexadecibel link under the stage heading that can open Google Maps to camp coordinates
 
 ## Stable NFC URLs
 
@@ -41,7 +43,7 @@ Each URL is far below a 504-byte NFC-tag limit.
 - `index.html` - page structure, header text, script/style version query strings
 - `styles.css` - mobile-first styling
 - `schedule-data.js` - schedule data in `window.SCHEDULE_DATA`
-- `app.js` - tabs, search, Now Playing, preview mode, camp link behavior, and URL handling
+- `app.js` - tabs, search, Now Playing, preview mode, current-day selection, camp link behavior, and URL handling
 - `camp-location.js` - easy-to-edit camp coordinates for the header Google Maps link
 - `sw.js` - service worker cache for offline use
 - `manifest.webmanifest` - installable app metadata
@@ -71,24 +73,24 @@ Use the `preview` parameter. It pretends the festival-local time is the value in
 Expected active-set tests:
 
 ```text
-https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-24T23:30&day=Friday#amp
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-24T23:30#amp
 ```
 
-Expected: `PEEKABOO` is now playing, `RUSKO` is up next, and the PEEKABOO row is highlighted.
+Expected: Friday is auto-selected, `PEEKABOO` is now playing, `RUSKO` is up next, and the PEEKABOO row is highlighted.
 
 ```text
-https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-24T21:45&day=Friday#pagoda
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-24T21:45#pagoda
 ```
 
-Expected: `JUSTIN MARTIN` is now playing.
+Expected: Friday is auto-selected and `JUSTIN MARTIN` is now playing.
 
 Expected upcoming-set test:
 
 ```text
-https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-23T10:00&day=Thursday#amp
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-23T10:00#amp
 ```
 
-Expected: `Next: VCTRE` and `Starts in 2 hr`.
+Expected: Thursday is auto-selected, `Next: VCTRE`, and `Starts in 2 hr`.
 
 Do not put `preview=...` in NFC tag URLs.
 
@@ -98,15 +100,15 @@ The site uses a network-first service worker. While online, it tries to fetch fr
 
 When changing `index.html`, `styles.css`, `app.js`, `schedule-data.js`, `camp-location.js`, or `sw.js`:
 
-1. Bump the asset query strings in `index.html`, for example `?v=9`.
-2. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v9`.
+1. Bump the asset query strings in `index.html`, for example `?v=10`.
+2. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v10`.
 3. Update the cached asset query strings in `sw.js` to the same version.
 4. Open the site once while online after publishing so the device receives the new cache.
 
 Current cache name:
 
 ```js
-const CACHE_NAME = "stage-schedule-v8";
+const CACHE_NAME = "stage-schedule-v9";
 ```
 
 ## Schedule data model
