@@ -1,52 +1,170 @@
 # Shambhala 2026 NFC Stage Schedule
 
-A small, static, phone-friendly schedule page that opens a selected stage from a URL hash. It needs no database, login, or paid hosting.
+A small, static, phone-friendly schedule page for six Shambhala stage necklaces. Each NFC tag opens its matching stage from a short URL hash. The site has no build step, backend, database, accounts, analytics, or external API dependency.
 
-## Files
-
-- `index.html` - webpage structure
-- `styles.css` - phone-friendly styling
-- `schedule-data.js` - the set-time data; edit this file if set times change
-- `app.js` - stage/day tabs, search, copy-link button, and URL handling
-- `sw.js` - caches the page after its first successful load for offline use
-
-## Publish it with GitHub Pages
-
-1. Create a new GitHub repository. Suggested name: `shambhala-stage-schedule`.
-2. Upload every file in this folder to the repository root.
-3. In the GitHub repository, open **Settings** > **Pages**.
-4. Under **Build and deployment**, choose **Deploy from a branch**.
-5. Select the `main` branch and the `/ (root)` folder, then save.
-6. GitHub will display the live site address, typically:
-
-   `https://YOUR-GITHUB-USERNAME.github.io/shambhala-stage-schedule/`
-
-GitHub may need a few minutes to publish the first version.
-
-## NFC tag URLs
-
-Use the published address plus the matching stage hash. The day is optional; including it lets the tag open to a specific day as well.
+Live site:
 
 ```text
-https://YOUR-GITHUB-USERNAME.github.io/shambhala-stage-schedule/#amp
-https://YOUR-GITHUB-USERNAME.github.io/shambhala-stage-schedule/#fractal-forest
-https://YOUR-GITHUB-USERNAME.github.io/shambhala-stage-schedule/#grove
-https://YOUR-GITHUB-USERNAME.github.io/shambhala-stage-schedule/#living-room
-https://YOUR-GITHUB-USERNAME.github.io/shambhala-stage-schedule/#pagoda
-https://YOUR-GITHUB-USERNAME.github.io/shambhala-stage-schedule/#village
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-To open a particular day, add `?day=Friday` before the hash:
+Current deployed version: `v7`
+
+## Current features
+
+- Stage and day filtering
+- Global artist search across all stages and days
+- Offline browsing after the site has been opened online once
+- Stage-specific Now Playing card using Salmo, BC / Pacific time
+- Early-morning rollover support, so Friday-list 2:00 AM sets are treated as Saturday morning while still belonging to Friday's schedule
+- Current set highlight in the schedule list
+- Up-next and starts-in timing in the Now Playing card
+- Camp Hexadecibel header link that can open Google Maps to camp coordinates
+
+## Stable NFC URLs
+
+Do not change these stage hash IDs unless the NFC tags are being rewritten.
 
 ```text
-https://YOUR-GITHUB-USERNAME.github.io/shambhala-stage-schedule/?day=Friday#amp
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#amp
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#fractal-forest
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#grove
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#living-room
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#pagoda
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#village
 ```
 
 Each URL is far below a 504-byte NFC-tag limit.
 
-## Updating set times
+## Files
 
-Open `schedule-data.js` in GitHub, choose the pencil/edit icon, update the relevant time or artist, then commit the change. GitHub Pages will republish the page automatically.
+- `index.html` - page structure, header text, script/style version query strings
+- `styles.css` - mobile-first styling
+- `schedule-data.js` - schedule data in `window.SCHEDULE_DATA`
+- `app.js` - tabs, search, Now Playing, preview mode, camp link behavior, and URL handling
+- `camp-location.js` - easy-to-edit camp coordinates for the header Google Maps link
+- `sw.js` - service worker cache for offline use
+- `manifest.webmanifest` - installable app metadata
+
+## Updating camp coordinates from a phone
+
+When Camp Hexadecibel has its actual location, edit only `camp-location.js` in GitHub.
+
+Change these values:
+
+```js
+window.CAMP_LOCATION = {
+  latitude: "49.123456",
+  longitude: "-117.123456",
+  googleMapsUrl: ""
+};
+```
+
+If `googleMapsUrl` is filled in, it wins over latitude/longitude. Otherwise the site builds a Google Maps coordinate link from `latitude` and `longitude`.
+
+After committing the change, open the site once while online so the phone caches the new location file.
+
+## Testing Now Playing before the festival
+
+Use the `preview` parameter. It pretends the festival-local time is the value in the URL without changing the device clock.
+
+Expected active-set tests:
+
+```text
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-24T23:30&day=Friday#amp
+```
+
+Expected: `PEEKABOO` is now playing, `RUSKO` is up next, and the PEEKABOO row is highlighted.
+
+```text
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-24T21:45&day=Friday#pagoda
+```
+
+Expected: `JUSTIN MARTIN` is now playing.
+
+Expected upcoming-set test:
+
+```text
+https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-23T10:00&day=Thursday#amp
+```
+
+Expected: `Next: VCTRE` and `Starts in 2 hr`.
+
+Do not put `preview=...` in NFC tag URLs.
+
+## Offline cache rules
+
+The site uses a network-first service worker. While online, it tries to fetch fresh same-origin files and update the cache. While offline, it falls back to the saved copy.
+
+When changing `index.html`, `styles.css`, `app.js`, `schedule-data.js`, `camp-location.js`, or `sw.js`:
+
+1. Bump the asset query strings in `index.html`, for example `?v=8`.
+2. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v8`.
+3. Update the cached asset query strings in `sw.js` to the same version.
+4. Open the site once while online after publishing so the device receives the new cache.
+
+Current cache name:
+
+```js
+const CACHE_NAME = "stage-schedule-v7";
+```
+
+## Schedule data model
+
+`schedule-data.js` stores all schedule data in `window.SCHEDULE_DATA`.
+
+Structure:
+
+```js
+{
+  "Friday": {
+    "amp": [["11:00 PM", "PEEKABOO"]]
+  }
+}
+```
+
+Stage IDs:
+
+```text
+amp
+fractal-forest
+grove
+living-room
+pagoda
+village
+```
+
+Schedule days are `Thursday`, `Friday`, `Saturday`, and `Sunday`.
+
+## Festival date mapping
+
+`app.js` maps schedule labels to the calendar date where that schedule day starts:
+
+```js
+Thursday: "2026-07-23"
+Friday: "2026-07-24"
+Saturday: "2026-07-25"
+Sunday: "2026-07-26"
+```
+
+This is intentional. The source schedule treats post-midnight sets as part of the previous evening's schedule list. The app detects time rollover inside each day list, so a Friday-list 2:00 AM set becomes Saturday morning internally while still being labeled as Friday's schedule.
+
+## Working from another computer
+
+Use GitHub as the source of truth. Local `Downloads` folders and uncommitted edits do not sync between PCs.
+
+Recommended handoff flow:
+
+1. Commit changes to `main` before switching computers.
+2. On the other PC, open or clone this GitHub repo.
+3. Make sure the ChatGPT Codex Connector is installed for this repo if Codex needs to publish changes directly.
+4. Start a new Codex thread with this README as the project handoff.
+
+## Publishing
+
+GitHub Pages publishes from the `main` branch. Most edits can be made directly in GitHub's web editor and committed to `main`.
+
+Important: the published site may take a minute or two to update after a commit.
 
 ## Important note
 
