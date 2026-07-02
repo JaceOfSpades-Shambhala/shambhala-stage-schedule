@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-Current deployed version: `v9`
+Current deployed version: `v10`
 
 ## Current features
 
@@ -100,15 +100,16 @@ The site uses a network-first service worker. While online, it tries to fetch fr
 
 When changing `index.html`, `styles.css`, `app.js`, `schedule-data.js`, `camp-location.js`, or `sw.js`:
 
-1. Bump the asset query strings in `index.html`, for example `?v=10`.
-2. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v10`.
-3. Update the cached asset query strings in `sw.js` to the same version.
-4. Open the site once while online after publishing so the device receives the new cache.
+1. Bump the asset query strings in `index.html`, for example `?v=11`.
+2. Bump the service worker registration in `app.js` to the same version, for example `sw.js?v=11`.
+3. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v11`.
+4. Update the cached asset query strings in `sw.js` to the same version.
+5. Open the site once while online after publishing so the device receives the new cache.
 
 Current cache name:
 
 ```js
-const CACHE_NAME = "stage-schedule-v9";
+const CACHE_NAME = "stage-schedule-v10";
 ```
 
 ## Schedule data model

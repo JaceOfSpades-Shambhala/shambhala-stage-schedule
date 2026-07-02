@@ -29,7 +29,6 @@
     setList: document.querySelector("#set-list"),
     noResults: document.querySelector("#no-results"),
     search: document.querySelector("#artist-search"),
-    copyLink: document.querySelector("#copy-link"),
     campLocation: document.querySelector("#camp-location-link"),
     nowPlaying: document.querySelector("#now-playing"),
     nowPlayingLabel: document.querySelector("#now-playing-label"),
@@ -177,7 +176,7 @@
         const marker = document.createElement("span");
         marker.className = "today-marker";
         marker.textContent = "Today";
-        button.append(marker);
+        button.append(document.createTextNode(" "), marker);
       }
 
       elements.dayTabs.append(button);
@@ -484,16 +483,6 @@
   elements.search.addEventListener("input", handleSearch);
   elements.search.addEventListener("search", handleSearch);
 
-  elements.copyLink.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      const original = elements.copyLink.textContent;
-      elements.copyLink.textContent = "Copied";
-      window.setTimeout(() => { elements.copyLink.textContent = original; }, 1600);
-    } catch {
-      window.prompt("Copy this link:", window.location.href);
-    }
-  });
 
   window.addEventListener("hashchange", () => {
     const hash = decodeURIComponent(window.location.hash.replace(/^#/, "")).toLowerCase();
@@ -511,6 +500,6 @@
   window.setInterval(renderLiveStatus, 30000);
 
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=10").catch(() => {}));
   }
 })();
