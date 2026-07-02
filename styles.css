@@ -31,13 +31,13 @@ a:hover { color: #ffb5d9; }
 .aurora-two { width: 32rem; height: 32rem; right: -12rem; top: 20rem; background: #33c7a5; }
 .shell { width: min(calc(100% - 2rem), 720px); margin: 0 auto; padding: 3.25rem 0 2.5rem; }
 .hero { margin-bottom: 1.15rem; }
-.eyebrow { margin: 0 0 .42rem; color: var(--accent); font-size: .74rem; font-weight: 900; letter-spacing: .13em; }
-.camp-eyebrow { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .28rem; row-gap: .16rem; }
-.camp-eyebrow a { color: #fff; text-underline-offset: .2rem; }
-.camp-eyebrow a:hover { color: #ffb5d9; }
+.eyebrow, .title-eyebrow { margin: 0 0 .42rem; color: var(--accent); font-size: .74rem; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
+.title-eyebrow { max-width: 34ch; }
+.camp-credit { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .28rem; row-gap: .16rem; margin: -.35rem 0 0; color: var(--muted); font-size: .84rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.camp-credit a { color: #fff; text-underline-offset: .2rem; }
+.camp-credit a:hover { color: #ffb5d9; }
 h1, h2, p { margin-top: 0; }
-h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.15rem, 11vw, 4.25rem); line-height: .93; letter-spacing: -.052em; }
-.title-subtitle { display: block; color: var(--muted); font-size: .42em; letter-spacing: -.025em; margin-top: .3rem; }
+h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6rem); line-height: .93; letter-spacing: -.052em; }
 .notice { max-width: 62ch; margin: 0 0 1rem; padding: .78rem .92rem; border-left: 3px solid var(--accent); color: #e6e3ee; background: rgba(15, 17, 31, .48); border-radius: 0 .55rem .55rem 0; font-size: .88rem; }
 .controls, .schedule-card, .now-playing { background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); backdrop-filter: blur(16px); }
 .now-playing { margin-bottom: 1rem; padding: 1rem 1.12rem; border-left: 3px solid var(--accent); border-radius: 1.1rem; }
@@ -60,6 +60,9 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.15rem, 11vw, 4.2
 .tab:hover { transform: translateY(-1px); border-color: rgba(255, 255, 255, .58); }
 .tab[aria-selected="true"] { color: #161120; background: var(--accent); border-color: var(--accent); }
 .tab:disabled { opacity: .38; cursor: not-allowed; }
+.day-tabs .tab { display: flex; align-items: center; justify-content: center; gap: .36rem; }
+.today-marker { padding: .06rem .32rem; border-radius: 999px; color: #161120; background: var(--accent); font-size: .58rem; font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
+.tab[aria-selected="true"] .today-marker { color: var(--accent); background: #161120; }
 .search-wrap { display: block; }
 .search-wrap span { display: block; margin-bottom: .45rem; color: var(--muted); font-size: .74rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
 .search-wrap input { width: 100%; padding: .72rem .8rem; border: 1px solid rgba(255, 255, 255, .2); outline: 0; border-radius: .65rem; color: var(--ink); background: rgba(0, 0, 0, .22); }
@@ -93,5 +96,5 @@ body.stage-village { --accent: #a981e1; --accent-deep: #7654af; }
 @keyframes status-pulse { 50% { transform: scale(1.13); } }
 @media (min-width: 520px) { .stage-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); } .day-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (min-width: 650px) { .shell { padding-top: 5rem; } .controls { padding: 1.35rem; } .schedule-heading { padding: 1.6rem 1.55rem 1.15rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem 1fr; padding-left: 1.55rem; padding-right: 1.55rem; } .now-playing { padding: 1.2rem 1.4rem; } }
-@media (max-width: 420px) { .schedule-heading { flex-direction: column; } .copy-link { width: 100%; } }
+@media (max-width: 420px) { .schedule-heading { flex-direction: column; } .copy-link { width: 100%; } .day-tabs .tab { flex-direction: column; gap: .12rem; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tab { transition: none; } .now-playing[data-status="active"] .status-dot { animation: none; } }
