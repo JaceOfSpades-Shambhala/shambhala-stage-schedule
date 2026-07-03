@@ -355,5 +355,5 @@
   updateCampLocationLink();
   render();
   window.setInterval(renderLiveStatus, 30000);
-  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=13").catch(() => {}));
+    if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=15").catch(() => {}));
 })();
