@@ -101,6 +101,10 @@ h2 { margin-bottom: 0; font-size: clamp(1.4rem, 5.6vw, 2rem); letter-spacing: -.
 .empty-state { padding: 1.2rem; margin: 0; color: var(--muted); }
 footer { padding: 1.65rem .45rem 0; color: var(--muted); font-size: .8rem; }
 footer p:last-child { margin-bottom: 0; }
+.update-banner { position: fixed; left: 50%; bottom: 1.1rem; transform: translateX(-50%); z-index: 20; padding: .68rem 1.15rem; border: 1px solid var(--accent); border-radius: 999px; color: #161120; background: var(--accent); box-shadow: var(--shadow); cursor: pointer; font-size: .84rem; font-weight: 850; letter-spacing: .02em; white-space: nowrap; animation: banner-in .25s ease; }
+.update-banner:hover { transform: translateX(-50%) translateY(-1px); }
+.update-banner:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+@keyframes banner-in { from { opacity: 0; transform: translateX(-50%) translateY(.6rem); } }
 body.stage-amp { --accent: #ef5a9c; --accent-deep: #ad2b70; }
 body.stage-fractal-forest { --accent: #ff645d; --accent-deep: #ca3734; }
 body.stage-grove { --accent: #46c6ad; --accent-deep: #21927c; }
@@ -112,4 +116,4 @@ body.stage-village { --accent: #a981e1; --accent-deep: #7654af; }
 @media (min-width: 520px) { .stage-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); } .day-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (min-width: 650px) { .shell { padding-top: 5rem; } .live-panel { padding: 1.35rem; } .search-panel, .planner-panel { padding: 1.2rem 1.35rem; } .schedule-heading { padding: 1.6rem 1.55rem 1.15rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem minmax(0, 1fr) auto; padding-left: 1.55rem; padding-right: 1.55rem; } }
 @media (max-width: 420px) { .schedule-heading { flex-direction: column; } .day-tabs .tab { flex-direction: column; gap: .12rem; } .planner-heading { align-items: stretch; flex-direction: column; } .planner-actions { justify-content: flex-start; } .planner-set { grid-template-columns: minmax(4.6rem, auto) minmax(0, 1fr); } .planner-remove { grid-column: 2; justify-self: start; } }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tab, .planner-action, .planner-remove, .planner-add, .install-button { transition: none; } .now-playing[data-status="active"] .status-dot { animation: none; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tab, .planner-action, .planner-remove, .planner-add, .install-button { transition: none; } .now-playing[data-status="active"] .status-dot, .update-banner { animation: none; } }
