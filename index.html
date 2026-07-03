@@ -7,10 +7,10 @@
   <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
   <title>Shambhala 2026 Stage Set Times</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=14">
+  <link rel="stylesheet" href="styles.css?v=15">
 </head>
 <body>
-  <!-- v14 -->
+  <!-- v15 -->
   <a class="skip-link" href="#schedule">Skip to schedule</a>
   <div class="aurora aurora-one" aria-hidden="true"></div>
   <div class="aurora aurora-two" aria-hidden="true"></div>
@@ -45,22 +45,6 @@
       </div>
     </section>
 
-    <section id="planner" class="planner-panel" aria-label="My set list">
-      <div class="planner-heading">
-        <div>
-          <p class="control-label">My Set List</p>
-          <p id="planner-count" class="planner-count">0 sets saved</p>
-        </div>
-        <div class="planner-actions">
-          <button id="planner-copy" class="planner-action" type="button" hidden>Copy</button>
-          <button id="planner-clear" class="planner-action" type="button" hidden>Clear</button>
-        </div>
-      </div>
-      <ol id="planner-list" class="planner-list"></ol>
-      <p id="planner-empty" class="planner-empty">Tap + beside a set to save it here.</p>
-      <p id="planner-feedback" class="planner-feedback" role="status" aria-live="polite"></p>
-    </section>
-
     <section class="search-panel" aria-label="Artist search">
       <label class="search-wrap" for="artist-search">
         <span>Search all stages and days</span>
@@ -84,6 +68,22 @@
       <p id="no-results" class="empty-state" hidden>No matching artist was found across the listed stages and days.</p>
     </section>
 
+    <section id="planner" class="planner-panel" aria-label="My set list">
+      <div class="planner-heading">
+        <div>
+          <p class="control-label">My Set List</p>
+          <p id="planner-count" class="planner-count">0 sets saved</p>
+        </div>
+        <div class="planner-actions">
+          <button id="planner-copy" class="planner-action" type="button" hidden>Copy</button>
+          <button id="planner-clear" class="planner-action" type="button" hidden>Clear</button>
+        </div>
+      </div>
+      <ol id="planner-list" class="planner-list"></ol>
+      <p id="planner-empty" class="planner-empty">Tap + beside a set to save it here.</p>
+      <p id="planner-feedback" class="planner-feedback" role="status" aria-live="polite"></p>
+    </section>
+
     <footer>
       <p>Made as a fan project for Shambhala 2026. Schedule information was transcribed from the official downloadable set-times schedule.</p>
       <p>"Now playing" uses your device clock in Salmo, BC time. Offline ready after first online load.</p>
@@ -91,9 +91,9 @@
     </footer>
   </main>
 
-  <script src="camp-location.js?v=14"></script>
-  <script src="schedule-data.js?v=14"></script>
-  <script src="app.js?v=14"></script>
-  <script src="planner.js?v=14"></script>
+  <script src="camp-location.js?v=15"></script>
+  <script src="schedule-data.js?v=15"></script>
+  <script src="app.js?v=15"></script>
+  <script src="planner.js?v=15"></script>
 </body>
 </html>
