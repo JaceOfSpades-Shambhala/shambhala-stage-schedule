@@ -9,8 +9,12 @@
     { id: "village", label: "Village" }
   ];
   const DAYS = ["Thursday", "Friday", "Saturday", "Sunday"];
+  const FESTIVAL_TIME_ZONE = "America/Vancouver";
   const FESTIVAL_DATES = { Thursday: "2026-07-23", Friday: "2026-07-24", Saturday: "2026-07-25", Sunday: "2026-07-26" };
   const STORAGE_KEY = "shambhala-2026-my-set-list";
+  // How long after its start time a saved set still counts as "now" here -
+  // the source schedule has no end times.
+  const CURRENT_SET_WINDOW_MINUTES = 90;
   const data = window.SCHEDULE_DATA || {};
   const elements = {
     panel: document.querySelector("#planner"),
@@ -19,9 +23,12 @@
     list: document.querySelector("#planner-list"),
     empty: document.querySelector("#planner-empty"),
     count: document.querySelector("#planner-count"),
-    copy: document.querySelector("#planner-copy"),
+    share: document.querySelector("#planner-share"),
     clear: document.querySelector("#planner-clear"),
-    feedback: document.querySelector("#planner-feedback")
+    feedback: document.querySelector("#planner-feedback"),
+    upNext: document.querySelector("#planner-up-next"),
+    upNextTitle: document.querySelector("#planner-up-next-title"),
+    upNextDetails: document.querySelector("#planner-up-next-details")
   };
   if (!elements.panel || !elements.scheduleList) return;
 
@@ -62,6 +69,25 @@
   function formatDate(date) {
     const [year, month, day] = date.split("-").map(Number);
     return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(new Date(Date.UTC(year, month - 1, day)));
+  }
+
+  function formatStartsIn(minutes) {
+    const safeMinutes = Math.max(0, minutes);
+    if (safeMinutes < 1) return "Starts now";
+    const hours = Math.floor(safeMinutes / 60);
+    const remainingMinutes = safeMinutes % 60;
+    if (hours && remainingMinutes) return `Starts in ${hours} hr ${remainingMinutes} min`;
+    if (hours) return `Starts in ${hours} hr`;
+    return `Starts in ${remainingMinutes} min`;
+  }
+
+  function getFestivalNow() {
+    const preview = new URLSearchParams(window.location.search).get("preview");
+    const previewMatch = preview && preview.match(/^(2026-07-\d{2})T(\d{2}):(\d{2})$/);
+    if (previewMatch) return { date: previewMatch[1], minutes: Number(previewMatch[2]) * 60 + Number(previewMatch[3]) };
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: FESTIVAL_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.filter(part => part.type !== "literal").map(part => [part.type, part.value]));
+    return { date: `${values.year}-${values.month}-${values.day}`, minutes: (Number(values.hour) % 24) * 60 + Number(values.minute) };
   }
 
   function buildStageTimeline(stageId) {
@@ -196,13 +222,43 @@
     setFeedback.timeout = window.setTimeout(() => { elements.feedback.textContent = ""; }, 2200);
   }
 
+  function renderUpNext() {
+    if (!elements.upNext) return;
+    const now = getFestivalNow();
+    const nowKey = dateToSerial(now.date) * 1440 + now.minutes;
+    const timeline = loadSets()
+      .map(item => ({ item, match: timelineMatch(item) }))
+      .filter(entry => entry.match)
+      .sort((a, b) => a.match.key - b.match.key);
+    const next = timeline.find(entry => entry.match.key > nowKey);
+    const current = timeline.filter(entry => entry.match.key <= nowKey && nowKey - entry.match.key <= CURRENT_SET_WINDOW_MINUTES).at(-1);
+
+    if (!next && !current) {
+      elements.upNext.hidden = true;
+      return;
+    }
+
+    elements.upNext.hidden = false;
+    if (next) {
+      elements.upNextTitle.textContent = `${next.item.artist} - ${next.item.time} at ${titleCaseStage(next.item.stageId)}`;
+      const timing = `${formatDate(next.match.date)} - ${formatStartsIn(next.match.key - nowKey)}`;
+      elements.upNextDetails.textContent = current
+        ? `${timing} - Now: ${current.item.artist} at ${titleCaseStage(current.item.stageId)}`
+        : timing;
+      return;
+    }
+    elements.upNextTitle.textContent = `${current.item.artist} at ${titleCaseStage(current.item.stageId)}`;
+    elements.upNextDetails.textContent = `Started at ${current.item.time} - the last set on your list`;
+  }
+
   function renderPlanner() {
     const sets = sortedSets();
     elements.count.textContent = `${sets.length} set${sets.length === 1 ? "" : "s"} saved`;
     elements.list.innerHTML = "";
     elements.empty.hidden = sets.length > 0;
-    elements.copy.hidden = sets.length === 0;
+    elements.share.hidden = sets.length === 0;
     elements.clear.hidden = sets.length === 0;
+    renderUpNext();
     sets.forEach(item => {
       const match = timelineMatch(item);
       const row = document.createElement("li");
@@ -239,9 +295,7 @@
     })].join("\n");
   }
 
-  async function copyPlanner() {
-    const text = plannerText();
-    if (!text) return;
+  async function copyPlanner(text) {
     try {
       await navigator.clipboard.writeText(text);
       setFeedback("Copied set list");
@@ -259,7 +313,23 @@
     setFeedback("Copied set list");
   }
 
-  elements.copy.addEventListener("click", copyPlanner);
+  async function sharePlanner() {
+    const text = plannerText();
+    if (!text) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "My Shambhala 2026 Set List", text });
+        return;
+      } catch (error) {
+        // Cancelling the share sheet is not a failure; anything else falls
+        // back to the clipboard so the button always does something useful.
+        if (error && error.name === "AbortError") return;
+      }
+    }
+    copyPlanner(text);
+  }
+
+  elements.share.addEventListener("click", sharePlanner);
   elements.clear.addEventListener("click", () => {
     saveSets([]);
     renderPlanner();
@@ -268,6 +338,8 @@
   });
   new MutationObserver(() => enhanceScheduleRows()).observe(elements.scheduleList, { childList: true });
   window.addEventListener("hashchange", () => window.setTimeout(enhanceScheduleRows, 0));
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) renderUpNext(); });
   renderPlanner();
   enhanceScheduleRows();
+  window.setInterval(renderUpNext, 30000);
 })();
