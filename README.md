@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-Current deployed version: `v14`
+Current deployed version: `v15`
 
 Rollback point before the custom set-list experiment: `2490e3b9b08138d549f9ec10174ca6c4a818961c` or branch `rollback-before-set-list`.
 
@@ -128,7 +128,7 @@ When changing `index.html`, `styles.css`, `app.js`, `planner.js`, `schedule-data
 Current cache name:
 
 ```js
-const CACHE_NAME = "stage-schedule-v14";
+const CACHE_NAME = "stage-schedule-v15";
 ```
 
 ## Schedule data model
