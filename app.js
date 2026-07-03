@@ -27,7 +27,9 @@
     nowPlaying: document.querySelector("#now-playing"),
     nowPlayingLabel: document.querySelector("#now-playing-label"),
     nowPlayingTitle: document.querySelector("#now-playing-title"),
-    nowPlayingDetails: document.querySelector("#now-playing-details")
+    nowPlayingDetails: document.querySelector("#now-playing-details"),
+    scheduleVersion: document.querySelector("#schedule-version"),
+    updateBanner: document.querySelector("#update-banner")
   };
   const appState = { stage: "amp", day: "Thursday", term: "" };
 
@@ -345,17 +347,54 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
+  const SCHEDULE_ASSET = "schedule-data.js?v=17";
+  const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+  let updateAvailable = false;
+
+  function renderScheduleVersion() {
+    if (!elements.scheduleVersion) return;
+    const version = String(window.SCHEDULE_VERSION || "").trim();
+    elements.scheduleVersion.textContent = version ? `Schedule data: ${version}.` : "";
+    elements.scheduleVersion.hidden = !version;
+  }
+
+  async function checkForScheduleUpdate() {
+    if (updateAvailable || document.hidden || navigator.onLine === false) return;
+    const currentVersion = String(window.SCHEDULE_VERSION || "").trim();
+    if (!currentVersion || !elements.updateBanner) return;
+    try {
+      // cache: "no-store" skips the HTTP cache, and the service worker stores
+      // the fresh copy it fetches here - so the reload below still shows the
+      // new schedule even if the signal drops again right after this check.
+      const response = await fetch(SCHEDULE_ASSET, { cache: "no-store" });
+      if (!response.ok) return;
+      const latest = (await response.text()).match(/SCHEDULE_VERSION\s*=\s*"([^"]+)"/)?.[1];
+      if (latest && latest !== currentVersion) {
+        updateAvailable = true;
+        elements.updateBanner.hidden = false;
+      }
+    } catch {}
+  }
+
   elements.search.addEventListener("input", event => { appState.term = event.target.value || ""; renderSchedule(); });
   elements.search.addEventListener("search", event => { appState.term = event.target.value || ""; renderSchedule(); });
   window.addEventListener("hashchange", () => {
     const stage = STAGES.find(item => item.id === decodeURIComponent(window.location.hash.replace(/^#/, "")).toLowerCase());
     if (stage && stage.id !== appState.stage) switchStage(stage.id);
   });
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) renderLiveStatus(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) return;
+    renderLiveStatus();
+    checkForScheduleUpdate();
+  });
+  elements.updateBanner?.addEventListener("click", () => window.location.reload());
 
   getInitialState();
   updateCampLocationLink();
+  renderScheduleVersion();
   render();
   window.setInterval(renderLiveStatus, 30000);
-  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=16").catch(() => {}));
+  window.setTimeout(checkForScheduleUpdate, 8000);
+  window.setInterval(checkForScheduleUpdate, UPDATE_CHECK_INTERVAL_MS);
+  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=17").catch(() => {}));
 })();
