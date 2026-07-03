@@ -1,20 +1,21 @@
-const CACHE_NAME = "stage-schedule-v16";
+const CACHE_NAME = "stage-schedule-v17";
+const NETWORK_TIMEOUT_MS = 3500;
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=16",
-  "./camp-location.js?v=16",
-  "./schedule-data.js?v=16",
-  "./app.js?v=16",
-  "./planner.js?v=16",
-  "./install.js?v=16",
+  "./styles.css?v=17",
+  "./camp-location.js?v=17",
+  "./schedule-data.js?v=17",
+  "./app.js?v=17",
+  "./planner.js?v=17",
+  "./install.js?v=17",
   "./manifest.webmanifest",
-  "./favicon.ico?v=16",
-  "./favicon-32.png?v=16",
-  "./favicon-16.png?v=16",
-  "./apple-touch-icon.png?v=16",
-  "./icon-192.png?v=16",
-  "./icon-512.png?v=16"
+  "./favicon.ico?v=17",
+  "./favicon-32.png?v=17",
+  "./favicon-16.png?v=17",
+  "./apple-touch-icon.png?v=17",
+  "./icon-192.png?v=17",
+  "./icon-512.png?v=17"
 ];
 
 self.addEventListener("install", event => {
@@ -31,24 +32,40 @@ self.addEventListener("activate", event => {
   self.clients.claim();
 });
 
-// Prefer fresh files while online, but retain a complete cached copy for
-// offline use after the first successful visit.
+// Prefer fresh files while online, but never leave a slow festival connection
+// hanging: after NETWORK_TIMEOUT_MS the cached copy is served while the fetch
+// keeps running in the background so the cache still picks up fresh files.
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
-
-  event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        if (response && response.ok && new URL(event.request.url).origin === self.location.origin) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-        }
-        return response;
-      })
-      .catch(() => caches.match(event.request).then(cached => {
-        if (cached) return cached;
-        if (event.request.mode === "navigate") return caches.match("./");
-        return Response.error();
-      }))
-  );
+  event.respondWith(respond(event));
 });
+
+async function respond(event) {
+  const request = event.request;
+  const network = fetch(request).then(response => {
+    if (response && response.ok && new URL(request.url).origin === self.location.origin) {
+      const copy = response.clone();
+      event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.put(request, copy)));
+    }
+    return response;
+  });
+  const settled = network.catch(() => null);
+  event.waitUntil(settled);
+
+  const response = await Promise.race([
+    settled,
+    new Promise(resolve => setTimeout(() => resolve(null), NETWORK_TIMEOUT_MS))
+  ]);
+  if (response) return response;
+
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  if (request.mode === "navigate") {
+    const shell = await caches.match("./");
+    if (shell) return shell;
+  }
+
+  // Nothing cached yet (likely a first visit): let the slow network finish.
+  const late = await settled;
+  return late || Response.error();
+}
