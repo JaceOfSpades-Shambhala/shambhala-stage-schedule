@@ -1,13 +1,20 @@
-const CACHE_NAME = "stage-schedule-v15";
+const CACHE_NAME = "stage-schedule-v16";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=15",
-  "./camp-location.js?v=15",
-  "./schedule-data.js?v=15",
-  "./app.js?v=15",
-  "./planner.js?v=15",
-  "./manifest.webmanifest"
+  "./styles.css?v=16",
+  "./camp-location.js?v=16",
+  "./schedule-data.js?v=16",
+  "./app.js?v=16",
+  "./planner.js?v=16",
+  "./install.js?v=16",
+  "./manifest.webmanifest",
+  "./favicon.ico?v=16",
+  "./favicon-32.png?v=16",
+  "./favicon-16.png?v=16",
+  "./apple-touch-icon.png?v=16",
+  "./icon-192.png?v=16",
+  "./icon-512.png?v=16"
 ];
 
 self.addEventListener("install", event => {

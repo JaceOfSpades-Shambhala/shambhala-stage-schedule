@@ -30,6 +30,10 @@ a:hover { color: #ffb5d9; }
 .camp-credit a:hover { color: #ffb5d9; }
 h1, h2, p { margin-top: 0; }
 h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6rem); line-height: .93; letter-spacing: -.052em; }
+.install-button { display: inline-flex; align-items: center; gap: .35rem; margin-top: .65rem; padding: .5rem .9rem; border: 1px solid rgba(255, 255, 255, .22); border-radius: 999px; color: var(--ink); background: rgba(255, 255, 255, .07); cursor: pointer; font-size: .8rem; font-weight: 800; letter-spacing: .02em; transition: transform .15s ease, border-color .15s ease, background .15s ease; }
+.install-button:hover { transform: translateY(-1px); border-color: rgba(255, 255, 255, .58); }
+.install-button:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.install-hint { max-width: 34ch; margin: .5rem 0 0; color: var(--muted); font-size: .78rem; }
 .notice { max-width: 62ch; margin: 1rem 0 0; padding: .78rem .92rem; border-left: 3px solid var(--accent); color: #e6e3ee; background: rgba(15, 17, 31, .48); border-radius: 0 .55rem .55rem 0; font-size: .88rem; }
 .live-panel, .search-panel, .planner-panel, .schedule-card { background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); backdrop-filter: blur(16px); }
 .live-panel { display: grid; gap: 1rem; padding: 1.15rem; border-radius: 1.1rem; }
@@ -108,4 +112,4 @@ body.stage-village { --accent: #a981e1; --accent-deep: #7654af; }
 @media (min-width: 520px) { .stage-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); } .day-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (min-width: 650px) { .shell { padding-top: 5rem; } .live-panel { padding: 1.35rem; } .search-panel, .planner-panel { padding: 1.2rem 1.35rem; } .schedule-heading { padding: 1.6rem 1.55rem 1.15rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem minmax(0, 1fr) auto; padding-left: 1.55rem; padding-right: 1.55rem; } }
 @media (max-width: 420px) { .schedule-heading { flex-direction: column; } .day-tabs .tab { flex-direction: column; gap: .12rem; } .planner-heading { align-items: stretch; flex-direction: column; } .planner-actions { justify-content: flex-start; } .planner-set { grid-template-columns: minmax(4.6rem, auto) minmax(0, 1fr); } .planner-remove { grid-column: 2; justify-self: start; } }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tab, .planner-action, .planner-remove, .planner-add { transition: none; } .now-playing[data-status="active"] .status-dot { animation: none; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tab, .planner-action, .planner-remove, .planner-add, .install-button { transition: none; } .now-playing[data-status="active"] .status-dot { animation: none; } }

@@ -270,5 +270,4 @@
   window.addEventListener("hashchange", () => window.setTimeout(enhanceScheduleRows, 0));
   renderPlanner();
   enhanceScheduleRows();
-    if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=15").catch(() => {}));
 })();

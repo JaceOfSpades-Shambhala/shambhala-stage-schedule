@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-Current deployed version: `v15`
+Current deployed version: `v16`
 
 Rollback point before the custom set-list experiment: `2490e3b9b08138d549f9ec10174ca6c4a818961c` or branch `rollback-before-set-list`.
 
@@ -25,6 +25,9 @@ Rollback point before the custom set-list experiment: `2490e3b9b08138d549f9ec101
 - Up-next and starts-in timing in the Now Playing card
 - Camp Hexadecibel link under the stage heading that can open Google Maps to camp coordinates
 - Phone-local My Set List planner with tap-to-add, remove, clear, and copy controls
+- Installable app icons (favicon, apple-touch-icon, manifest icons) based on the Camp Hexadecibel pendant
+- Open Graph preview card metadata for links shared in chat apps
+- An Add to Home Screen button (Android/Chrome install prompt, manual Share instructions on iOS Safari)
 
 ## Stable NFC URLs
 
@@ -47,11 +50,15 @@ Each URL is far below a 504-byte NFC-tag limit.
 - `index.html` - page structure, header text, script/style version query strings
 - `styles.css` - mobile-first styling
 - `schedule-data.js` - schedule data in `window.SCHEDULE_DATA`
-- `app.js` - tabs, search, Now Playing, preview mode, current-day selection, camp link behavior, and URL handling
+- `app.js` - tabs, search, Now Playing, preview mode, current-day selection, camp link behavior, URL handling, and the site's single service worker registration
 - `planner.js` - phone-local My Set List feature
 - `camp-location.js` - easy-to-edit camp coordinates for the header Google Maps link
+- `install.js` - Add to Home Screen button behavior (Android/Chrome install prompt, iOS Safari hint)
 - `sw.js` - service worker cache for offline use
-- `manifest.webmanifest` - installable app metadata
+- `manifest.webmanifest` - installable app metadata, including icons
+- `favicon.ico`, `favicon-16.png`, `favicon-32.png` - browser tab / bookmark icons
+- `apple-touch-icon.png` - iOS home-screen icon (180x180, opaque background)
+- `icon-192.png`, `icon-512.png` - manifest install icons
 
 ## Updating camp coordinates from a phone
 
@@ -117,18 +124,18 @@ Selected sets are sorted by festival timeline, including post-midnight rollover 
 
 The site uses a network-first service worker. While online, it tries to fetch fresh same-origin files and update the cache. While offline, it falls back to the saved copy.
 
-When changing `index.html`, `styles.css`, `app.js`, `planner.js`, `schedule-data.js`, `camp-location.js`, or `sw.js`:
+When changing `index.html`, `styles.css`, `app.js`, `planner.js`, `install.js`, `schedule-data.js`, `camp-location.js`, `sw.js`, or any icon file:
 
-1. Bump the asset query strings in `index.html`, for example `?v=15`.
-2. Bump the service worker registration in `app.js` or `planner.js` to the same version, for example `sw.js?v=15`.
-3. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v15`.
+1. Bump the asset query strings in `index.html`, for example `?v=17`.
+2. Bump the service worker registration in `app.js` to the same version, for example `sw.js?v=17`. The service worker is registered once, from `app.js` only.
+3. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v17`.
 4. Update the cached asset query strings in `sw.js` to the same version.
 5. Open the site once while online after publishing so the device receives the new cache.
 
 Current cache name:
 
 ```js
-const CACHE_NAME = "stage-schedule-v15";
+const CACHE_NAME = "stage-schedule-v16";
 ```
 
 ## Schedule data model

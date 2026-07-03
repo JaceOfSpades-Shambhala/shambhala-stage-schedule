@@ -40,7 +40,7 @@
   }
 
   function normaliseForSearch(value) {
-    return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\u2019\u2018]/g, "'").toLowerCase().trim();
+    return String(value ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[’‘]/g, "'").toLowerCase().trim();
   }
 
   function clearSearch() {
@@ -184,6 +184,7 @@
       button.textContent = stage.label;
       button.setAttribute("role", "tab");
       button.setAttribute("aria-selected", String(stage.id === appState.stage));
+      button.setAttribute("aria-controls", "schedule");
       button.addEventListener("click", () => switchStage(stage.id));
       elements.stageTabs.append(button);
     });
@@ -196,6 +197,7 @@
       button.disabled = !available;
       button.setAttribute("role", "tab");
       button.setAttribute("aria-selected", String(day === appState.day));
+      button.setAttribute("aria-controls", "schedule");
       button.addEventListener("click", () => switchDay(day));
       const label = document.createElement("span");
       label.textContent = day;
@@ -355,5 +357,5 @@
   updateCampLocationLink();
   render();
   window.setInterval(renderLiveStatus, 30000);
-    if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=15").catch(() => {}));
+  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=16").catch(() => {}));
 })();

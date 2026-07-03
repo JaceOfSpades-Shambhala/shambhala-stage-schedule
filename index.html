@@ -7,10 +7,21 @@
   <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
   <title>Shambhala 2026 Stage Set Times</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=15">
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=16">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=16">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=16">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=16">
+  <link rel="stylesheet" href="styles.css?v=16">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Camp Hexadecibel">
+  <meta property="og:title" content="Shambhala 2026 Stage Set Times">
+  <meta property="og:description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
+  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=16">
+  <meta property="og:url" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/">
+  <meta name="twitter:card" content="summary">
 </head>
 <body>
-  <!-- v15 -->
+  <!-- v16 -->
   <a class="skip-link" href="#schedule">Skip to schedule</a>
   <div class="aurora aurora-one" aria-hidden="true"></div>
   <div class="aurora aurora-two" aria-hidden="true"></div>
@@ -20,6 +31,8 @@
       <p class="title-eyebrow">Shambhala 2026 Set Times</p>
       <h1 id="stage-title">AMP</h1>
       <p class="camp-credit"><span>Made by Camp Hexadecibel</span><span aria-hidden="true"> - </span><a id="camp-location-link" href="https://www.google.com/maps/search/?api=1&query=Shambhala%20Music%20Festival%20Salmo%20BC" target="_blank" rel="noreferrer">Come visit us</a></p>
+      <button id="install-button" class="install-button" type="button" hidden>Add to Home Screen</button>
+      <p id="install-hint" class="install-hint" hidden>On iPhone or iPad: tap the Share icon, then "Add to Home Screen".</p>
     </header>
 
     <section class="live-panel" aria-label="Live stage controls">
@@ -36,11 +49,11 @@
         <p class="controls-intro">Tap a stage or pick a day.</p>
         <div>
           <p class="control-label">Stage</p>
-          <nav id="stage-tabs" class="tabs stage-tabs" aria-label="Select a stage"></nav>
+          <nav id="stage-tabs" class="tabs stage-tabs" role="tablist" aria-label="Select a stage"></nav>
         </div>
         <div>
           <p class="control-label">Day</p>
-          <nav id="day-tabs" class="tabs day-tabs" aria-label="Select a day"></nav>
+          <nav id="day-tabs" class="tabs day-tabs" role="tablist" aria-label="Select a day"></nav>
         </div>
       </div>
     </section>
@@ -56,7 +69,7 @@
       Unofficial guide. Set times can change - confirm important plans in the official festival schedule or app.
     </div>
 
-    <section id="schedule" class="schedule-card" aria-live="polite">
+    <section id="schedule" class="schedule-card" role="tabpanel" aria-live="polite">
       <div class="schedule-heading">
         <div>
           <p id="day-label" class="eyebrow">THURSDAY</p>
@@ -91,9 +104,10 @@
     </footer>
   </main>
 
-  <script src="camp-location.js?v=15"></script>
-  <script src="schedule-data.js?v=15"></script>
-  <script src="app.js?v=15"></script>
-  <script src="planner.js?v=15"></script>
+  <script src="camp-location.js?v=16"></script>
+  <script src="schedule-data.js?v=16"></script>
+  <script src="app.js?v=16"></script>
+  <script src="planner.js?v=16"></script>
+  <script src="install.js?v=16"></script>
 </body>
 </html>
