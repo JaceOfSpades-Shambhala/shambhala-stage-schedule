@@ -160,12 +160,17 @@
     history.replaceState({}, "", url);
   }
 
+  function withViewTransition(update) {
+    if (document.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) document.startViewTransition(update);
+    else update();
+  }
+
   function switchStage(stageId) {
     appState.stage = stageId;
     if (!isAvailable(appState.day, appState.stage)) appState.day = getCurrentScheduleDay(appState.stage) || DAYS.find(day => isAvailable(day, appState.stage)) || "Friday";
     clearSearch();
     updateUrl();
-    render();
+    withViewTransition(render);
   }
 
   function switchDay(day) {
@@ -173,7 +178,7 @@
     appState.day = day;
     clearSearch();
     updateUrl();
-    render();
+    withViewTransition(render);
   }
 
   function renderTabs() {
@@ -347,7 +352,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=17";
+  const SCHEDULE_ASSET = "schedule-data.js?v=18";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -396,5 +401,5 @@
   window.setInterval(renderLiveStatus, 30000);
   window.setTimeout(checkForScheduleUpdate, 8000);
   window.setInterval(checkForScheduleUpdate, UPDATE_CHECK_INTERVAL_MS);
-  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=17").catch(() => {}));
+  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=18").catch(() => {}));
 })();
