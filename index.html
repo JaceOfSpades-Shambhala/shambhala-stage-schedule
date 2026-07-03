@@ -7,21 +7,21 @@
   <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
   <title>Shambhala 2026 Stage Set Times</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=17">
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=17">
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=17">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=17">
-  <link rel="stylesheet" href="styles.css?v=17">
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=18">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=18">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=18">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=18">
+  <link rel="stylesheet" href="styles.css?v=18">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Camp Hexadecibel">
   <meta property="og:title" content="Shambhala 2026 Stage Set Times">
   <meta property="og:description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
-  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=17">
+  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=18">
   <meta property="og:url" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/">
   <meta name="twitter:card" content="summary">
 </head>
 <body>
-  <!-- v17 -->
+  <!-- v18 -->
   <a class="skip-link" href="#schedule">Skip to schedule</a>
   <div class="aurora aurora-one" aria-hidden="true"></div>
   <div class="aurora aurora-two" aria-hidden="true"></div>
@@ -88,9 +88,14 @@
           <p id="planner-count" class="planner-count">0 sets saved</p>
         </div>
         <div class="planner-actions">
-          <button id="planner-copy" class="planner-action" type="button" hidden>Copy</button>
+          <button id="planner-share" class="planner-action" type="button" hidden>Share</button>
           <button id="planner-clear" class="planner-action" type="button" hidden>Clear</button>
         </div>
+      </div>
+      <div id="planner-up-next" class="planner-up-next" hidden>
+        <p class="planner-up-next-label">Up next from your sets</p>
+        <p id="planner-up-next-title" class="planner-up-next-title"></p>
+        <p id="planner-up-next-details" class="planner-up-next-details"></p>
       </div>
       <ol id="planner-list" class="planner-list"></ol>
       <p id="planner-empty" class="planner-empty">Tap + beside a set to save it here.</p>
@@ -107,10 +112,10 @@
 
   <button id="update-banner" class="update-banner" type="button" hidden>Schedule updated - tap to refresh</button>
 
-  <script src="camp-location.js?v=17"></script>
-  <script src="schedule-data.js?v=17"></script>
-  <script src="app.js?v=17"></script>
-  <script src="planner.js?v=17"></script>
-  <script src="install.js?v=17"></script>
+  <script src="camp-location.js?v=18"></script>
+  <script src="schedule-data.js?v=18"></script>
+  <script src="app.js?v=18"></script>
+  <script src="planner.js?v=18"></script>
+  <script src="install.js?v=18"></script>
 </body>
 </html>
