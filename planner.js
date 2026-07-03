@@ -143,6 +143,35 @@
     return loadSets().sort((a, b) => sortKey(a) - sortKey(b) || titleCaseStage(a.stageId).localeCompare(titleCaseStage(b.stageId)));
   }
 
+  // The published schedule has no end times, so a set is assumed to run until
+  // the next listed set on its own stage, capped at ASSUMED_SET_MINUTES.
+  const ASSUMED_SET_MINUTES = 90;
+
+  function setEndKey(match) {
+    const nextOnStage = buildStageTimeline(match.stageId).find(entry => entry.key > match.key);
+    const cap = match.key + ASSUMED_SET_MINUTES;
+    return nextOnStage ? Math.min(nextOnStage.key, cap) : cap;
+  }
+
+  function findOverlaps() {
+    const entries = loadSets()
+      .map(item => ({ item, match: timelineMatch(item) }))
+      .filter(entry => entry.match)
+      .map(entry => ({ ...entry, end: setEndKey(entry.match) }));
+    const overlaps = new Map();
+    const note = (item, artist) => overlaps.set(setId(item), [...(overlaps.get(setId(item)) || []), artist]);
+    entries.forEach((a, index) => {
+      entries.slice(index + 1).forEach(b => {
+        if (a.item.stageId === b.item.stageId) return;
+        if (a.match.key < b.end && b.match.key < a.end) {
+          note(a.item, b.item.artist);
+          note(b.item, a.item.artist);
+        }
+      });
+    });
+    return overlaps;
+  }
+
   function hasSet(item) {
     return loadSets().some(saved => setId(saved) === setId(item));
   }
@@ -229,7 +258,7 @@
     const timeline = loadSets()
       .map(item => ({ item, match: timelineMatch(item) }))
       .filter(entry => entry.match)
-      .sort((a, b) => a.match.key - b.match.key);
+      .sort((a, b) => a.match.key - b.match.key || titleCaseStage(a.item.stageId).localeCompare(titleCaseStage(b.item.stageId)));
     const next = timeline.find(entry => entry.match.key > nowKey);
     const current = timeline.filter(entry => entry.match.key <= nowKey && nowKey - entry.match.key <= CURRENT_SET_WINDOW_MINUTES).at(-1);
 
@@ -240,11 +269,12 @@
 
     elements.upNext.hidden = false;
     if (next) {
+      const alsoNext = timeline.filter(entry => entry !== next && entry.match.key === next.match.key);
       elements.upNextTitle.textContent = `${next.item.artist} - ${next.item.time} at ${titleCaseStage(next.item.stageId)}`;
-      const timing = `${formatDate(next.match.date)} - ${formatStartsIn(next.match.key - nowKey)}`;
-      elements.upNextDetails.textContent = current
-        ? `${timing} - Now: ${current.item.artist} at ${titleCaseStage(current.item.stageId)}`
-        : timing;
+      const parts = [`${formatDate(next.match.date)} - ${formatStartsIn(next.match.key - nowKey)}`];
+      if (alsoNext.length) parts.push(`Also at ${next.item.time}: ${alsoNext.map(entry => `${entry.item.artist} (${titleCaseStage(entry.item.stageId)})`).join(", ")}`);
+      if (current) parts.push(`Now: ${current.item.artist} at ${titleCaseStage(current.item.stageId)}`);
+      elements.upNextDetails.textContent = parts.join(" - ");
       return;
     }
     elements.upNextTitle.textContent = `${current.item.artist} at ${titleCaseStage(current.item.stageId)}`;
@@ -253,6 +283,7 @@
 
   function renderPlanner() {
     const sets = sortedSets();
+    const overlaps = findOverlaps();
     elements.count.textContent = `${sets.length} set${sets.length === 1 ? "" : "s"} saved`;
     elements.list.innerHTML = "";
     elements.empty.hidden = sets.length > 0;
@@ -261,6 +292,7 @@
     renderUpNext();
     sets.forEach(item => {
       const match = timelineMatch(item);
+      const conflicts = overlaps.get(setId(item));
       const row = document.createElement("li");
       row.className = "planner-set";
       const time = document.createElement("span");
@@ -271,10 +303,18 @@
       const artist = document.createElement("span");
       artist.className = "planner-artist";
       artist.textContent = item.artist;
+      details.append(artist);
+      if (conflicts) {
+        const badge = document.createElement("span");
+        badge.className = "overlap-badge";
+        badge.textContent = "Overlap";
+        details.append(badge);
+      }
       const meta = document.createElement("span");
       meta.className = "planner-meta";
-      meta.textContent = `${match ? formatDate(match.date) : item.day} - ${titleCaseStage(item.stageId)}`;
-      details.append(artist, meta);
+      meta.textContent = `${match ? formatDate(match.date) : item.day} - ${titleCaseStage(item.stageId)}`
+        + (conflicts ? ` - Overlaps ${conflicts.join(", ")}` : "");
+      details.append(meta);
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "planner-remove";

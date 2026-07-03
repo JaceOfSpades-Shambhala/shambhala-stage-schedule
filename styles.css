@@ -102,6 +102,7 @@ h2 { margin-bottom: 0; font-size: clamp(1.4rem, 5.6vw, 2rem); letter-spacing: -.
 .planner-add { min-width: 2.7rem; min-height: 2.15rem; padding: .32rem .52rem; border-radius: 999px; font-size: .78rem; }
 .planner-add.is-added { color: #161120; background: var(--accent); border-color: var(--accent); }
 .now-badge { width: max-content; padding: .12rem .42rem; border-radius: 999px; color: #161120; background: var(--accent); font-size: .66rem; font-weight: 950; letter-spacing: .08em; }
+.overlap-badge { width: max-content; padding: .12rem .42rem; border-radius: 999px; color: #161120; background: #f5bf4f; font-size: .66rem; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
 .empty-state { padding: 1.2rem; margin: 0; color: var(--muted); }
 footer { padding: 1.65rem .45rem 0; color: var(--muted); font-size: .8rem; }
 footer p:last-child { margin-bottom: 0; }

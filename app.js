@@ -352,7 +352,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=18";
+  const SCHEDULE_ASSET = "schedule-data.js?v=19";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -401,5 +401,5 @@
   window.setInterval(renderLiveStatus, 30000);
   window.setTimeout(checkForScheduleUpdate, 8000);
   window.setInterval(checkForScheduleUpdate, UPDATE_CHECK_INTERVAL_MS);
-  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=18").catch(() => {}));
+  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=19").catch(() => {}));
 })();
