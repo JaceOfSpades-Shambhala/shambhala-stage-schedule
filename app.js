@@ -361,7 +361,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=21";
+  const SCHEDULE_ASSET = "schedule-data.js?v=22";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -410,5 +410,19 @@
   window.setInterval(renderLiveStatus, 30000);
   window.setTimeout(checkForScheduleUpdate, 8000);
   window.setInterval(checkForScheduleUpdate, UPDATE_CHECK_INTERVAL_MS);
-  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=21").catch(() => {}));
+  async function registerPeriodicSync() {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      if (!("periodicSync" in registration)) return;
+      // Only granted for installed PWAs with enough engagement; never prompts,
+      // and a no-op on browsers without the permission or the API.
+      const status = await navigator.permissions.query({ name: "periodic-background-sync" });
+      if (status.state !== "granted") return;
+      await registration.periodicSync.register("refresh-schedule", { minInterval: 6 * 60 * 60 * 1000 });
+    } catch {}
+  }
+
+  if ("serviceWorker" in navigator) window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js?v=22").then(registerPeriodicSync).catch(() => {});
+  });
 })();

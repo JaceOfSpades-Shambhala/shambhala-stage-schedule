@@ -1,21 +1,21 @@
-const CACHE_NAME = "stage-schedule-v21";
+const CACHE_NAME = "stage-schedule-v22";
 const NETWORK_TIMEOUT_MS = 3500;
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=21",
-  "./camp-location.js?v=21",
-  "./schedule-data.js?v=21",
-  "./app.js?v=21",
-  "./planner.js?v=21",
-  "./install.js?v=21",
+  "./styles.css?v=22",
+  "./camp-location.js?v=22",
+  "./schedule-data.js?v=22",
+  "./app.js?v=22",
+  "./planner.js?v=22",
+  "./install.js?v=22",
   "./manifest.webmanifest",
-  "./favicon.ico?v=21",
-  "./favicon-32.png?v=21",
-  "./favicon-16.png?v=21",
-  "./apple-touch-icon.png?v=21",
-  "./icon-192.png?v=21",
-  "./icon-512.png?v=21"
+  "./favicon.ico?v=22",
+  "./favicon-32.png?v=22",
+  "./favicon-16.png?v=22",
+  "./apple-touch-icon.png?v=22",
+  "./icon-192.png?v=22",
+  "./icon-512.png?v=22"
 ];
 
 self.addEventListener("install", event => {
@@ -30,6 +30,26 @@ self.addEventListener("activate", event => {
     ))
   );
   self.clients.claim();
+});
+
+// Periodic Background Sync (Chrome/Android, installed PWAs): when the OS grants
+// the app a background window, refresh the schedule so the cache is already
+// fresh next time it opens - even if it opens offline. Only the small text/data
+// files are refreshed; the icons are skipped to spare festival bandwidth.
+const REFRESH_ASSETS = ASSETS.filter(asset => !/\.(png|ico)(\?|$)/.test(asset));
+
+async function refreshSchedule() {
+  const cache = await caches.open(CACHE_NAME);
+  await Promise.all(REFRESH_ASSETS.map(async asset => {
+    try {
+      const response = await fetch(asset, { cache: "reload" });
+      if (response && response.ok) await cache.put(asset, response);
+    } catch {}
+  }));
+}
+
+self.addEventListener("periodicsync", event => {
+  if (event.tag === "refresh-schedule") event.waitUntil(refreshSchedule());
 });
 
 // Prefer fresh files while online, but never leave a slow festival connection
