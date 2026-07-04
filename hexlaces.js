@@ -26,7 +26,6 @@
   const elements = {
     panel: document.querySelector("#hexlaces"),
     count: document.querySelector("#hexlace-count"),
-    refresh: document.querySelector("#hexlace-refresh"),
     list: document.querySelector("#hexlace-list"),
     empty: document.querySelector("#hexlace-empty"),
     setup: document.querySelector("#hexlace-setup"),
@@ -35,15 +34,14 @@
     myName: document.querySelector("#hexlace-name"),
     status: document.querySelector("#hexlace-status"),
     rename: document.querySelector("#hexlace-rename"),
-    copy: document.querySelector("#hexlace-copy"),
     shareLink: document.querySelector("#hexlace-share-link"),
-    qrToggle: document.querySelector("#hexlace-qr-toggle"),
     qr: document.querySelector("#hexlace-qr"),
     nfc: document.querySelector("#hexlace-nfc"),
     giveaway: document.querySelector("#hexlace-giveaway"),
     giveawayResult: document.querySelector("#hexlace-giveaway-result"),
+    giveawayQr: document.querySelector("#hexlace-giveaway-qr"),
     giveawayUrl: document.querySelector("#hexlace-giveaway-url"),
-    giveawayCopy: document.querySelector("#hexlace-giveaway-copy"),
+    giveawayShare: document.querySelector("#hexlace-giveaway-share"),
     giveawayNfc: document.querySelector("#hexlace-giveaway-nfc"),
     editor: document.querySelector("#hexlace-editor"),
     editorPrompt: document.querySelector("#hexlace-editor-prompt"),
@@ -58,6 +56,15 @@
   let editorMode = "";
   let publishTimer = 0;
   let giveawayLink = "";
+  let renderedQrUrl = "";
+
+  function renderQr(container, url) {
+    if (typeof qrcode !== "function" || !container) return;
+    const qr = qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    container.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+  }
 
   function stageLabel(stageId) {
     return STAGES.find(stage => stage.id === stageId)?.label || stageId;
@@ -134,10 +141,15 @@
     elements.editor.hidden = !editorMode;
     if (!identity) return;
     elements.myName.textContent = identity.name || "(no name yet)";
-    if (identity.invalid) elements.status.textContent = "This sharing link stopped working. Tap Change name to try re-publishing.";
+    if (identity.invalid) elements.status.textContent = "This sharing link stopped working. Tap your name to try re-publishing.";
     else if (identity.dirty) elements.status.textContent = "Changes waiting for signal to publish.";
     else if (identity.lastPublished) elements.status.textContent = `Live - published ${timeAgo(identity.lastPublished)}.`;
     else elements.status.textContent = "Live.";
+    const url = shareUrl(identity.readId);
+    if (url !== renderedQrUrl) {
+      renderQr(elements.qr, url);
+      renderedQrUrl = url;
+    }
   }
 
   function markDirtyAndPublishSoon() {
@@ -228,6 +240,7 @@
       if (!result.ok || !result.body?.readId) { feedback("Couldn't create one - check your signal."); return; }
       giveawayLink = `${shareUrl(result.body.readId)}&claim=${result.body.claimToken}`;
       elements.giveawayUrl.textContent = giveawayLink;
+      renderQr(elements.giveawayQr, giveawayLink);
       elements.giveawayResult.hidden = false;
       addCollected(result.body.readId, "Unclaimed Hexlace");
       feedback("Giveaway Hexlace created.");
@@ -258,7 +271,6 @@
       ? `${entries.length} Hexlace${entries.length === 1 ? "" : "s"} collected`
       : "No Hexlaces collected yet";
     elements.empty.hidden = entries.length > 0;
-    elements.refresh.hidden = entries.length === 0;
     elements.list.innerHTML = "";
     entries.forEach(entry => {
       const group = document.createElement("details");
@@ -430,21 +442,12 @@
     }
   }
 
-  function toggleQr() {
-    const identity = loadIdentity();
-    if (!identity) return;
-    if (elements.qr.hidden) {
-      if (typeof qrcode !== "function") { feedback("QR code isn't available."); return; }
-      const qr = qrcode(0, "M");
-      qr.addData(shareUrl(identity.readId));
-      qr.make();
-      elements.qr.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
-      elements.qr.hidden = false;
-      elements.qrToggle.textContent = "Hide QR";
-    } else {
-      elements.qr.hidden = true;
-      elements.qrToggle.textContent = "Show QR";
+  async function shareOrCopy(url, title) {
+    if (navigator.share) {
+      try { await navigator.share({ title, url }); return; }
+      catch (error) { if (error && error.name === "AbortError") return; }
     }
+    copyText(url, "Link copied.");
   }
 
   // --- Wiring ---------------------------------------------------------------
@@ -453,28 +456,16 @@
   elements.rename.addEventListener("click", () => openEditor("rename", "Update the name friends see:", loadIdentity()?.name || ""));
   elements.nameSave.addEventListener("click", saveName);
   elements.nameCancel.addEventListener("click", () => {
-    if (editorMode === "claim") feedback("You can set your name any time with Change name.");
+    if (editorMode === "claim") feedback("You can set your name any time by tapping it.");
     closeEditor();
   });
   elements.nameInput.addEventListener("keydown", event => { if (event.key === "Enter") saveName(); });
-  elements.copy.addEventListener("click", () => {
+  elements.shareLink.addEventListener("click", () => {
     const identity = loadIdentity();
-    if (identity) copyText(shareUrl(identity.readId), "Link copied.");
+    if (identity) shareOrCopy(shareUrl(identity.readId), `${identity.name}'s Shambhala sets`);
   });
-  elements.shareLink.addEventListener("click", async () => {
-    const identity = loadIdentity();
-    if (!identity) return;
-    const url = shareUrl(identity.readId);
-    if (navigator.share) {
-      try { await navigator.share({ title: `${identity.name}'s Shambhala sets`, url }); return; }
-      catch (error) { if (error && error.name === "AbortError") return; }
-    }
-    copyText(url, "Link copied.");
-  });
-  elements.qrToggle.addEventListener("click", toggleQr);
   elements.giveaway.addEventListener("click", createGiveaway);
-  elements.giveawayCopy.addEventListener("click", () => { if (giveawayLink) copyText(giveawayLink, "Giveaway link copied."); });
-  elements.refresh.addEventListener("click", () => { refreshCollected(true); feedback("Refreshing..."); });
+  elements.giveawayShare.addEventListener("click", () => { if (giveawayLink) shareOrCopy(giveawayLink, "A Hexlace for you"); });
   if ("NDEFReader" in window) {
     elements.nfc.hidden = false;
     elements.giveawayNfc.hidden = false;
