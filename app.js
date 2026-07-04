@@ -133,6 +133,15 @@
     return { type: "unavailable", now };
   }
 
+  // The actual festival programming day right now, independent of any stage.
+  // Sets run past midnight, so early-morning hours still belong to the
+  // previous day's programming. Returns null outside the festival.
+  function getCurrentFestivalDay() {
+    const now = getFestivalNow();
+    const date = now.minutes < 10 * 60 ? addDays(now.date, -1) : now.date;
+    return DAYS.find(day => FESTIVAL_DATES[day] === date) || null;
+  }
+
   function getCurrentScheduleDay(stageId) {
     const status = getNowPlayingStatus(stageId);
     if (status.current?.day && isAvailable(status.current.day, stageId)) return status.current.day;
@@ -182,7 +191,7 @@
   }
 
   function renderTabs() {
-    const currentScheduleDay = getCurrentScheduleDay(appState.stage);
+    const currentScheduleDay = getCurrentFestivalDay();
     elements.stageTabs.innerHTML = "";
     STAGES.forEach(stage => {
       const button = document.createElement("button");
@@ -352,7 +361,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=20";
+  const SCHEDULE_ASSET = "schedule-data.js?v=21";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -401,5 +410,5 @@
   window.setInterval(renderLiveStatus, 30000);
   window.setTimeout(checkForScheduleUpdate, 8000);
   window.setInterval(checkForScheduleUpdate, UPDATE_CHECK_INTERVAL_MS);
-  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=20").catch(() => {}));
+  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=21").catch(() => {}));
 })();
