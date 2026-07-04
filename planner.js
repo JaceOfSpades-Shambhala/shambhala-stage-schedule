@@ -12,9 +12,6 @@
   const FESTIVAL_TIME_ZONE = "America/Vancouver";
   const FESTIVAL_DATES = { Thursday: "2026-07-23", Friday: "2026-07-24", Saturday: "2026-07-25", Sunday: "2026-07-26" };
   const STORAGE_KEY = "shambhala-2026-my-set-list";
-  // How long after its start time a saved set still counts as "now" here -
-  // the source schedule has no end times.
-  const CURRENT_SET_WINDOW_MINUTES = 90;
   const data = window.SCHEDULE_DATA || {};
   const elements = {
     panel: document.querySelector("#planner"),
@@ -27,8 +24,10 @@
     clear: document.querySelector("#planner-clear"),
     feedback: document.querySelector("#planner-feedback"),
     upNext: document.querySelector("#planner-up-next"),
-    upNextTitle: document.querySelector("#planner-up-next-title"),
-    upNextDetails: document.querySelector("#planner-up-next-details")
+    liveNow: document.querySelector("#planner-live-now"),
+    liveNowList: document.querySelector("#planner-live-now-list"),
+    liveNext: document.querySelector("#planner-live-next"),
+    liveNextList: document.querySelector("#planner-live-next-list")
   };
   if (!elements.panel || !elements.scheduleList) return;
 
@@ -146,6 +145,9 @@
   // The published schedule has no end times, so a set is assumed to run until
   // the next listed set on its own stage, capped at ASSUMED_SET_MINUTES.
   const ASSUMED_SET_MINUTES = 90;
+  // Overlaps shorter than this are treated as festival-normal (leave one set
+  // a little early) and not flagged.
+  const OVERLAP_IGNORE_MINUTES = 20;
 
   function setEndKey(match) {
     const nextOnStage = buildStageTimeline(match.stageId).find(entry => entry.key > match.key);
@@ -153,17 +155,23 @@
     return nextOnStage ? Math.min(nextOnStage.key, cap) : cap;
   }
 
-  function findOverlaps() {
-    const entries = loadSets()
+  function savedTimeline() {
+    return loadSets()
       .map(item => ({ item, match: timelineMatch(item) }))
       .filter(entry => entry.match)
-      .map(entry => ({ ...entry, end: setEndKey(entry.match) }));
+      .map(entry => ({ ...entry, end: setEndKey(entry.match) }))
+      .sort((a, b) => a.match.key - b.match.key || titleCaseStage(a.item.stageId).localeCompare(titleCaseStage(b.item.stageId)));
+  }
+
+  function findOverlaps() {
+    const entries = savedTimeline();
     const overlaps = new Map();
     const note = (item, artist) => overlaps.set(setId(item), [...(overlaps.get(setId(item)) || []), artist]);
     entries.forEach((a, index) => {
       entries.slice(index + 1).forEach(b => {
         if (a.item.stageId === b.item.stageId) return;
-        if (a.match.key < b.end && b.match.key < a.end) {
+        const overlapMinutes = Math.min(a.end, b.end) - Math.max(a.match.key, b.match.key);
+        if (overlapMinutes >= OVERLAP_IGNORE_MINUTES) {
           note(a.item, b.item.artist);
           note(b.item, a.item.artist);
         }
@@ -251,34 +259,85 @@
     setFeedback.timeout = window.setTimeout(() => { elements.feedback.textContent = ""; }, 2200);
   }
 
+  function liveEntry(artist, detailText) {
+    const wrap = document.createElement("div");
+    wrap.className = "planner-live-entry";
+    const title = document.createElement("p");
+    title.className = "planner-live-title";
+    title.textContent = artist;
+    const details = document.createElement("p");
+    details.className = "planner-live-details";
+    details.textContent = detailText;
+    wrap.append(title, details);
+    return wrap;
+  }
+
   function renderUpNext() {
     if (!elements.upNext) return;
     const now = getFestivalNow();
     const nowKey = dateToSerial(now.date) * 1440 + now.minutes;
-    const timeline = loadSets()
-      .map(item => ({ item, match: timelineMatch(item) }))
-      .filter(entry => entry.match)
-      .sort((a, b) => a.match.key - b.match.key || titleCaseStage(a.item.stageId).localeCompare(titleCaseStage(b.item.stageId)));
+    const timeline = savedTimeline();
+    const playing = timeline.filter(entry => entry.match.key <= nowKey && nowKey < entry.end);
     const next = timeline.find(entry => entry.match.key > nowKey);
-    const current = timeline.filter(entry => entry.match.key <= nowKey && nowKey - entry.match.key <= CURRENT_SET_WINDOW_MINUTES).at(-1);
+    const upcoming = next ? timeline.filter(entry => entry.match.key === next.match.key) : [];
 
-    if (!next && !current) {
-      elements.upNext.hidden = true;
-      return;
-    }
+    elements.upNext.hidden = !playing.length && !upcoming.length;
+    elements.liveNow.hidden = !playing.length;
+    elements.liveNext.hidden = !upcoming.length;
 
-    elements.upNext.hidden = false;
-    if (next) {
-      const alsoNext = timeline.filter(entry => entry !== next && entry.match.key === next.match.key);
-      elements.upNextTitle.textContent = `${next.item.artist} - ${next.item.time} at ${titleCaseStage(next.item.stageId)}`;
-      const parts = [`${formatDate(next.match.date)} - ${formatStartsIn(next.match.key - nowKey)}`];
-      if (alsoNext.length) parts.push(`Also at ${next.item.time}: ${alsoNext.map(entry => `${entry.item.artist} (${titleCaseStage(entry.item.stageId)})`).join(", ")}`);
-      if (current) parts.push(`Now: ${current.item.artist} at ${titleCaseStage(current.item.stageId)}`);
-      elements.upNextDetails.textContent = parts.join(" - ");
-      return;
+    elements.liveNowList.innerHTML = "";
+    playing.forEach(entry => elements.liveNowList.append(
+      liveEntry(entry.item.artist, `Started at ${entry.item.time} - ${titleCaseStage(entry.item.stageId)}`)
+    ));
+
+    elements.liveNextList.innerHTML = "";
+    upcoming.forEach(entry => elements.liveNextList.append(
+      liveEntry(entry.item.artist, `${entry.item.time} at ${titleCaseStage(entry.item.stageId)} - ${formatStartsIn(entry.match.key - nowKey)}`)
+    ));
+  }
+
+  // Remembers days the user has manually opened or closed, so re-renders
+  // (add/remove/clear) don't fight their choice within a session.
+  const dayOpenState = new Map();
+
+  function currentScheduleDay() {
+    const now = getFestivalNow();
+    // Sets run well past midnight, so early-morning hours still belong to
+    // the previous schedule day.
+    const date = now.minutes < 10 * 60 ? addDays(now.date, -1) : now.date;
+    return DAYS.find(day => FESTIVAL_DATES[day] === date) || "";
+  }
+
+  function buildSetRow(item, conflicts) {
+    const row = document.createElement("li");
+    row.className = "planner-set";
+    const time = document.createElement("span");
+    time.className = "planner-time";
+    time.textContent = item.time;
+    const details = document.createElement("span");
+    details.className = "planner-details";
+    const artist = document.createElement("span");
+    artist.className = "planner-artist";
+    artist.textContent = item.artist;
+    details.append(artist);
+    if (conflicts) {
+      const badge = document.createElement("span");
+      badge.className = "overlap-badge";
+      badge.textContent = "Overlap";
+      details.append(badge);
     }
-    elements.upNextTitle.textContent = `${current.item.artist} at ${titleCaseStage(current.item.stageId)}`;
-    elements.upNextDetails.textContent = `Started at ${current.item.time} - the last set on your list`;
+    const meta = document.createElement("span");
+    meta.className = "planner-meta";
+    meta.textContent = titleCaseStage(item.stageId) + (conflicts ? ` - Overlaps ${conflicts.join(", ")}` : "");
+    details.append(meta);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "planner-remove";
+    remove.textContent = "Remove";
+    remove.setAttribute("aria-label", `Remove ${item.artist} from My Set List`);
+    remove.addEventListener("click", () => removeSet(item));
+    row.append(time, details, remove);
+    return row;
   }
 
   function renderPlanner() {
@@ -290,39 +349,29 @@
     elements.share.hidden = sets.length === 0;
     elements.clear.hidden = sets.length === 0;
     renderUpNext();
-    sets.forEach(item => {
-      const match = timelineMatch(item);
-      const conflicts = overlaps.get(setId(item));
-      const row = document.createElement("li");
-      row.className = "planner-set";
-      const time = document.createElement("span");
-      time.className = "planner-time";
-      time.textContent = item.time;
-      const details = document.createElement("span");
-      details.className = "planner-details";
-      const artist = document.createElement("span");
-      artist.className = "planner-artist";
-      artist.textContent = item.artist;
-      details.append(artist);
-      if (conflicts) {
-        const badge = document.createElement("span");
-        badge.className = "overlap-badge";
-        badge.textContent = "Overlap";
-        details.append(badge);
-      }
-      const meta = document.createElement("span");
-      meta.className = "planner-meta";
-      meta.textContent = `${match ? formatDate(match.date) : item.day} - ${titleCaseStage(item.stageId)}`
-        + (conflicts ? ` - Overlaps ${conflicts.join(", ")}` : "");
-      details.append(meta);
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "planner-remove";
-      remove.textContent = "Remove";
-      remove.setAttribute("aria-label", `Remove ${item.artist} from My Set List`);
-      remove.addEventListener("click", () => removeSet(item));
-      row.append(time, details, remove);
-      elements.list.append(row);
+    const currentDay = currentScheduleDay();
+    DAYS.forEach(day => {
+      const daySets = sets.filter(item => item.day === day);
+      if (!daySets.length) return;
+      const group = document.createElement("details");
+      group.className = "planner-day";
+      // Outside the festival there is no current day, so every day stays open.
+      group.open = dayOpenState.has(day) ? dayOpenState.get(day) : (!currentDay || day === currentDay);
+      group.addEventListener("toggle", () => dayOpenState.set(day, group.open));
+      const summary = document.createElement("summary");
+      summary.className = "planner-day-summary";
+      const name = document.createElement("span");
+      name.className = "planner-day-name";
+      name.textContent = day;
+      const count = document.createElement("span");
+      count.className = "planner-day-count";
+      count.textContent = `${daySets.length} set${daySets.length === 1 ? "" : "s"}`;
+      summary.append(name, count);
+      const list = document.createElement("ol");
+      list.className = "planner-day-list";
+      daySets.forEach(item => list.append(buildSetRow(item, overlaps.get(setId(item)))));
+      group.append(summary, list);
+      elements.list.append(group);
     });
   }
 
