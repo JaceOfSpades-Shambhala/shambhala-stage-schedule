@@ -135,7 +135,12 @@
   }
 
   function saveSets(sets) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sets.map(normaliseSet)));
+    // Stored pre-sorted so anything publishing the raw list (hexlaces.js)
+    // shares it in chronological order.
+    const sorted = sets.map(normaliseSet)
+      .sort((a, b) => sortKey(a) - sortKey(b) || titleCaseStage(a.stageId).localeCompare(titleCaseStage(b.stageId)));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
+    window.dispatchEvent(new CustomEvent("setlist-changed"));
   }
 
   function sortedSets() {
