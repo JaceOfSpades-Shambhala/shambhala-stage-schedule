@@ -361,7 +361,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=24";
+  const SCHEDULE_ASSET = "schedule-data.js?v=25";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -372,20 +372,46 @@
     elements.scheduleVersion.hidden = !version;
   }
 
+  function showUpdateBanner() {
+    updateAvailable = true;
+    elements.updateBanner.hidden = false;
+  }
+
+  // The release number lives in a comment at the top of <body>; every deploy
+  // bumps it, so comparing it against the live copy detects new app code the
+  // same way SCHEDULE_VERSION detects new set times.
+  function currentAppVersion() {
+    for (const node of document.body.childNodes) {
+      if (node.nodeType === Node.COMMENT_NODE) {
+        const match = node.textContent.match(/v(\d+)/);
+        if (match) return match[1];
+      }
+    }
+    return "";
+  }
+
   async function checkForScheduleUpdate() {
     if (updateAvailable || document.hidden || navigator.onLine === false) return;
-    const currentVersion = String(window.SCHEDULE_VERSION || "").trim();
-    if (!currentVersion || !elements.updateBanner) return;
+    if (!elements.updateBanner) return;
     try {
       // cache: "no-store" skips the HTTP cache, and the service worker stores
-      // the fresh copy it fetches here - so the reload below still shows the
-      // new schedule even if the signal drops again right after this check.
-      const response = await fetch(SCHEDULE_ASSET, { cache: "no-store" });
-      if (!response.ok) return;
-      const latest = (await response.text()).match(/SCHEDULE_VERSION\s*=\s*"([^"]+)"/)?.[1];
-      if (latest && latest !== currentVersion) {
-        updateAvailable = true;
-        elements.updateBanner.hidden = false;
+      // the fresh copies it fetches here - so the reload below still shows the
+      // new version even if the signal drops again right after this check.
+      const currentVersion = String(window.SCHEDULE_VERSION || "").trim();
+      if (currentVersion) {
+        const response = await fetch(SCHEDULE_ASSET, { cache: "no-store" });
+        if (response.ok) {
+          const latest = (await response.text()).match(/SCHEDULE_VERSION\s*=\s*"([^"]+)"/)?.[1];
+          if (latest && latest !== currentVersion) return showUpdateBanner();
+        }
+      }
+      const appVersion = currentAppVersion();
+      if (appVersion) {
+        const response = await fetch("index.html", { cache: "no-store" });
+        if (response.ok) {
+          const latest = (await response.text()).match(/<!--\s*v(\d+)\s*-->/)?.[1];
+          if (latest && latest !== appVersion) showUpdateBanner();
+        }
       }
     } catch {}
   }
@@ -423,6 +449,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=24").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=25").then(registerPeriodicSync).catch(() => {});
   });
 })();
