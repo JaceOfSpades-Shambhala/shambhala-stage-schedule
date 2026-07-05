@@ -1,0 +1,14 @@
+// Config for the shambhala-setlists API worker (source in worker/src).
+// This lives at the repo root ON PURPOSE: a Cloudflare git integration is (or
+// was) connected to this repo, and without a root config its automatic build
+// deploys the repo as static assets OVER the API worker, breaking Hexlace
+// sharing. With this file, any such build deploys the API correctly instead.
+// Manual deploys: run `wrangler deploy` from the repo root.
+{
+  "name": "shambhala-setlists",
+  "main": "worker/src/index.js",
+  "compatibility_date": "2026-07-01",
+  "kv_namespaces": [
+    { "binding": "LISTS", "id": "61bdc52caedc49c0acefbd5ae92cb5fe" }
+  ]
+}

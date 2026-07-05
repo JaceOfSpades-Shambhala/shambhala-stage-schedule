@@ -1,9 +1,0 @@
-name = "shambhala-setlists"
-main = "src/index.js"
-compatibility_date = "2026-07-01"
-
-# KV namespace holding shared set lists. The id is filled in by
-# `wrangler kv namespace create LISTS` during setup.
-[[kv_namespaces]]
-binding = "LISTS"
-id = "61bdc52caedc49c0acefbd5ae92cb5fe"
