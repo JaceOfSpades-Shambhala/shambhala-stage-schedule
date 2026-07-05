@@ -5,13 +5,17 @@
 // someone's tag can only ever read, never overwrite.
 //
 // Routes:
-//   POST /lists               -> create, returns { readId, writeKey } and, when
-//                                the body has claimable:true, a one-time claimToken
-//                                for pre-programmed giveaway tags
+//   POST /lists               -> create own list, returns { readId, writeKey };
+//                                with claimable:true instead returns { readId,
+//                                claimToken } and stores NO write key, so a
+//                                giveaway tag is unwritable until claimed
 //   GET  /lists/:readId       -> read,   returns { name, sets, updated }
 //   PUT  /lists/:readId       -> update, requires header X-Write-Key
-//   POST /lists/:readId/claim -> exchange a claim token for the write key, once;
-//                                lets a gifted tag's first owner take it over
+//   POST /lists/:readId/claim -> the recipient sends the claim token plus a
+//                                write key THEY generated; the server records it
+//                                and burns the token. First valid claim wins,
+//                                which lets the claimer own the tag offline (the
+//                                claim is retried until it lands).
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -21,9 +25,10 @@ const CORS = {
 };
 
 const TTL_SECONDS = 60 * 24 * 60 * 60; // lists expire 60 days after their last write
-const MAX_SETS = 200;
+const MAX_SETS = 100;
 const MAX_BYTES = 20000;
 const MAX_NAME = 60;
+const MIN_KEY_LENGTH = 16;
 // Base58-ish alphabet: no 0/O/1/l/I, so ids are safe to read aloud or retype.
 const ID_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
 
@@ -37,7 +42,7 @@ function randomId(length) {
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json", ...CORS }
+    headers: { "Content-Type": "application/json", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store", ...CORS }
   });
 }
 
@@ -79,7 +84,7 @@ export default {
     if (parts[0] !== "lists") return json({ error: "Not found." }, 404);
 
     try {
-      // POST /lists — create a new shared list.
+      // POST /lists — create a list.
       if (request.method === "POST" && parts.length === 1) {
         const body = await readJson(request);
         const blob = serialize(cleanPayload(body));
@@ -88,27 +93,32 @@ export default {
           readId = randomId(8);
           if (!(await env.LISTS.get(`list:${readId}`))) break;
         }
-        const writeKey = randomId(24);
         await env.LISTS.put(`list:${readId}`, blob, { expirationTtl: TTL_SECONDS });
-        await env.LISTS.put(`auth:${readId}`, writeKey, { expirationTtl: TTL_SECONDS });
-        const created = { readId, writeKey };
+        // A giveaway tag is created unclaimed: no write key exists yet, so it
+        // cannot be published to until someone claims it and sets one.
         if (body.claimable === true) {
-          created.claimToken = randomId(12);
-          await env.LISTS.put(`claim:${readId}`, created.claimToken, { expirationTtl: TTL_SECONDS });
+          const claimToken = randomId(12);
+          await env.LISTS.put(`claim:${readId}`, claimToken, { expirationTtl: TTL_SECONDS });
+          return json({ readId, claimToken }, 201);
         }
-        return json(created, 201);
+        const writeKey = randomId(24);
+        await env.LISTS.put(`auth:${readId}`, writeKey, { expirationTtl: TTL_SECONDS });
+        return json({ readId, writeKey }, 201);
       }
 
-      // POST /lists/:readId/claim — one-time write-key handoff for gifted tags.
+      // POST /lists/:readId/claim — the recipient records the write key they
+      // generated. First valid claim wins and burns the token.
       if (request.method === "POST" && parts.length === 3 && parts[2] === "claim") {
         const readId = parts[1];
         const expected = await env.LISTS.get(`claim:${readId}`);
-        if (!expected) return json({ error: "Not claimable." }, 404);
+        if (!expected) return json({ error: "Already claimed or not claimable." }, 409);
         const body = await readJson(request);
         if (((body && body.claimToken) || "") !== expected) return json({ error: "Invalid claim token." }, 403);
+        const writeKey = body && typeof body.writeKey === "string" ? body.writeKey : "";
+        if (writeKey.length < MIN_KEY_LENGTH) return json({ error: "A valid write key is required." }, 400);
+        await env.LISTS.put(`auth:${readId}`, writeKey, { expirationTtl: TTL_SECONDS });
         await env.LISTS.delete(`claim:${readId}`);
-        const writeKey = await env.LISTS.get(`auth:${readId}`);
-        return json({ writeKey });
+        return json({ ok: true });
       }
 
       // GET /lists/:readId — read a shared list.
@@ -126,7 +136,6 @@ export default {
         if ((request.headers.get("X-Write-Key") || "") !== expected) return json({ error: "Invalid write key." }, 403);
         const blob = serialize(cleanPayload(await readJson(request)));
         await env.LISTS.put(`list:${readId}`, blob, { expirationTtl: TTL_SECONDS });
-        await env.LISTS.put(`auth:${readId}`, expected, { expirationTtl: TTL_SECONDS });
         return json({ ok: true, updated: JSON.parse(blob).updated });
       }
     } catch (message) {

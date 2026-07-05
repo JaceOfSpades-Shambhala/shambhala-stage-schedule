@@ -37,6 +37,13 @@
     return STAGES.find(stage => stage.id === stageId)?.label || "AMP";
   }
 
+  // A malformed percent-encoding in the URL hash (e.g. a truncated shared link
+  // or a mis-written NFC tag) otherwise throws and aborts the whole script.
+  function safeDecodeHash() {
+    try { return decodeURIComponent(window.location.hash.replace(/^#/, "")); }
+    catch { return window.location.hash.replace(/^#/, ""); }
+  }
+
   function isAvailable(day, stage) {
     return Array.isArray(data[day]?.[stage]) && data[day][stage].length > 0;
   }
@@ -153,7 +160,7 @@
   }
 
   function getInitialState() {
-    const hash = decodeURIComponent(window.location.hash.replace(/^#/, "")).toLowerCase();
+    const hash = safeDecodeHash().toLowerCase();
     const matchedStage = STAGES.find(stage => stage.id === hash);
     if (matchedStage) appState.stage = matchedStage.id;
     const requestedDay = new URLSearchParams(window.location.search).get("day");
@@ -361,7 +368,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=25";
+  const SCHEDULE_ASSET = "schedule-data.js?v=26";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -397,9 +404,11 @@
       // cache: "no-store" skips the HTTP cache, and the service worker stores
       // the fresh copies it fetches here - so the reload below still shows the
       // new version even if the signal drops again right after this check.
+      // "no-cache" revalidates with the server's ETag - a ~304 (few hundred
+      // bytes) when nothing changed, versus re-downloading the file every time.
       const currentVersion = String(window.SCHEDULE_VERSION || "").trim();
       if (currentVersion) {
-        const response = await fetch(SCHEDULE_ASSET, { cache: "no-store" });
+        const response = await fetch(SCHEDULE_ASSET, { cache: "no-cache" });
         if (response.ok) {
           const latest = (await response.text()).match(/SCHEDULE_VERSION\s*=\s*"([^"]+)"/)?.[1];
           if (latest && latest !== currentVersion) return showUpdateBanner();
@@ -407,7 +416,7 @@
       }
       const appVersion = currentAppVersion();
       if (appVersion) {
-        const response = await fetch("index.html", { cache: "no-store" });
+        const response = await fetch("index.html", { cache: "no-cache" });
         if (response.ok) {
           const latest = (await response.text()).match(/<!--\s*v(\d+)\s*-->/)?.[1];
           if (latest && latest !== appVersion) showUpdateBanner();
@@ -419,7 +428,7 @@
   elements.search.addEventListener("input", event => { appState.term = event.target.value || ""; renderSchedule(); });
   elements.search.addEventListener("search", event => { appState.term = event.target.value || ""; renderSchedule(); });
   window.addEventListener("hashchange", () => {
-    const stage = STAGES.find(item => item.id === decodeURIComponent(window.location.hash.replace(/^#/, "")).toLowerCase());
+    const stage = STAGES.find(item => item.id === safeDecodeHash().toLowerCase());
     if (stage && stage.id !== appState.stage) switchStage(stage.id);
   });
   document.addEventListener("visibilitychange", () => {
@@ -449,6 +458,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=25").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=26").then(registerPeriodicSync).catch(() => {});
   });
 })();

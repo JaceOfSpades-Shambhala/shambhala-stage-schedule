@@ -3,8 +3,11 @@
 // list into the "Hexlaces Collected" panel, refreshed whenever there's signal.
 // A secret write key, held only in the owner's localStorage, is what publishes
 // changes - so tapping someone's tag can only ever read, never overwrite.
-// Giveaway tags add a one-time claim token (?claim=) that the first opener
-// exchanges for the write key; the token burns server-side, locking ownership.
+// Giveaway tags add a one-time claim token (?claim=). The recipient's device
+// adopts the tag immediately with a write key IT generates (so it works fully
+// offline), then sends that key with the token the moment it gets signal; the
+// first successful claim burns the token and locks ownership. Caveat surfaced
+// to users: get signal once before letting anyone else tap a fresh tag.
 (() => {
   const API_BASE = "https://shambhala-setlists.hexadecibel.workers.dev";
   const IDENTITY_KEY = "shambhala-2026-hexlace-identity";
@@ -57,6 +60,16 @@
   let publishTimer = 0;
   let giveawayLink = "";
   let renderedQrUrl = "";
+  let claiming = false;
+
+  // Unambiguous alphabet (no 0/O/1/l/I), matching the Worker's id style.
+  const KEY_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
+  function randomKey(length) {
+    const bytes = crypto.getRandomValues(new Uint8Array(length));
+    let out = "";
+    for (const byte of bytes) out += KEY_ALPHABET[byte % KEY_ALPHABET.length];
+    return out;
+  }
 
   function renderQr(container, url) {
     if (typeof qrcode !== "function" || !container) return;
@@ -80,7 +93,7 @@
   }
 
   function saveIdentity(identity) {
-    localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
+    try { localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity)); } catch {}
   }
 
   function loadCollected() {
@@ -93,7 +106,7 @@
   }
 
   function saveCollected(entries) {
-    localStorage.setItem(COLLECTED_KEY, JSON.stringify(entries));
+    try { localStorage.setItem(COLLECTED_KEY, JSON.stringify(entries)); } catch {}
   }
 
   function mySets() {
@@ -141,7 +154,8 @@
     elements.editor.hidden = !editorMode;
     if (!identity) return;
     elements.myName.textContent = identity.name || "(no name yet)";
-    if (identity.invalid) elements.status.textContent = "This sharing link stopped working. Tap your name to try re-publishing.";
+    if (identity.pendingClaim) elements.status.textContent = "Get signal once to finish claiming this Hexlace - then it's safely yours.";
+    else if (identity.invalid) elements.status.textContent = "This sharing link stopped working. Tap your name to try re-publishing.";
     else if (identity.dirty) elements.status.textContent = "Changes waiting for signal to publish.";
     else if (identity.lastPublished) elements.status.textContent = `Live - published ${timeAgo(identity.lastPublished)}.`;
     else elements.status.textContent = "Live.";
@@ -165,6 +179,9 @@
   async function publish() {
     const identity = loadIdentity();
     if (!identity || !identity.name) return;
+    // A freshly claimed tag has no server-side write key until the claim lands,
+    // so finish that first; the claim publishes the current list on success.
+    if (identity.pendingClaim) { flushPendingClaim(); return; }
     try {
       const result = await api(`/lists/${identity.readId}`, {
         method: "PUT",
@@ -205,11 +222,17 @@
     elements.nameSave.disabled = true;
     try {
       if (editorMode === "enable") {
-        const result = await api("/lists", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, sets: mySets() })
-        });
+        let result;
+        try {
+          result = await api("/lists", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, sets: mySets() })
+          });
+        } catch {
+          feedback("Couldn't start sharing - you need signal for this first step.");
+          return;
+        }
         if (!result.ok || !result.body?.readId) { feedback("Couldn't start sharing - check your signal."); return; }
         saveIdentity({ readId: result.body.readId, writeKey: result.body.writeKey, name, lastPublished: Date.now() });
         feedback("Sharing is live!");
@@ -249,18 +272,54 @@
     }
   }
 
-  async function claimHexlace(readId, claimToken) {
-    const result = await api(`/lists/${readId}/claim`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ claimToken })
-    });
-    if (result.ok && result.body?.writeKey) {
-      saveIdentity({ readId, writeKey: result.body.writeKey, name: "" });
-      openEditor("claim", "This Hexlace is now yours! What name should friends see?", "");
-      return true;
+  function claimHexlace(readId, claimToken) {
+    // Adopt the tag right away with a locally generated key so naming and
+    // list-building work offline; the claim is sent (and retried) on signal.
+    saveIdentity({ readId, writeKey: randomKey(24), name: "", pendingClaim: claimToken, dirty: true });
+    openEditor("claim", "This Hexlace is now yours! What name should friends see?", "");
+    flushPendingClaim();
+    return true;
+  }
+
+  async function flushPendingClaim() {
+    const identity = loadIdentity();
+    if (!identity || !identity.pendingClaim || claiming) return;
+    claiming = true;
+    try {
+      const result = await api(`/lists/${identity.readId}/claim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claimToken: identity.pendingClaim, writeKey: identity.writeKey })
+      });
+      if (result.ok) {
+        const claimed = loadIdentity();
+        if (claimed && claimed.readId === identity.readId) {
+          delete claimed.pendingClaim;
+          saveIdentity(claimed);
+          publish();
+        }
+      } else if (result.status === 409 || result.status === 403) {
+        // Someone else claimed this tag first. Keep the user's sets, drop the
+        // dead identity, and collect the winner's list instead.
+        const lostId = identity.readId;
+        try { localStorage.removeItem(IDENTITY_KEY); } catch {}
+        editorMode = "";
+        feedback("This Hexlace was claimed by someone else first. Your sets are safe - tap 'Start sharing' to make a new one.");
+        addCollected(lostId, "");
+        renderMine();
+      }
+    } catch {
+      // Offline: leave the pending claim in place and try again later.
+    } finally {
+      claiming = false;
     }
-    return false;
+  }
+
+  function syncMine() {
+    const identity = loadIdentity();
+    if (!identity) return;
+    if (identity.pendingClaim) flushPendingClaim();
+    else if (identity.dirty) publish();
   }
 
   // --- Collecting friends --------------------------------------------------
@@ -477,15 +536,15 @@
   }
 
   window.addEventListener("setlist-changed", markDirtyAndPublishSoon);
-  window.addEventListener("online", () => { publish(); refreshCollected(false); });
+  window.addEventListener("online", () => { syncMine(); refreshCollected(false); });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
-    if (loadIdentity()?.dirty) publish();
+    syncMine();
     refreshCollected(false);
     renderMine();
   });
   window.setInterval(() => {
-    if (loadIdentity()?.dirty) publish();
+    syncMine();
     refreshCollected(false);
     renderMine();
   }, REFRESH_INTERVAL_MS);
@@ -493,5 +552,6 @@
   renderMine();
   renderCollected();
   handleIncomingLink();
+  flushPendingClaim();
   window.setTimeout(() => refreshCollected(false), 2500);
 })();

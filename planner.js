@@ -35,6 +35,11 @@
     return STAGES.find(stage => stage.id === stageId)?.label || "AMP";
   }
 
+  // A malformed percent-encoding in the URL hash otherwise throws and aborts.
+  function safeDecode(value) {
+    try { return decodeURIComponent(value); } catch { return value; }
+  }
+
   function stageIdFromLabel(label) {
     const normalised = String(label || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     return STAGES.find(stage => stage.id === normalised || stage.label.toLowerCase() === String(label || "").toLowerCase())?.id || "";
@@ -134,12 +139,20 @@
     }
   }
 
+  // Matches the Worker's per-list cap so a saved list can always be published.
+  const MAX_SAVED_SETS = 100;
+
   function saveSets(sets) {
     // Stored pre-sorted so anything publishing the raw list (hexlaces.js)
     // shares it in chronological order.
     const sorted = sets.map(normaliseSet)
       .sort((a, b) => sortKey(a) - sortKey(b) || titleCaseStage(a.stageId).localeCompare(titleCaseStage(b.stageId)));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
+    } catch {
+      setFeedback("Couldn't save - your device storage may be full.");
+      return;
+    }
     window.dispatchEvent(new CustomEvent("setlist-changed"));
   }
 
@@ -192,6 +205,10 @@
   function addSet(item) {
     const sets = loadSets();
     if (!sets.some(saved => setId(saved) === setId(item))) {
+      if (sets.length >= MAX_SAVED_SETS) {
+        setFeedback(`Your set list is full (${MAX_SAVED_SETS} max).`);
+        return;
+      }
       sets.push(normaliseSet(item));
       saveSets(sets);
     }
@@ -206,7 +223,7 @@
   }
 
   function getCurrentStageId() {
-    const hash = decodeURIComponent(window.location.hash.replace(/^#/, "")).toLowerCase();
+    const hash = safeDecode(window.location.hash.replace(/^#/, "")).toLowerCase();
     if (STAGES.some(stage => stage.id === hash)) return hash;
     const bodyStage = Array.from(document.body.classList).find(className => className.startsWith("stage-"))?.replace(/^stage-/, "");
     return STAGES.some(stage => stage.id === bodyStage) ? bodyStage : "amp";
