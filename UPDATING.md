@@ -25,7 +25,7 @@ At the top of `schedule-data.js`:
 window.SCHEDULE_VERSION = "July 24, 11:15 PM - Rusko pushed to midnight";
 ```
 
-Change this string **every time you edit**. Put something human and specific; the exact text doesn't matter, only that it's different from before. The app compares this string against the copy each phone already has and shows a "Schedule updated - tap to refresh" banner when they differ. **If you forget to change it, phones won't know anything changed.**
+Change this string **every time you edit**. Put something human and specific; the exact text doesn't matter, only that it's different from before. The app compares this string against the copy each phone already has and shows an "Update available - tap to refresh" banner when they differ. **If you forget to change it, phones won't know anything changed.**
 
 Do **not** change the `?v=NN` numbers in `index.html` / `sw.js` for a normal in-festival data edit — those are for full releases and would force every phone to re-download everything.
 

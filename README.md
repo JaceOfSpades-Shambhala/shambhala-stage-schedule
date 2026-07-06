@@ -1,6 +1,6 @@
 # Shambhala 2026 NFC Stage Schedule
 
-A small, static, phone-friendly schedule page for seven Shambhala stage necklaces. Each NFC tag opens its matching stage from a short URL hash. The site has no build step, backend, database, accounts, analytics, or external API dependency.
+A static, phone-friendly, offline-first schedule site for seven Shambhala stage necklaces. Each NFC tag opens its matching stage from a short URL hash. The core schedule site has no build step, accounts, or analytics; the optional **Hexlaces** live set-list sharing feature is backed by a single tiny Cloudflare Worker + KV store (source in `worker/`).
 
 Live site:
 
@@ -8,26 +8,31 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-Current deployed version: `v16`
-
-Rollback point before the custom set-list experiment: `2490e3b9b08138d549f9ec10174ca6c4a818961c` or branch `rollback-before-set-list`.
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v26 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
-- Stage and day filtering across seven stages, including Secret Garden
-- Automatic current schedule-day selection when no `?day=` is provided
-- Subtle Today marker on the current schedule-day tab
+Schedule and planning:
+
+- Stage and day filtering across seven stages, with automatic current-day selection and a Today marker (calendar-accurate, independent of stage)
 - Global artist search across all stages and days
-- Offline browsing after the site has been opened online once
-- Stage-specific Now Playing card using Salmo, BC / Pacific time
-- Early-morning rollover support, so Friday-list 2:00 AM sets are treated as Saturday morning while still belonging to Friday's schedule
-- Current set highlight in the schedule list
-- Up-next and starts-in timing in the Now Playing card
-- Camp Hexadecibel link under the stage heading that can open Google Maps to camp coordinates
-- Phone-local My Set List planner with tap-to-add, remove, clear, and copy controls
-- Installable app icons (favicon, apple-touch-icon, manifest icons) based on the Camp Hexadecibel pendant
-- Open Graph preview card metadata for links shared in chat apps
-- An Add to Home Screen button (Android/Chrome install prompt, manual Share instructions on iOS Safari)
+- Stage-specific Now Playing card using Salmo, BC time, with up-next and starts-in timing, current-set highlight, and early-morning rollover (a Friday-list 2:00 AM set counts as Saturday morning but stays in Friday's schedule)
+- My Set List planner (phone-local): tap-to-add, collapsible day groups (current day open by default), a live "Now / Up next from your sets" block, overlap flagging between saved sets (inferred set lengths, 20-minute tolerance), Share button (native share sheet with clipboard fallback), 100-set cap
+- Smooth stage/day transitions (View Transitions API, progressive)
+
+Hexlaces (live set-list sharing):
+
+- Every sharer gets a permanent read-only link (`?f=<id>`) carried on their NFC tag and shown as an always-visible QR; opening it collects their live list into a "Hexlaces Collected" panel that auto-refreshes (open/foreground/every 5 min) and stays readable offline
+- Editable display name; publishing is automatic and debounced, queued while offline
+- Giveaway tags with one-time claim tokens: the first phone to open one takes ownership (works fully offline — the claim retries when signal returns and the token burns server-side). Tell recipients: get signal once before letting anyone else tap a fresh tag
+- Android can write tags in-app (Web NFC); iOS writes tags once with the NFC Tools app
+
+Infrastructure:
+
+- Offline browsing after first online load (network-first service worker with a 3.5 s slow-network fallback to cache)
+- "Update available — tap to refresh" banner for both schedule edits and app releases (checked every 5 min via ETag revalidation)
+- Periodic Background Sync on installed Android PWAs refreshes the schedule while the app is closed
+- Add to Home Screen button, pendant-based app icons, Open Graph preview metadata
 
 ## Stable NFC URLs
 
@@ -43,28 +48,28 @@ https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#secret-garden
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#village
 ```
 
-Each URL is far below a 504-byte NFC-tag limit.
+Personal Hexlace tags use `?f=<readId>` (plus `&claim=<token>` on unclaimed giveaway tags). All URLs fit comfortably on NTAG213 tags.
 
 ## Files
 
-- `index.html` - page structure, header text, script/style version query strings
-- `styles.css` - mobile-first styling
-- `schedule-data.js` - schedule data in `window.SCHEDULE_DATA`
-- `app.js` - tabs, search, Now Playing, preview mode, current-day selection, camp link behavior, URL handling, and the site's single service worker registration
-- `planner.js` - phone-local My Set List feature
-- `camp-location.js` - easy-to-edit camp coordinates for the header Google Maps link
-- `install.js` - Add to Home Screen button behavior (Android/Chrome install prompt, iOS Safari hint)
-- `sw.js` - service worker cache for offline use
-- `manifest.webmanifest` - installable app metadata, including icons
-- `favicon.ico`, `favicon-16.png`, `favicon-32.png` - browser tab / bookmark icons
-- `apple-touch-icon.png` - iOS home-screen icon (180x180, opaque background)
-- `icon-192.png`, `icon-512.png` - manifest install icons
+- `index.html` — page structure and the authoritative `<!-- vNN -->` release marker
+- `styles.css` — mobile-first styling (note the global `[hidden]` rule; keep it)
+- `schedule-data.js` — schedule data (`window.SCHEDULE_DATA`) and the `SCHEDULE_VERSION` stamp that drives the update banner
+- `app.js` — tabs, search, Now Playing, preview mode, update checks, service-worker registration
+- `planner.js` — My Set List planner, overlap detection, day grouping
+- `hexlaces.js` — live sharing: identity, publishing, collecting, claims
+- `qrcode.js` — vendored qrcode-generator 1.4.4 (pinned)
+- `install.js` — Add to Home Screen behavior
+- `sw.js` — service worker (offline cache, network timeout, periodic background sync)
+- `camp-location.js` — easy-to-edit camp coordinates for the header Google Maps link
+- `manifest.webmanifest`, icons — installable app metadata
+- `worker/src/index.js` + root `wrangler.jsonc` — the Hexlaces API (Cloudflare Worker + KV). The config intentionally lives at the repo root; see HANDOFF.md “Gotchas”
+- `UPDATING.md` — how to push schedule changes during the festival
+- `HANDOFF.md` — full developer handoff: setup, deploy pipelines, release discipline, API reference, gotchas, roadmap
 
 ## Updating camp coordinates from a phone
 
-When Camp Hexadecibel has its actual location, edit only `camp-location.js` in GitHub.
-
-Change these values:
+Edit only `camp-location.js` in GitHub:
 
 ```js
 window.CAMP_LOCATION = {
@@ -74,127 +79,51 @@ window.CAMP_LOCATION = {
 };
 ```
 
-If `googleMapsUrl` is filled in, it wins over latitude/longitude. Otherwise the site builds a Google Maps coordinate link from `latitude` and `longitude`.
-
-After committing the change, open the site once while online so the phone caches the new location file.
+If `googleMapsUrl` is filled in, it wins over latitude/longitude. After committing, open the site once while online so phones cache the new file.
 
 ## Testing Now Playing before the festival
 
-Use the `preview` parameter. It pretends the festival-local time is the value in the URL without changing the device clock.
-
-Expected active-set tests:
+Use the `preview` parameter to pretend the festival-local time is the value in the URL:
 
 ```text
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-24T23:30#amp
 ```
 
-Expected: Friday is auto-selected, `PEEKABOO` is now playing, `RUSKO` is up next, and the PEEKABOO row is highlighted.
+Expected: Friday auto-selected, `PEEKABOO` now playing, `RUSKO` up next, PEEKABOO row highlighted.
 
 ```text
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-24T21:45#pagoda
 ```
 
-Expected: Friday is auto-selected and `JUSTIN MARTIN` is now playing.
-
-Expected upcoming-set test:
+Expected: `JUSTIN MARTIN` now playing.
 
 ```text
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-23T10:00#amp
 ```
 
-Expected: Thursday is auto-selected, `Next: VCTRE`, and `Starts in 2 hr`.
-
-Secret Garden test:
-
-```text
-https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-24T21:30#secret-garden
-```
-
-Expected: Friday is auto-selected and `CHACHO` is now playing.
+Expected: Thursday auto-selected, `Next: VCTRE`, `Starts in 2 hr`.
 
 Do not put `preview=...` in NFC tag URLs.
 
-## My Set List behavior
+## Data model
 
-The My Set List planner is stored in the phone browser's local storage. It does not sync between devices, does not require an account, and remains available offline as long as the browser keeps the site's local data.
-
-Selected sets are sorted by festival timeline, including post-midnight rollover inside each schedule day. Use `Copy` for a text version that can be sent in chat, or screenshot the My Set List panel directly.
-
-## Offline cache rules
-
-The site uses a network-first service worker. While online, it tries to fetch fresh same-origin files and update the cache. While offline, it falls back to the saved copy.
-
-When changing `index.html`, `styles.css`, `app.js`, `planner.js`, `install.js`, `schedule-data.js`, `camp-location.js`, `sw.js`, or any icon file:
-
-1. Bump the asset query strings in `index.html`, for example `?v=17`.
-2. Bump the service worker registration in `app.js` to the same version, for example `sw.js?v=17`. The service worker is registered once, from `app.js` only.
-3. Bump `CACHE_NAME` in `sw.js`, for example `stage-schedule-v17`.
-4. Update the cached asset query strings in `sw.js` to the same version.
-5. Open the site once while online after publishing so the device receives the new cache.
-
-Current cache name:
+`schedule-data.js` stores all schedule data in `window.SCHEDULE_DATA`:
 
 ```js
-const CACHE_NAME = "stage-schedule-v16";
+{ "Friday": { "amp": [["11:00 PM", "PEEKABOO"]] } }
 ```
 
-## Schedule data model
+Stage IDs: `amp`, `fractal-forest`, `grove`, `living-room`, `pagoda`, `secret-garden`, `village`. Days: `Thursday`–`Sunday`, mapped in `app.js` to calendar dates 2026-07-23 through 2026-07-26; post-midnight sets stay in the previous evening's list and roll over internally.
 
-`schedule-data.js` stores all schedule data in `window.SCHEDULE_DATA`.
+My Set List and Hexlace identity/collection live in browser localStorage (no accounts). Published Hexlace lists live in Cloudflare KV with a 60-day TTL; the full API surface is documented in HANDOFF.md.
 
-Structure:
+## Publishing and releases
 
-```js
-{
-  "Friday": {
-    "amp": [["11:00 PM", "PEEKABOO"]]
-  }
-}
-```
-
-Stage IDs:
-
-```text
-amp
-fractal-forest
-grove
-living-room
-pagoda
-secret-garden
-village
-```
-
-Schedule days are `Thursday`, `Friday`, `Saturday`, and `Sunday`.
-
-## Festival date mapping
-
-`app.js` maps schedule labels to the calendar date where that schedule day starts:
-
-```js
-Thursday: "2026-07-23"
-Friday: "2026-07-24"
-Saturday: "2026-07-25"
-Sunday: "2026-07-26"
-```
-
-This is intentional. The source schedule treats post-midnight sets as part of the previous evening's schedule list. The app detects time rollover inside each day list, so a Friday-list 2:00 AM set becomes Saturday morning internally while still being labeled as Friday's schedule.
+GitHub Pages publishes `main` automatically (allow a minute or two, and note the 10-minute HTTP cache). **Schedule-only edits during the festival do not bump versions** — see [UPDATING.md](UPDATING.md). Code releases bump the `?v=NN` scheme across `index.html` / `sw.js` / `app.js` / `manifest.webmanifest` — exact checklist and commands in [HANDOFF.md](HANDOFF.md). The Worker deploys separately via `wrangler deploy` from the repo root; after any push, health-check the API as described in HANDOFF.md.
 
 ## Working from another computer
 
-Use GitHub as the source of truth. Local `Downloads` folders and uncommitted edits do not sync between PCs.
-
-Recommended handoff flow:
-
-1. Commit changes to `main` before switching computers.
-2. On the other PC, open or clone this GitHub repo.
-3. Make sure the ChatGPT Codex Connector is installed for this repo if Codex needs to publish changes directly.
-4. Start a new Codex thread with this README as the project handoff.
-
-## Publishing
-
-GitHub Pages publishes from the `main` branch. Most edits can be made directly in GitHub's web editor and committed to `main`.
-
-Important: the published site may take a minute or two to update after a commit.
+Clone this repo and follow the setup section of [HANDOFF.md](HANDOFF.md) — it covers tooling, the two one-time logins (`gh auth login`, `wrangler login`), deploy verification, and every gotcha that has actually bitten this project.
 
 ## Important note
 
