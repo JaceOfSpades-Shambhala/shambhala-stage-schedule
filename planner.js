@@ -254,7 +254,7 @@
 
   function setButtonState(button, item) {
     const saved = hasSet(item);
-    button.textContent = saved ? "Added" : "+";
+    button.textContent = saved ? "Saved" : "+";
     button.classList.toggle("is-added", saved);
     button.setAttribute("aria-label", `${saved ? "Remove" : "Add"} ${item.artist} at ${item.time} from My Set List`);
     button.title = saved ? "Remove from My Set List" : "Add to My Set List";
@@ -265,6 +265,7 @@
       row.querySelector(".planner-add")?.remove();
       const item = itemFromRow(row);
       if (!item) return;
+      row.classList.toggle("set-saved", hasSet(item));
       const button = document.createElement("button");
       button.type = "button";
       button.className = "planner-add";

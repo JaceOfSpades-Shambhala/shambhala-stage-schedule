@@ -250,12 +250,18 @@
     return matches;
   }
 
-  function appendSet({ time, artist, day, stage, isCurrent = false }) {
+  function appendSet({ time, artist, day, stage, isCurrent = false, state = "", sub = "", progress = null }) {
     const item = document.createElement("li");
     item.className = "set";
-    if (isCurrent) {
-      item.classList.add("set-current");
-      item.setAttribute("aria-current", "true");
+    if (isCurrent) item.setAttribute("aria-current", "true");
+    if (state) item.classList.add(`set-${state}`);
+    // A timeline node is drawn only in the day/stage view (which passes a
+    // state); search results stay as flat rows.
+    if (state) {
+      const node = document.createElement("span");
+      node.className = "set-node";
+      node.setAttribute("aria-hidden", "true");
+      item.append(node);
     }
     const timeElement = document.createElement("span");
     timeElement.className = "set-time";
@@ -266,7 +272,21 @@
     artistElement.className = "set-artist";
     artistElement.textContent = artist;
     details.append(artistElement);
-    if (isCurrent) {
+    if (sub) {
+      const subElement = document.createElement("span");
+      subElement.className = "set-sub";
+      subElement.textContent = sub;
+      details.append(subElement);
+      if (progress !== null) {
+        const track = document.createElement("span");
+        track.className = "set-progress";
+        const fill = document.createElement("span");
+        fill.className = "set-progress-fill";
+        fill.style.width = `${progress}%`;
+        track.append(fill);
+        details.append(track);
+      }
+    } else if (isCurrent) {
       const badge = document.createElement("span");
       badge.className = "now-badge";
       badge.textContent = "NOW";
@@ -282,6 +302,16 @@
     elements.setList.append(item);
   }
 
+  function upNextLabel(minutes) {
+    const safe = Math.max(0, minutes);
+    if (safe < 1) return "UP NEXT - NOW";
+    const hours = Math.floor(safe / 60);
+    const mins = safe % 60;
+    if (hours && mins) return `UP NEXT - IN ${hours} HR ${mins} MIN`;
+    if (hours) return `UP NEXT - IN ${hours} HR`;
+    return `UP NEXT - IN ${mins} MIN`;
+  }
+
   function renderSchedule() {
     const stageLabel = titleCaseStage(appState.stage);
     const entries = data[appState.day]?.[appState.stage] || [];
@@ -295,17 +325,47 @@
       elements.scheduleTitle.textContent = `Search results for "${term}"`;
       elements.scheduleNote.textContent = `${matches.length} matching set${matches.length === 1 ? "" : "s"} across all listed stages and days.`;
       elements.noResults.textContent = "No matching artist was found across the listed stages and days.";
+      elements.setList.classList.remove("timeline");
       matches.forEach(appendSet);
       elements.noResults.hidden = matches.length !== 0;
       return;
     }
     const status = getNowPlayingStatus(appState.stage);
     const current = ["active", "final"].includes(status.type) ? status.current : null;
+    const next = status.next || null;
+    const nowKey = nowToKey(status.now);
+    const timeline = buildStageTimeline(appState.stage);
     elements.dayLabel.textContent = appState.day.toUpperCase();
     elements.scheduleTitle.textContent = `${stageLabel} set times`;
     elements.scheduleNote.textContent = `${entries.length} listed set${entries.length === 1 ? "" : "s"}. All times are shown as published.`;
     elements.noResults.hidden = true;
-    entries.forEach(([time, artist]) => appendSet({ time, artist, isCurrent: Boolean(current && current.day === appState.day && current.time === time && current.artist === artist) }));
+    elements.setList.classList.add("timeline");
+    entries.forEach(([time, artist]) => {
+      const isCurrent = Boolean(current && current.day === appState.day && current.time === time && current.artist === artist);
+      const isNext = Boolean(next && next.day === appState.day && next.time === time && next.artist === artist);
+      const index = timeline.findIndex(entry => entry.day === appState.day && entry.time === time && entry.artist === artist);
+      const key = index === -1 ? null : timeline[index].key;
+      let state = "up";
+      let sub = "";
+      let progress = null;
+      if (isCurrent) {
+        state = "now";
+        const endEntry = index === -1 ? null : timeline[index + 1];
+        if (endEntry) {
+          const span = endEntry.key - key;
+          progress = span > 0 ? Math.max(0, Math.min(100, Math.round((nowKey - key) / span * 100))) : null;
+          sub = `ON NOW - ENDS ${endEntry.time}`;
+        } else {
+          sub = "ON NOW";
+        }
+      } else if (isNext) {
+        state = "next";
+        sub = upNextLabel(next.key - nowKey);
+      } else if (key !== null && key <= nowKey) {
+        state = "done";
+      }
+      appendSet({ time, artist, isCurrent, state, sub, progress });
+    });
   }
 
   function setNowPlayingDetails(parts) {
@@ -368,7 +428,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=26";
+  const SCHEDULE_ASSET = "schedule-data.js?v=27";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -458,6 +518,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=26").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=27").then(registerPeriodicSync).catch(() => {});
   });
 })();
