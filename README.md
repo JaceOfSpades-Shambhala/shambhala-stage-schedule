@@ -55,6 +55,7 @@ Personal Hexlace tags use `?f=<readId>` (plus `&claim=<token>` on unclaimed give
 - `index.html` — page structure and the authoritative `<!-- vNN -->` release marker
 - `styles.css` — mobile-first styling (note the global `[hidden]` rule; keep it)
 - `schedule-data.js` — schedule data (`window.SCHEDULE_DATA`) and the `SCHEDULE_VERSION` stamp that drives the update banner
+- `scripts/validate-schedule.mjs` — schedule safety check for day/stage IDs, time format, duplicate rows, empty stage arrays, and overnight rollover order
 - `app.js` — tabs, search, Now Playing, preview mode, update checks, service-worker registration
 - `planner.js` — My Set List planner, overlap detection, day grouping
 - `hexlaces.js` — live sharing: identity, publishing, collecting, claims
@@ -116,6 +117,14 @@ Do not put `preview=...` in NFC tag URLs.
 Stage IDs: `amp`, `fractal-forest`, `grove`, `living-room`, `pagoda`, `secret-garden`, `village`. Days: `Thursday`–`Sunday`, mapped in `app.js` to calendar dates 2026-07-23 through 2026-07-26; post-midnight sets stay in the previous evening's list and roll over internally.
 
 My Set List and Hexlace identity/collection live in browser localStorage (no accounts). Published Hexlace lists live in Cloudflare KV with a 60-day TTL; the full API surface is documented in HANDOFF.md.
+
+## Testing
+
+```bash
+npm test
+```
+
+This runs the date-mapping tests and validates `schedule-data.js`. Use `npm run validate:schedule` when you only want the schedule data check.
 
 ## Publishing and releases
 
