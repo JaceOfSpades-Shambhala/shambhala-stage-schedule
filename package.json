@@ -1,5 +1,7 @@
 {
+  "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test && node scripts/validate-schedule.mjs",
+    "validate:schedule": "node scripts/validate-schedule.mjs"
   }
 }
