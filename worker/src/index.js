@@ -12,10 +12,9 @@
 //   GET  /lists/:readId       -> read,   returns { name, sets, updated }
 //   PUT  /lists/:readId       -> update, requires header X-Write-Key
 //   POST /lists/:readId/claim -> the recipient sends the claim token plus a
-//                                write key THEY generated; the server records it
-//                                and burns the token. First valid claim wins,
-//                                which lets the claimer own the tag offline (the
-//                                claim is retried until it lands).
+//                                write key THEY generated and the local time
+//                                they first scanned it. The earliest scan wins,
+//                                even if another phone reached the server first.
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -108,6 +107,20 @@ async function readJson(request) {
   }
 }
 
+function parseClaimRecord(value) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === "object" && typeof parsed.token === "string") return parsed;
+  } catch {}
+  return { token: value };
+}
+
+function cleanScannedAt(value) {
+  const scannedAt = Number(value);
+  return Number.isFinite(scannedAt) && scannedAt > 0 ? scannedAt : Date.now();
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
@@ -137,7 +150,7 @@ export default {
         // cannot be published to until someone claims it and sets one.
         if (body.claimable === true) {
           const claimToken = randomId(12);
-          await env.LISTS.put(`claim:${readId}`, claimToken, { expirationTtl: TTL_SECONDS });
+          await env.LISTS.put(`claim:${readId}`, JSON.stringify({ token: claimToken }), { expirationTtl: TTL_SECONDS });
           return json({ readId, claimToken }, 201);
         }
         const writeKey = randomId(24);
@@ -146,20 +159,31 @@ export default {
       }
 
       // POST /lists/:readId/claim — the recipient records the write key they
-      // generated. First valid claim wins and burns the token.
+      // generated. If multiple phones scan before signal, the earliest local
+      // scan time wins even when it reaches the server later.
       if (request.method === "POST" && parts.length === 3 && parts[2] === "claim") {
         const limited = await enforceRateLimit(request, env, "claim");
         if (limited) return limited;
         const readId = parts[1];
-        const expected = await env.LISTS.get(`claim:${readId}`);
-        if (!expected) return json({ error: "Already claimed or not claimable." }, 409);
+        const claim = parseClaimRecord(await env.LISTS.get(`claim:${readId}`));
+        if (!claim) return json({ error: "Not claimable." }, 409);
         const body = await readJson(request);
-        if (((body && body.claimToken) || "") !== expected) return json({ error: "Invalid claim token." }, 403);
+        if (((body && body.claimToken) || "") !== claim.token) return json({ error: "Invalid claim token." }, 403);
         const writeKey = body && typeof body.writeKey === "string" ? body.writeKey : "";
         if (writeKey.length < MIN_KEY_LENGTH) return json({ error: "A valid write key is required." }, 400);
-        await env.LISTS.put(`auth:${readId}`, writeKey, { expirationTtl: TTL_SECONDS });
-        await env.LISTS.delete(`claim:${readId}`);
-        return json({ ok: true });
+        const scannedAt = cleanScannedAt(body && body.scannedAt);
+        const previousScannedAt = Number.isFinite(Number(claim.scannedAt)) ? Number(claim.scannedAt) : Infinity;
+        const accepted = !claim.ownerSet || scannedAt <= previousScannedAt;
+        if (accepted) {
+          await env.LISTS.put(`auth:${readId}`, writeKey, { expirationTtl: TTL_SECONDS });
+          await env.LISTS.put(`claim:${readId}`, JSON.stringify({
+            token: claim.token,
+            scannedAt,
+            claimedAt: Date.now(),
+            ownerSet: true
+          }), { expirationTtl: TTL_SECONDS });
+        }
+        return json({ ok: true, accepted });
       }
 
       // GET /lists/:readId — read a shared list.

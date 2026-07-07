@@ -41,3 +41,36 @@ test("create endpoint returns 429 after its write limit", async () => {
   assert.equal(blocked.headers.get("Retry-After"), "300");
   assert.match(await blocked.text(), /Too many requests/);
 });
+
+test("earlier local scan can claim after a later scan reached the server first", async () => {
+  const env = { LISTS: new MemoryKv() };
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Unclaimed Hexlace", sets: [], claimable: true })
+  }), env);
+  assert.equal(created.status, 201);
+  const { readId, claimToken } = await created.json();
+
+  const laterClaim = await worker.fetch(makeRequest(`/lists/${readId}/claim`, {
+    method: "POST",
+    body: JSON.stringify({ claimToken, writeKey: "later-write-key-123", scannedAt: 2000 })
+  }), env);
+  assert.deepEqual(await laterClaim.json(), { ok: true, accepted: true });
+  assert.equal(await env.LISTS.get(`auth:${readId}`), "later-write-key-123");
+
+  const earlierClaim = await worker.fetch(makeRequest(`/lists/${readId}/claim`, {
+    method: "POST",
+    headers: { "CF-Connecting-IP": "203.0.113.11" },
+    body: JSON.stringify({ claimToken, writeKey: "earlier-write-key-123", scannedAt: 1000 })
+  }), env);
+  assert.deepEqual(await earlierClaim.json(), { ok: true, accepted: true });
+  assert.equal(await env.LISTS.get(`auth:${readId}`), "earlier-write-key-123");
+
+  const tooLateClaim = await worker.fetch(makeRequest(`/lists/${readId}/claim`, {
+    method: "POST",
+    headers: { "CF-Connecting-IP": "203.0.113.12" },
+    body: JSON.stringify({ claimToken, writeKey: "too-late-write-key", scannedAt: 3000 })
+  }), env);
+  assert.deepEqual(await tooLateClaim.json(), { ok: true, accepted: false });
+  assert.equal(await env.LISTS.get(`auth:${readId}`), "earlier-write-key-123");
+});

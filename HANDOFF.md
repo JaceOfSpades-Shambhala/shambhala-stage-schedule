@@ -1,13 +1,13 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v28**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v29**.
 
 ## What this is
 
 A fan-made, offline-first PWA for Shambhala 2026 in Salmo, BC. The main festival is July 24-27; this guide covers Thursday programming on July 23 and runs through the Sunday-night sets that continue into Monday morning. It is reached via NFC necklace links and QR codes. Two halves:
 
 1. **Static site** (this repo, deployed by GitHub Pages on push to `main`): stage schedules, a personal set-list planner with overlap detection, live now/next tracking, install-to-home-screen, service-worker offline support, and an update banner.
-2. **"Hexlaces" live set-list sharing**: each person's NFC tag/QR carries a permanent read-only link (`?f=<readId>`). A tiny Cloudflare Worker + KV store (source in `worker/src/index.js`, config in root `wrangler.jsonc`) hosts published set lists. A secret write key held only in the owner's localStorage publishes changes; giveaway tags add a one-time claim token so a recipient can take ownership (works offline — the claim queues and retries on signal; first claim to reach the server wins and burns the token).
+2. **"Hexlaces" live set-list sharing**: each person's NFC tag/QR carries a permanent read-only link (`?f=<readId>`). A tiny Cloudflare Worker + KV store (source in `worker/src/index.js`, config in root `wrangler.jsonc`) hosts published set lists. A secret write key held only in the owner's localStorage publishes changes; giveaway tags add a claim token so a recipient can take ownership offline. The browser records the local scan time and the Worker gives ownership to the earliest recorded scan, even if another phone reaches the server first.
 
 **Live site:** https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 **API:** https://shambhala-setlists.hexadecibel.workers.dev (Cloudflare account: jsj715@gmail.com, worker `shambhala-setlists`, KV namespace `LISTS` = `61bdc52caedc49c0acefbd5ae92cb5fe`)
@@ -45,7 +45,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (currently 28). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (currently 29). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
@@ -54,9 +54,9 @@ Every site release bumps ONE version number everywhere (currently 28). The piece
 
 The sed incantation used for bumps (adjust numbers):
 ```bash
-sed -i 's/?v=28/?v=29/g; s/<!-- v28 -->/<!-- v29 -->/' index.html
-sed -i 's/sw\.js?v=28/sw.js?v=29/; s/schedule-data\.js?v=28/schedule-data.js?v=29/' app.js
-sed -i 's/stage-schedule-v28/stage-schedule-v29/; s/?v=28/?v=29/g' sw.js
+sed -i 's/?v=29/?v=30/g; s/<!-- v29 -->/<!-- v30 -->/' index.html
+sed -i 's/sw\.js?v=29/sw.js?v=30/; s/schedule-data\.js?v=29/schedule-data.js?v=30/' app.js
+sed -i 's/stage-schedule-v29/stage-schedule-v30/; s/?v=29/?v=30/g' sw.js
 ```
 
 **Schedule-only edits during the festival do NOT bump `?v=`** — edit `schedule-data.js`, change its `SCHEDULE_VERSION` string, commit. Full instructions in [UPDATING.md](UPDATING.md). Open PWAs poll every 5 min and show a "tap to refresh" banner for both schedule and app updates.
@@ -69,7 +69,7 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 - **Schedule validation:** `npm run validate:schedule` checks day/stage IDs, time format, blank artists, duplicate rows, empty stage arrays, and overnight rollover order. It intentionally does not fail on artist spelling/capitalization differences.
 - **Time travel:** `?preview=2026-07-24T21:30` pins "now" (Salmo time) — drives now-playing, Today marker, planner day-collapse, up-next.
 - **Seed a set list:** localStorage key `shambhala-2026-my-set-list` = array of `{day, stageId, time, artist}`.
-- **Identity/collection:** `shambhala-2026-hexlace-identity` (`{readId, writeKey, name, pendingClaim?, dirty?, lastPublished?}`) and `shambhala-2026-hexlaces-collected` (array).
+- **Identity/collection:** `shambhala-2026-hexlace-identity` (`{readId, writeKey, name, pendingClaim?, claimScannedAt?, silentClaim?, dirty?, lastPublished?}`) and `shambhala-2026-hexlaces-collected` (array).
 - The client hits the **production** API — fine (test lists auto-expire in 60 days), or run `wrangler dev` for a local worker.
 
 ## API surface (worker/src/index.js)
@@ -77,7 +77,7 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 - `POST /lists` `{name, sets}` → `{readId, writeKey}`; with `claimable:true` → `{readId, claimToken}` (no write key stored — unwritable until claimed)
 - `GET /lists/:readId` → `{name, sets, updated}`
 - `PUT /lists/:readId` + header `X-Write-Key` → update (name changes ride along)
-- `POST /lists/:readId/claim` `{claimToken, writeKey}` → registers the CLAIMER's locally-generated key, burns token (409 after)
+- `POST /lists/:readId/claim` `{claimToken, writeKey, scannedAt}` → registers the CLAIMER's locally-generated key when this is the earliest recorded scan; returns `{ok:true, accepted:false}` for later scans without changing ownership.
 - Caps: 100 sets, 20KB, name ≤ 60 chars. TTL 60 days from last write. CORS `*`.
 - Write-like endpoints have generous KV-backed rate limits: create and claim each allow 80 requests per 5 minutes per client IP; updates allow 300 requests per 5 minutes per client IP plus 180 successful updates per 5 minutes per list. Reads are not rate-limited.
 
@@ -94,7 +94,7 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 ## Design decisions worth knowing
 
 - Set end times aren't published; a set's inferred end = next set on the same stage, capped at 90 min. Overlaps under 20 min aren't flagged.
-- The claim race is accepted by design: a fresh giveaway tag should get signal once before others tap it (UI says so). Losing a race drops the dead identity, keeps the user's sets, and collects the winner.
+- Claiming is intentionally invisible to the end user: opening a claim URL with no existing identity stores a silent local reservation. The Worker keeps the claim token metadata and lets the earliest local `scannedAt` own the Hexlace, so an accidental later tap cannot permanently steal a tag just because it had signal first.
 - Publishing debounces 4s after each planner change; queued offline (`dirty` flag) and flushed on online/foreground/5-min tick. Workers Paid is enabled for write headroom; the Worker still rate-limits writes to protect against retry loops and abuse.
 - All remote strings render via `textContent` — keep it that way (XSS surface is friend names/artists from the API).
 
@@ -109,4 +109,4 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 
 ## Version history (condensed)
 
-v15–16 pre-existing site → v17 SW network-timeout + schedule version stamp + update banner → v18 up-next-from-my-sets, Share button, View Transitions → v19 overlap flagging → v20 planner declutter (live now/next block, collapsible days, 20-min tolerance) → v21 Today-marker fix → v22 periodic background sync + UPDATING.md → v23 Hexlaces (worker + client) → v24 Hexlace panel declutter + `[hidden]` fix → v25 app-release detection in update banner → v26 audit fixes (crash-proof hash, offline-safe claims, 100-set cap, storage guards, ETag checks, worker hardening) → v28 morning-day consistency, collapsed inactive Hexlaces, date-mapping tests, schedule validation, and Worker-side write rate limits.
+v15–16 pre-existing site → v17 SW network-timeout + schedule version stamp + update banner → v18 up-next-from-my-sets, Share button, View Transitions → v19 overlap flagging → v20 planner declutter (live now/next block, collapsible days, 20-min tolerance) → v21 Today-marker fix → v22 periodic background sync + UPDATING.md → v23 Hexlaces (worker + client) → v24 Hexlace panel declutter + `[hidden]` fix → v25 app-release detection in update banner → v26 audit fixes (crash-proof hash, offline-safe claims, 100-set cap, storage guards, ETag checks, worker hardening) → v28 morning-day consistency, collapsed inactive Hexlaces, date-mapping tests, schedule validation, and Worker-side write rate limits → v29 invisible Hexlace claim reservations with earliest-scan ownership.

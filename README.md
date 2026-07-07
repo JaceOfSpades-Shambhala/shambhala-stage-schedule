@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v28 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v29 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
@@ -24,7 +24,7 @@ Hexlaces (live set-list sharing):
 
 - Every sharer gets a permanent read-only link (`?f=<id>`) carried on their NFC tag and shown as an always-visible QR; opening it collects their live list into a "Hexlaces Collected" panel that auto-refreshes (open/foreground/every 5 min) and stays readable offline
 - Editable display name; publishing is automatic and debounced, queued while offline
-- Giveaway tags with one-time claim tokens: the first phone to open one takes ownership (works fully offline — the claim retries when signal returns and the token burns server-side). Tell recipients: get signal once before letting anyone else tap a fresh tag
+- Giveaway tags with claim tokens: opening one quietly records the local scan time, works offline, and lets the earliest scan own the Hexlace once signal returns
 - Android can write tags in-app (Web NFC); iOS writes tags once with the NFC Tools app
 
 Infrastructure:
