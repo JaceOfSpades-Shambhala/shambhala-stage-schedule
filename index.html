@@ -7,21 +7,21 @@
   <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
   <title>Shambhala 2026 Stage Set Times</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=27">
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=27">
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=27">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=27">
-  <link rel="stylesheet" href="styles.css?v=27">
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=28">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=28">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=28">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=28">
+  <link rel="stylesheet" href="styles.css?v=28">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Camp Hexadecibel">
   <meta property="og:title" content="Shambhala 2026 Stage Set Times">
   <meta property="og:description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
-  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=27">
+  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=28">
   <meta property="og:url" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/">
   <meta name="twitter:card" content="summary">
 </head>
 <body>
-  <!-- v27 -->
+  <!-- v28 -->
   <a class="skip-link" href="#schedule">Skip to schedule</a>
   <div class="aurora aurora-one" aria-hidden="true"></div>
   <div class="aurora aurora-two" aria-hidden="true"></div>
@@ -107,58 +107,61 @@
       <p id="planner-feedback" class="planner-feedback" role="status" aria-live="polite"></p>
     </section>
 
-    <section id="hexlaces" class="planner-panel" aria-label="Hexlaces Collected">
-      <div class="planner-heading">
-        <div>
-          <p class="control-label">Hexlaces Collected</p>
-          <p id="hexlace-count" class="planner-count">No Hexlaces collected yet</p>
-        </div>
-      </div>
-      <div id="hexlace-list" class="hexlace-list"></div>
-      <p id="hexlace-empty" class="planner-empty">Tap a friend's Hexlace or scan their QR code to collect their live set list here.</p>
+    <details id="hexlaces" class="planner-panel hexlace-panel" aria-label="Hexlaces Collected">
+      <summary class="planner-heading hexlace-panel-summary">
+        <span class="hexlace-summary-copy">
+          <span class="control-label">Hexlaces Collected</span>
+          <span id="hexlace-count" class="planner-count">No Hexlaces collected yet</span>
+        </span>
+        <span class="hexlace-panel-state" aria-hidden="true"></span>
+      </summary>
+      <div class="hexlace-panel-body">
+        <div id="hexlace-list" class="hexlace-list"></div>
+        <p id="hexlace-empty" class="planner-empty">Tap a friend's Hexlace or scan their QR code to collect their live set list here.</p>
 
-      <div class="hexlace-mine-card">
-        <p class="control-label">My Hexlace</p>
-        <div id="hexlace-setup">
-          <p class="hexlace-hint">Share your set list live. Friends who tap your Hexlace or scan your QR see your latest picks whenever they have signal.</p>
-          <button id="hexlace-enable" class="planner-action" type="button">Start sharing my list</button>
-        </div>
-        <div id="hexlace-mine" hidden>
-          <p class="hexlace-sharing-as">Sharing live as <button id="hexlace-rename" class="hexlace-name-edit" type="button" aria-label="Change your display name"><strong id="hexlace-name"></strong><span aria-hidden="true"> &#9998;</span></button></p>
-          <p id="hexlace-status" class="hexlace-hint"></p>
-          <div id="hexlace-qr" class="hexlace-qr"></div>
-          <p class="hexlace-hint">Friends scan this - or tap your tag - to collect your list.</p>
-          <div class="planner-actions hexlace-actions">
-            <button id="hexlace-share-link" class="planner-action" type="button">Share link</button>
+        <div class="hexlace-mine-card">
+          <p class="control-label">My Hexlace</p>
+          <div id="hexlace-setup">
+            <p class="hexlace-hint">Share your set list live. Friends who tap your Hexlace or scan your QR see your latest picks whenever they have signal.</p>
+            <button id="hexlace-enable" class="planner-action" type="button">Start sharing my list</button>
           </div>
-          <button id="hexlace-nfc" class="hexlace-text-action" type="button" hidden>Write my tag with this link</button>
-          <details class="hexlace-giveaway">
-            <summary class="hexlace-giveaway-summary">Give a Hexlace to a friend</summary>
-            <div class="hexlace-giveaway-body">
-              <p class="hexlace-hint">Make a Hexlace for someone else: write the link to a blank tag (or let them scan the QR) and the first person to open it makes it theirs. It lands in your collection above, so you'll see their picks.</p>
-              <button id="hexlace-giveaway" class="planner-action" type="button">Create a giveaway Hexlace</button>
-              <div id="hexlace-giveaway-result" class="hexlace-giveaway-result" hidden>
-                <div id="hexlace-giveaway-qr" class="hexlace-qr hexlace-qr-small"></div>
-                <p id="hexlace-giveaway-url" class="hexlace-giveaway-url"></p>
-                <div class="planner-actions hexlace-actions">
-                  <button id="hexlace-giveaway-share" class="planner-action" type="button">Share link</button>
-                </div>
-                <button id="hexlace-giveaway-nfc" class="hexlace-text-action" type="button" hidden>Write a tag with this link</button>
-              </div>
+          <div id="hexlace-mine" hidden>
+            <p class="hexlace-sharing-as">Sharing live as <button id="hexlace-rename" class="hexlace-name-edit" type="button" aria-label="Change your display name"><strong id="hexlace-name"></strong><span aria-hidden="true"> &#9998;</span></button></p>
+            <p id="hexlace-status" class="hexlace-hint"></p>
+            <div id="hexlace-qr" class="hexlace-qr"></div>
+            <p class="hexlace-hint">Friends scan this - or tap your tag - to collect your list.</p>
+            <div class="planner-actions hexlace-actions">
+              <button id="hexlace-share-link" class="planner-action" type="button">Share link</button>
             </div>
-          </details>
-        </div>
-        <div id="hexlace-editor" class="hexlace-editor" hidden>
-          <label class="hexlace-hint" for="hexlace-name-input" id="hexlace-editor-prompt">What name should friends see?</label>
-          <div class="hexlace-editor-row">
-            <input id="hexlace-name-input" maxlength="60" placeholder="Your name or camp" autocomplete="off">
-            <button id="hexlace-name-save" class="planner-action" type="button">Save</button>
-            <button id="hexlace-name-cancel" class="planner-action" type="button">Cancel</button>
+            <button id="hexlace-nfc" class="hexlace-text-action" type="button" hidden>Write my tag with this link</button>
+            <details class="hexlace-giveaway">
+              <summary class="hexlace-giveaway-summary">Give a Hexlace to a friend</summary>
+              <div class="hexlace-giveaway-body">
+                <p class="hexlace-hint">Make a Hexlace for someone else: write the link to a blank tag (or let them scan the QR) and the first person to open it makes it theirs. It lands in your collection above, so you'll see their picks.</p>
+                <button id="hexlace-giveaway" class="planner-action" type="button">Create a giveaway Hexlace</button>
+                <div id="hexlace-giveaway-result" class="hexlace-giveaway-result" hidden>
+                  <div id="hexlace-giveaway-qr" class="hexlace-qr hexlace-qr-small"></div>
+                  <p id="hexlace-giveaway-url" class="hexlace-giveaway-url"></p>
+                  <div class="planner-actions hexlace-actions">
+                    <button id="hexlace-giveaway-share" class="planner-action" type="button">Share link</button>
+                  </div>
+                  <button id="hexlace-giveaway-nfc" class="hexlace-text-action" type="button" hidden>Write a tag with this link</button>
+                </div>
+              </div>
+            </details>
+          </div>
+          <div id="hexlace-editor" class="hexlace-editor" hidden>
+            <label class="hexlace-hint" for="hexlace-name-input" id="hexlace-editor-prompt">What name should friends see?</label>
+            <div class="hexlace-editor-row">
+              <input id="hexlace-name-input" maxlength="60" placeholder="Your name or camp" autocomplete="off">
+              <button id="hexlace-name-save" class="planner-action" type="button">Save</button>
+              <button id="hexlace-name-cancel" class="planner-action" type="button">Cancel</button>
+            </div>
           </div>
         </div>
+        <p id="hexlace-feedback" class="planner-feedback" role="status" aria-live="polite"></p>
       </div>
-      <p id="hexlace-feedback" class="planner-feedback" role="status" aria-live="polite"></p>
-    </section>
+    </details>
 
     <footer>
       <p>Made as a fan project for Shambhala 2026. Schedule information was transcribed from the official downloadable set-times schedule.</p>
@@ -170,12 +173,12 @@
 
   <button id="update-banner" class="update-banner" type="button" hidden>Update available - tap to refresh</button>
 
-  <script src="camp-location.js?v=27"></script>
-  <script src="schedule-data.js?v=27"></script>
-  <script src="app.js?v=27"></script>
-  <script src="planner.js?v=27"></script>
-  <script src="qrcode.js?v=27"></script>
-  <script src="hexlaces.js?v=27"></script>
-  <script src="install.js?v=27"></script>
+  <script src="camp-location.js?v=28"></script>
+  <script src="schedule-data.js?v=28"></script>
+  <script src="app.js?v=28"></script>
+  <script src="planner.js?v=28"></script>
+  <script src="qrcode.js?v=28"></script>
+  <script src="hexlaces.js?v=28"></script>
+  <script src="install.js?v=28"></script>
 </body>
 </html>

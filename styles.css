@@ -83,6 +83,15 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .planner-live-title { margin: 0; font-size: 1.12rem; font-weight: 850; line-height: 1.1; letter-spacing: -.02em; overflow-wrap: anywhere; }
 .planner-live-details { margin: 0; color: var(--muted); font-size: .78rem; font-weight: 650; }
 .planner-list { display: grid; gap: .3rem; margin: 0; padding: 0; }
+.hexlace-panel { padding: 0; overflow: hidden; }
+.hexlace-panel-summary { padding: 1.05rem 1.15rem; cursor: pointer; list-style: none; }
+.hexlace-panel-summary::-webkit-details-marker { display: none; }
+.hexlace-summary-copy { display: grid; gap: .18rem; }
+.hexlace-summary-copy .control-label { margin-bottom: 0; }
+.hexlace-panel-summary::after { content: "Open"; align-self: center; padding: .32rem .58rem; border: 1px solid rgba(255, 255, 255, .18); border-radius: 999px; color: var(--ink); background: rgba(255, 255, 255, .065); font-size: .72rem; font-weight: 850; }
+.hexlace-panel[open] .hexlace-panel-summary::after { content: "Hide"; }
+.hexlace-panel-summary:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.hexlace-panel-body { display: grid; gap: .78rem; padding: 0 1.15rem 1.05rem; }
 .planner-day { border-top: 1px solid var(--line); padding-top: .5rem; }
 .planner-day-summary { display: flex; align-items: baseline; gap: .55rem; cursor: pointer; padding: .12rem 0; }
 .planner-day-summary::marker { color: var(--accent); }
@@ -174,6 +183,6 @@ body.stage-secret-garden { --accent: #90cd8d; --accent-deep: #5f9e5d; }
 body.stage-village { --accent: #8a6bc0; --accent-deep: #69499c; }
 @keyframes status-pulse { 50% { transform: scale(1.13); } }
 @media (min-width: 520px) { .stage-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); } .day-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (min-width: 650px) { .shell { padding-top: 5rem; } .live-panel { padding: 1.35rem; } .search-panel, .planner-panel { padding: 1.2rem 1.35rem; } .schedule-heading { padding: 1.6rem 1.55rem 1.15rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem minmax(0, 1fr) auto; padding-left: 1.55rem; padding-right: 1.55rem; } .set-list.timeline .set { grid-template-columns: 1.4rem 5rem minmax(0, 1fr) auto; } .set-list.timeline::before { left: calc(1.55rem + .7rem - 1px); } }
+@media (min-width: 650px) { .shell { padding-top: 5rem; } .live-panel { padding: 1.35rem; } .search-panel, .planner-panel { padding: 1.2rem 1.35rem; } .hexlace-panel { padding: 0; } .hexlace-panel-summary { padding: 1.2rem 1.35rem; } .hexlace-panel-body { padding: 0 1.35rem 1.2rem; } .schedule-heading { padding: 1.6rem 1.55rem 1.15rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem minmax(0, 1fr) auto; padding-left: 1.55rem; padding-right: 1.55rem; } .set-list.timeline .set { grid-template-columns: 1.4rem 5rem minmax(0, 1fr) auto; } .set-list.timeline::before { left: calc(1.55rem + .7rem - 1px); } }
 @media (max-width: 420px) { .schedule-heading { flex-direction: column; } .day-tabs .tab { flex-direction: column; gap: .12rem; } .planner-heading { align-items: stretch; flex-direction: column; } .planner-actions { justify-content: flex-start; } .planner-set { grid-template-columns: minmax(4.6rem, auto) minmax(0, 1fr); } .planner-remove { grid-column: 2; justify-self: start; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tab, .planner-action, .planner-remove, .planner-add, .install-button { transition: none; } .now-playing[data-status="active"] .status-dot, .update-banner, .planner-live-dot { animation: none; } }

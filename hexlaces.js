@@ -129,6 +129,14 @@
     feedback.timeout = window.setTimeout(() => { elements.feedback.textContent = ""; }, 3200);
   }
 
+  function shouldOpenPanel() {
+    return Boolean(loadIdentity()) || loadCollected().length > 0 || Boolean(editorMode);
+  }
+
+  function syncPanelOpen() {
+    if (shouldOpenPanel()) elements.panel.open = true;
+  }
+
   function timeAgo(timestamp) {
     const minutes = Math.floor((Date.now() - timestamp) / 60000);
     if (minutes < 1) return "just now";
@@ -149,6 +157,7 @@
 
   function renderMine() {
     const identity = loadIdentity();
+    syncPanelOpen();
     elements.setup.hidden = Boolean(identity) || editorMode === "enable" || editorMode === "claim";
     elements.mine.hidden = !identity || editorMode === "claim";
     elements.editor.hidden = !editorMode;
@@ -326,6 +335,7 @@
 
   function renderCollected() {
     const entries = loadCollected();
+    syncPanelOpen();
     elements.count.textContent = entries.length
       ? `${entries.length} Hexlace${entries.length === 1 ? "" : "s"} collected`
       : "No Hexlaces collected yet";

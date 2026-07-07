@@ -1,10 +1,10 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v26**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v28**.
 
 ## What this is
 
-A fan-made, offline-first PWA for Shambhala 2026 (July 23–26, Salmo BC), reached via NFC necklace links and QR codes. Two halves:
+A fan-made, offline-first PWA for Shambhala 2026 in Salmo, BC. The main festival is July 24-27; this guide covers Thursday programming on July 23 and runs through the Sunday-night sets that continue into Monday morning. It is reached via NFC necklace links and QR codes. Two halves:
 
 1. **Static site** (this repo, deployed by GitHub Pages on push to `main`): stage schedules, a personal set-list planner with overlap detection, live now/next tracking, install-to-home-screen, service-worker offline support, and an update banner.
 2. **"Hexlaces" live set-list sharing**: each person's NFC tag/QR carries a permanent read-only link (`?f=<readId>`). A tiny Cloudflare Worker + KV store (source in `worker/src/index.js`, config in root `wrangler.jsonc`) hosts published set lists. A secret write key held only in the owner's localStorage publishes changes; giveaway tags add a one-time claim token so a recipient can take ownership (works offline — the claim queues and retries on signal; first claim to reach the server wins and burns the token).
@@ -54,9 +54,9 @@ Every site release bumps ONE version number everywhere (currently 26). The piece
 
 The sed incantation used for bumps (adjust numbers):
 ```bash
-sed -i 's/?v=26/?v=27/g; s/<!-- v26 -->/<!-- v27 -->/' index.html
-sed -i 's/sw\.js?v=26/sw.js?v=27/; s/schedule-data\.js?v=26/schedule-data.js?v=27/' app.js
-sed -i 's/stage-schedule-v26/stage-schedule-v27/; s/?v=26/?v=27/g' sw.js
+sed -i 's/?v=28/?v=29/g; s/<!-- v28 -->/<!-- v29 -->/' index.html
+sed -i 's/sw\.js?v=28/sw.js?v=29/; s/schedule-data\.js?v=28/schedule-data.js?v=29/' app.js
+sed -i 's/stage-schedule-v28/stage-schedule-v29/; s/?v=28/?v=29/g' sw.js
 ```
 
 **Schedule-only edits during the festival do NOT bump `?v=`** — edit `schedule-data.js`, change its `SCHEDULE_VERSION` string, commit. Full instructions in [UPDATING.md](UPDATING.md). Open PWAs poll every 5 min and show a "tap to refresh" banner for both schedule and app updates.
@@ -107,4 +107,4 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 
 ## Version history (condensed)
 
-v15–16 pre-existing site → v17 SW network-timeout + schedule version stamp + update banner → v18 up-next-from-my-sets, Share button, View Transitions → v19 overlap flagging → v20 planner declutter (live now/next block, collapsible days, 20-min tolerance) → v21 Today-marker fix → v22 periodic background sync + UPDATING.md → v23 Hexlaces (worker + client) → v24 Hexlace panel declutter + `[hidden]` fix → v25 app-release detection in update banner → v26 audit fixes (crash-proof hash, offline-safe claims, 100-set cap, storage guards, ETag checks, worker hardening).
+v15–16 pre-existing site → v17 SW network-timeout + schedule version stamp + update banner → v18 up-next-from-my-sets, Share button, View Transitions → v19 overlap flagging → v20 planner declutter (live now/next block, collapsible days, 20-min tolerance) → v21 Today-marker fix → v22 periodic background sync + UPDATING.md → v23 Hexlaces (worker + client) → v24 Hexlace panel declutter + `[hidden]` fix → v25 app-release detection in update banner → v26 audit fixes (crash-proof hash, offline-safe claims, 100-set cap, storage guards, ETag checks, worker hardening) → v28 morning-day consistency, collapsed inactive Hexlaces, and date-mapping tests.

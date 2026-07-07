@@ -150,6 +150,9 @@
   }
 
   function getCurrentScheduleDay(stageId) {
+    const currentFestivalDay = getCurrentFestivalDay();
+    if (currentFestivalDay && isAvailable(currentFestivalDay, stageId)) return currentFestivalDay;
+
     const status = getNowPlayingStatus(stageId);
     if (status.current?.day && isAvailable(status.current.day, stageId)) return status.current.day;
     if (status.next?.day && isAvailable(status.next.day, stageId)) {
@@ -428,7 +431,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=27";
+  const SCHEDULE_ASSET = "schedule-data.js?v=28";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -461,11 +464,10 @@
     if (updateAvailable || document.hidden || navigator.onLine === false) return;
     if (!elements.updateBanner) return;
     try {
-      // cache: "no-store" skips the HTTP cache, and the service worker stores
-      // the fresh copies it fetches here - so the reload below still shows the
-      // new version even if the signal drops again right after this check.
       // "no-cache" revalidates with the server's ETag - a ~304 (few hundred
-      // bytes) when nothing changed, versus re-downloading the file every time.
+      // bytes) when nothing changed - and the service worker stores any fresh
+      // copy it fetches here, so a refresh can still work if signal drops after
+      // the check completes.
       const currentVersion = String(window.SCHEDULE_VERSION || "").trim();
       if (currentVersion) {
         const response = await fetch(SCHEDULE_ASSET, { cache: "no-cache" });
@@ -518,6 +520,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=27").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=28").then(registerPeriodicSync).catch(() => {});
   });
 })();
