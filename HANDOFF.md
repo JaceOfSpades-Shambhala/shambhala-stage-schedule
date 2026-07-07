@@ -45,7 +45,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (currently 26). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (currently 28). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
@@ -65,6 +65,8 @@ sed -i 's/stage-schedule-v28/stage-schedule-v29/; s/?v=28/?v=29/g' sw.js
 
 Serve the repo folder over localhost (any static server; a PowerShell `HttpListener` one-liner was used historically — port matters only for consistency). localhost is a secure context, so the service worker runs. Useful tricks:
 
+- **Automated checks:** `npm test` runs the date-mapping tests plus `scripts/validate-schedule.mjs`.
+- **Schedule validation:** `npm run validate:schedule` checks day/stage IDs, time format, blank artists, duplicate rows, empty stage arrays, and overnight rollover order. It intentionally does not fail on artist spelling/capitalization differences.
 - **Time travel:** `?preview=2026-07-24T21:30` pins "now" (Salmo time) — drives now-playing, Today marker, planner day-collapse, up-next.
 - **Seed a set list:** localStorage key `shambhala-2026-my-set-list` = array of `{day, stageId, time, artist}`.
 - **Identity/collection:** `shambhala-2026-hexlace-identity` (`{readId, writeKey, name, pendingClaim?, dirty?, lastPublished?}`) and `shambhala-2026-hexlaces-collected` (array).
@@ -77,6 +79,7 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 - `PUT /lists/:readId` + header `X-Write-Key` → update (name changes ride along)
 - `POST /lists/:readId/claim` `{claimToken, writeKey}` → registers the CLAIMER's locally-generated key, burns token (409 after)
 - Caps: 100 sets, 20KB, name ≤ 60 chars. TTL 60 days from last write. CORS `*`.
+- Write-like endpoints have generous KV-backed rate limits: create and claim each allow 80 requests per 5 minutes per client IP; updates allow 300 requests per 5 minutes per client IP plus 180 successful updates per 5 minutes per list. Reads are not rate-limited.
 
 ## Gotchas that already bit us (read before touching)
 
@@ -92,19 +95,18 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 
 - Set end times aren't published; a set's inferred end = next set on the same stage, capped at 90 min. Overlaps under 20 min aren't flagged.
 - The claim race is accepted by design: a fresh giveaway tag should get signal once before others tap it (UI says so). Losing a race drops the dead identity, keeps the user's sets, and collects the winner.
-- Publishing debounces 4s after each planner change; queued offline (`dirty` flag) and flushed on online/foreground/5-min tick. Cloudflare KV free tier = 1,000 writes/day account-wide (~500 publishes); the owner planned to enable Workers Paid ($5/mo) to lift this.
+- Publishing debounces 4s after each planner change; queued offline (`dirty` flag) and flushed on online/foreground/5-min tick. Workers Paid is enabled for write headroom; the Worker still rate-limits writes to protect against retry loops and abuse.
 - All remote strings render via `textContent` — keep it that way (XSS surface is friend names/artists from the API).
 
 ## Open items / roadmap
 
 - [ ] Disconnect the Cloudflare git build (dashboard) — or consciously keep it as worker CI
 - [ ] Delete stray `hexadecibel` worker (dashboard or `wrangler delete --name hexadecibel`)
-- [ ] Enable Workers Paid ($5/mo) for write headroom (owner decision, dashboard billing)
-- [ ] Optional hardening: Cloudflare WAF rate-limit rule on POST/PUT; `<meta>` CSP
+- [ ] Optional hardening: Cloudflare WAF rate-limit rule on POST/PUT if Worker-side limits are not enough; `<meta>` CSP
 - [ ] Real-phone field test: NFC tap-to-collect, giveaway claim handoff, Android "Write my tag"
 - [ ] Phase 2: friends' lists refreshed by periodic background sync (needs IndexedDB handoff to the SW); overlay friends' picks onto the schedule views
 - [ ] Write camp pendants with each person's `?f=` link before the festival (NFC Tools app, or Android in-app button)
 
 ## Version history (condensed)
 
-v15–16 pre-existing site → v17 SW network-timeout + schedule version stamp + update banner → v18 up-next-from-my-sets, Share button, View Transitions → v19 overlap flagging → v20 planner declutter (live now/next block, collapsible days, 20-min tolerance) → v21 Today-marker fix → v22 periodic background sync + UPDATING.md → v23 Hexlaces (worker + client) → v24 Hexlace panel declutter + `[hidden]` fix → v25 app-release detection in update banner → v26 audit fixes (crash-proof hash, offline-safe claims, 100-set cap, storage guards, ETag checks, worker hardening) → v28 morning-day consistency, collapsed inactive Hexlaces, and date-mapping tests.
+v15–16 pre-existing site → v17 SW network-timeout + schedule version stamp + update banner → v18 up-next-from-my-sets, Share button, View Transitions → v19 overlap flagging → v20 planner declutter (live now/next block, collapsible days, 20-min tolerance) → v21 Today-marker fix → v22 periodic background sync + UPDATING.md → v23 Hexlaces (worker + client) → v24 Hexlace panel declutter + `[hidden]` fix → v25 app-release detection in update banner → v26 audit fixes (crash-proof hash, offline-safe claims, 100-set cap, storage guards, ETag checks, worker hardening) → v28 morning-day consistency, collapsed inactive Hexlaces, date-mapping tests, schedule validation, and Worker-side write rate limits.
