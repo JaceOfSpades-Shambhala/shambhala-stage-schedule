@@ -29,6 +29,12 @@ const MAX_SETS = 100;
 const MAX_BYTES = 20000;
 const MAX_NAME = 60;
 const MIN_KEY_LENGTH = 16;
+const RATE_LIMITS = {
+  create: { limit: 80, windowSeconds: 300 },
+  claim: { limit: 80, windowSeconds: 300 },
+  updateIp: { limit: 300, windowSeconds: 300 },
+  updateList: { limit: 180, windowSeconds: 300 }
+};
 // Base58-ish alphabet: no 0/O/1/l/I, so ids are safe to read aloud or retype.
 const ID_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
 
@@ -43,6 +49,37 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store", ...CORS }
+  });
+}
+
+function clientBucket(request) {
+  const ip = request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "unknown";
+  return ip.replace(/[^a-zA-Z0-9:._-]/g, "").slice(0, 80) || "unknown";
+}
+
+async function checkRateLimit(env, key, limit, windowSeconds) {
+  const slot = Math.floor(Date.now() / 1000 / windowSeconds);
+  const bucket = `rate:${key}:${slot}`;
+  const current = Number(await env.LISTS.get(bucket)) || 0;
+  if (current >= limit) return false;
+  await env.LISTS.put(bucket, String(current + 1), { expirationTtl: windowSeconds * 2 });
+  return true;
+}
+
+async function enforceRateLimit(request, env, kind, id = clientBucket(request)) {
+  const rule = RATE_LIMITS[kind];
+  if (!rule) return null;
+  const ok = await checkRateLimit(env, `${kind}:${id}`, rule.limit, rule.windowSeconds);
+  if (ok) return null;
+  return new Response(JSON.stringify({ error: "Too many requests. Try again in a few minutes." }), {
+    status: 429,
+    headers: {
+      "Content-Type": "application/json",
+      "Retry-After": String(rule.windowSeconds),
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "no-store",
+      ...CORS
+    }
   });
 }
 
@@ -86,6 +123,8 @@ export default {
     try {
       // POST /lists — create a list.
       if (request.method === "POST" && parts.length === 1) {
+        const limited = await enforceRateLimit(request, env, "create");
+        if (limited) return limited;
         const body = await readJson(request);
         const blob = serialize(cleanPayload(body));
         let readId;
@@ -109,6 +148,8 @@ export default {
       // POST /lists/:readId/claim — the recipient records the write key they
       // generated. First valid claim wins and burns the token.
       if (request.method === "POST" && parts.length === 3 && parts[2] === "claim") {
+        const limited = await enforceRateLimit(request, env, "claim");
+        if (limited) return limited;
         const readId = parts[1];
         const expected = await env.LISTS.get(`claim:${readId}`);
         if (!expected) return json({ error: "Already claimed or not claimable." }, 409);
@@ -130,10 +171,14 @@ export default {
 
       // PUT /lists/:readId — update a list; requires the secret write key.
       if (request.method === "PUT" && parts.length === 2) {
+        const limitedByIp = await enforceRateLimit(request, env, "updateIp");
+        if (limitedByIp) return limitedByIp;
         const readId = parts[1];
         const expected = await env.LISTS.get(`auth:${readId}`);
         if (!expected) return json({ error: "Not found." }, 404);
         if ((request.headers.get("X-Write-Key") || "") !== expected) return json({ error: "Invalid write key." }, 403);
+        const limitedByList = await enforceRateLimit(request, env, "updateList", readId);
+        if (limitedByList) return limitedByList;
         const blob = serialize(cleanPayload(await readJson(request)));
         await env.LISTS.put(`list:${readId}`, blob, { expirationTtl: TTL_SECONDS });
         return json({ ok: true, updated: JSON.parse(blob).updated });
