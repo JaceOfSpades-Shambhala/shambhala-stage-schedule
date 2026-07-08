@@ -155,11 +155,15 @@ h2 { margin-bottom: 0; font-size: clamp(1.4rem, 5.6vw, 2rem); letter-spacing: -.
 .set-list.timeline { position: relative; }
 .set-list.timeline::before { content: ""; position: absolute; top: 1.7rem; bottom: 1.7rem; left: calc(1.2rem + .7rem - 1px); width: 2px; background: linear-gradient(to bottom, var(--accent) 0 var(--timeline-progress, 0%), rgba(255, 255, 255, .13) var(--timeline-progress, 0%) 100%); transition: background .35s ease; }
 .set-list.timeline .set { grid-template-columns: 1.4rem minmax(4.2rem, auto) minmax(0, 1fr) auto; column-gap: .6rem; }
-.set-node { position: relative; z-index: 1; justify-self: center; width: .9rem; height: .9rem; background: rgba(15, 17, 31, .92); border: 1.5px solid rgba(255, 255, 255, .32); clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%); transform: rotate(90deg); transition: width .2s ease, height .2s ease, transform .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.set-node { position: relative; z-index: 1; justify-self: center; width: 1.08rem; height: 1.08rem; background: transparent; }
+.set-node::before { content: ""; position: absolute; inset: -.2rem; border-radius: 999px; background: #17192c; }
+.set-node::after { content: ""; position: absolute; inset: .12rem; background: rgba(15, 17, 31, .96); border: 1.5px solid rgba(255, 255, 255, .32); clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0 50%); transition: inset .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease; }
 .set-done { opacity: .42; }
 .set-done .set-time { color: var(--muted); }
-.set-done .set-node { background: var(--accent); border-color: var(--accent); }
-.set-now .set-node { z-index: 2; width: 1.12rem; height: 1.12rem; background: var(--accent); border-color: rgba(255, 255, 255, .92); border-width: 2px; transform: rotate(90deg) scale(1.28); box-shadow: 0 0 0 .34rem rgba(255, 255, 255, .06), 0 0 0 .62rem color-mix(in srgb, var(--accent) 18%, transparent); }
+.set-done .set-node::after { background: var(--accent); border-color: var(--accent); }
+.set-now .set-node { z-index: 2; width: 1.2rem; height: 1.2rem; }
+.set-now .set-node::before { inset: -.42rem; background: #282b4a; box-shadow: 0 0 0 .22rem rgba(255, 255, 255, .035), 0 0 0 .54rem color-mix(in srgb, var(--accent) 14%, transparent); }
+.set-now .set-node::after { inset: .02rem; background: var(--accent); border-color: rgba(255, 255, 255, .92); border-width: 2px; box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent); }
 .set-sub { color: var(--accent); font-size: .64rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 .set-next .set-sub { color: #f5bf4f; }
 .set-progress { display: block; height: 4px; margin-top: .12rem; border-radius: 999px; background: rgba(255, 255, 255, .13); overflow: hidden; }
