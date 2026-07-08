@@ -1,23 +1,31 @@
-const CACHE_NAME = "stage-schedule-v35";
+const CACHE_NAME = "stage-schedule-v36";
 const NETWORK_TIMEOUT_MS = 3500;
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=35",
-  "./camp-location.js?v=35",
-  "./schedule-data.js?v=35",
-  "./app.js?v=35",
-  "./planner.js?v=35",
-  "./qrcode.js?v=35",
-  "./hexlaces.js?v=35",
-  "./install.js?v=35",
+  "./styles.css?v=36",
+  "./camp-location.js?v=36",
+  "./schedule-data.js?v=36",
+  "./app.js?v=36",
+  "./planner.js?v=36",
+  "./qrcode.js?v=36",
+  "./hexlaces.js?v=36",
+  "./install.js?v=36",
+  "./wordmark.svg?v=36",
+  "./stage-names/amp.png?v=36",
+  "./stage-names/fractal-forest.png?v=36",
+  "./stage-names/grove.png?v=36",
+  "./stage-names/living-room.png?v=36",
+  "./stage-names/pagoda.png?v=36",
+  "./stage-names/secret-garden.png?v=36",
+  "./stage-names/village.png?v=36",
   "./manifest.webmanifest",
-  "./favicon.ico?v=35",
-  "./favicon-32.png?v=35",
-  "./favicon-16.png?v=35",
-  "./apple-touch-icon.png?v=35",
-  "./icon-192.png?v=35",
-  "./icon-512.png?v=35"
+  "./favicon.ico?v=36",
+  "./favicon-32.png?v=36",
+  "./favicon-16.png?v=36",
+  "./apple-touch-icon.png?v=36",
+  "./icon-192.png?v=36",
+  "./icon-512.png?v=36"
 ];
 
 self.addEventListener("install", event => {
@@ -38,7 +46,7 @@ self.addEventListener("activate", event => {
 // the app a background window, refresh the schedule so the cache is already
 // fresh next time it opens - even if it opens offline. Only the small text/data
 // files are refreshed; the icons are skipped to spare festival bandwidth.
-const REFRESH_ASSETS = ASSETS.filter(asset => !/\.(png|ico)(\?|$)/.test(asset));
+const REFRESH_ASSETS = ASSETS.filter(asset => !/\.(png|ico|svg)(\?|$)/.test(asset));
 
 async function refreshSchedule() {
   const cache = await caches.open(CACHE_NAME);

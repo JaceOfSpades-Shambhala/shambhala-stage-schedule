@@ -24,6 +24,9 @@ a:hover { color: #ffb5d9; }
 .aurora-two { width: 32rem; height: 32rem; right: -12rem; top: 20rem; background: #33c7a5; }
 .shell { width: min(calc(100% - 2rem), 720px); margin: 0 auto; padding: 3.25rem 0 2.5rem; }
 .hero { margin-bottom: 1.15rem; }
+.hero-mark { display: flex; align-items: flex-end; gap: .55rem; max-width: none; margin: 0 0 .85rem; font-size: 1rem; }
+.hero-wordmark { display: block; width: min(380px, 82%); height: auto; filter: invert(1); }
+
 .eyebrow, .title-eyebrow { margin: 0 0 .42rem; color: var(--accent); font-size: .74rem; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
 .title-eyebrow { max-width: 34ch; }
 .camp-credit { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .28rem; row-gap: .16rem; margin: -.35rem 0 0; color: var(--muted); font-size: .84rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
@@ -138,6 +141,7 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .schedule-card { margin-top: 1rem; overflow: hidden; border-radius: 1.1rem; }
 .schedule-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1.3rem 1.2rem 1rem; border-bottom: 1px solid var(--line); }
 h2 { margin-bottom: 0; font-size: clamp(1.4rem, 5.6vw, 2rem); letter-spacing: -.03em; }
+.schedule-title-art { display: block; height: clamp(2.4rem, 10vw, 3.6rem); width: auto; max-width: 100%; object-fit: contain; object-position: left center; filter: invert(1); }
 .schedule-note { margin: 0; padding: .72rem 1.2rem; color: var(--muted); border-bottom: 1px solid var(--line); font-size: .85rem; }
 .set-list { margin: 0; padding: 0; list-style: none; }
 .set { display: grid; grid-template-columns: minmax(5.4rem, auto) minmax(0, 1fr) auto; align-items: center; gap: .72rem; padding: .84rem 1.2rem; border-bottom: 1px solid var(--line); }

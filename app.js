@@ -16,7 +16,6 @@
   const elements = {
     stageTabs: document.querySelector("#stage-tabs"),
     dayTabs: document.querySelector("#day-tabs"),
-    stageTitle: document.querySelector("#stage-title"),
     dayLabel: document.querySelector("#day-label"),
     scheduleTitle: document.querySelector("#schedule-title"),
     scheduleNote: document.querySelector("#schedule-note"),
@@ -310,12 +309,22 @@
     return `UP NEXT - IN ${mins} MIN`;
   }
 
+  // The official stage-name art used as the schedule title. Falls back to
+  // plain text if an image ever fails to load.
+  function setStageTitleArt(stageLabel) {
+    const art = document.createElement("img");
+    art.className = "schedule-title-art";
+    art.src = `stage-names/${appState.stage}.png?v=36`;
+    art.alt = `${stageLabel} set times`;
+    art.addEventListener("error", () => { elements.scheduleTitle.textContent = `${stageLabel} set times`; });
+    elements.scheduleTitle.replaceChildren(art);
+  }
+
   function renderSchedule() {
     const stageLabel = titleCaseStage(appState.stage);
     const entries = data[appState.day]?.[appState.stage] || [];
     const term = appState.term.trim();
     document.body.className = `stage-${appState.stage}`;
-    elements.stageTitle.textContent = stageLabel;
     elements.setList.innerHTML = "";
     if (term) {
       const matches = getGlobalMatches(term);
@@ -334,7 +343,7 @@
     const nowKey = nowToKey(status.now);
     const timeline = buildStageTimeline(appState.stage);
     elements.dayLabel.textContent = appState.day.toUpperCase();
-    elements.scheduleTitle.textContent = `${stageLabel} set times`;
+    setStageTitleArt(stageLabel);
     elements.scheduleNote.textContent = "Unofficial guide - set times can change.";
     elements.noResults.hidden = true;
     elements.setList.classList.add("timeline");
@@ -425,7 +434,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=35";
+  const SCHEDULE_ASSET = "schedule-data.js?v=36";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -514,6 +523,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=35").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=36").then(registerPeriodicSync).catch(() => {});
   });
 })();
