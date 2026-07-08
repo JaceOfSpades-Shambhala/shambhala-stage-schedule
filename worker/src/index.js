@@ -28,12 +28,20 @@ const MAX_SETS = 100;
 const MAX_BYTES = 20000;
 const MAX_NAME = 60;
 const MIN_KEY_LENGTH = 16;
+// Per-IP limits are sized for festival reality: a whole camp can sit behind
+// one carrier-NAT/hotspot IP, so bursts of legitimate traffic share a bucket.
+// The per-list update cap is per readId (NAT-independent) and stays tighter.
 const RATE_LIMITS = {
-  create: { limit: 80, windowSeconds: 300 },
-  claim: { limit: 80, windowSeconds: 300 },
-  updateIp: { limit: 300, windowSeconds: 300 },
+  create: { limit: 120, windowSeconds: 300 },
+  claim: { limit: 120, windowSeconds: 300 },
+  updateIp: { limit: 450, windowSeconds: 300 },
   updateList: { limit: 180, windowSeconds: 300 }
 };
+// After the first successful claim, an earlier-scan takeover is honoured only
+// this long. It covers the real offline race (camp-mate taps before the owner
+// gets signal) without leaving the write key stealable forever by anyone who
+// once saw the tag's claim token.
+const CLAIM_CONTENTION_WINDOW_MS = 24 * 60 * 60 * 1000;
 // Base58-ish alphabet: no 0/O/1/l/I, so ids are safe to read aloud or retype.
 const ID_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
 
@@ -173,13 +181,17 @@ export default {
         if (writeKey.length < MIN_KEY_LENGTH) return json({ error: "A valid write key is required." }, 400);
         const scannedAt = cleanScannedAt(body && body.scannedAt);
         const previousScannedAt = Number.isFinite(Number(claim.scannedAt)) ? Number(claim.scannedAt) : Infinity;
-        const accepted = !claim.ownerSet || scannedAt <= previousScannedAt;
+        // firstClaimedAt never advances on takeovers, so the whole contention
+        // period is bounded to the window after the very first claim.
+        const firstClaimedAt = Number.isFinite(Number(claim.claimedAt)) ? Number(claim.claimedAt) : null;
+        const contentionOpen = firstClaimedAt === null || Date.now() - firstClaimedAt < CLAIM_CONTENTION_WINDOW_MS;
+        const accepted = !claim.ownerSet || (contentionOpen && scannedAt <= previousScannedAt);
         if (accepted) {
           await env.LISTS.put(`auth:${readId}`, writeKey, { expirationTtl: TTL_SECONDS });
           await env.LISTS.put(`claim:${readId}`, JSON.stringify({
             token: claim.token,
             scannedAt,
-            claimedAt: Date.now(),
+            claimedAt: firstClaimedAt ?? Date.now(),
             ownerSet: true
           }), { expirationTtl: TTL_SECONDS });
         }

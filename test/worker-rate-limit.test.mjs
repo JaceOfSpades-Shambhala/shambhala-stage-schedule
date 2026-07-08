@@ -31,7 +31,7 @@ test("create endpoint returns 429 after its write limit", async () => {
   const env = { LISTS: new MemoryKv() };
   const body = JSON.stringify({ name: "Tester", sets: [] });
 
-  for (let index = 0; index < 80; index += 1) {
+  for (let index = 0; index < 120; index += 1) {
     const response = await worker.fetch(makeRequest("/lists", { method: "POST", body }), env);
     assert.equal(response.status, 201);
   }
@@ -73,4 +73,33 @@ test("earlier local scan can claim after a later scan reached the server first",
   }), env);
   assert.deepEqual(await tooLateClaim.json(), { ok: true, accepted: false });
   assert.equal(await env.LISTS.get(`auth:${readId}`), "earlier-write-key-123");
+});
+
+test("ownership locks once the 24h contention window closes", async () => {
+  const env = { LISTS: new MemoryKv() };
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Unclaimed Hexlace", sets: [], claimable: true })
+  }), env);
+  const { readId, claimToken } = await created.json();
+
+  const claim = await worker.fetch(makeRequest(`/lists/${readId}/claim`, {
+    method: "POST",
+    body: JSON.stringify({ claimToken, writeKey: "owner-write-key-1234", scannedAt: 2000 })
+  }), env);
+  assert.deepEqual(await claim.json(), { ok: true, accepted: true });
+
+  // Age the first claim past the contention window, then try an
+  // earlier-scan takeover - it must be refused and the key untouched.
+  const record = JSON.parse(await env.LISTS.get(`claim:${readId}`));
+  record.claimedAt = Date.now() - (24 * 60 * 60 * 1000 + 60000);
+  await env.LISTS.put(`claim:${readId}`, JSON.stringify(record));
+
+  const staleTakeover = await worker.fetch(makeRequest(`/lists/${readId}/claim`, {
+    method: "POST",
+    headers: { "CF-Connecting-IP": "203.0.113.13" },
+    body: JSON.stringify({ claimToken, writeKey: "hijack-write-key-1234", scannedAt: 1 })
+  }), env);
+  assert.deepEqual(await staleTakeover.json(), { ok: true, accepted: false });
+  assert.equal(await env.LISTS.get(`auth:${readId}`), "owner-write-key-1234");
 });

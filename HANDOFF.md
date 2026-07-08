@@ -1,6 +1,6 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v34**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v35**.
 
 ## What this is
 
@@ -45,7 +45,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (currently 32). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (v35 at the time of writing). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
@@ -77,9 +77,9 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 - `POST /lists` `{name, sets}` → `{readId, writeKey}`; with `claimable:true` → `{readId, claimToken}` (no write key stored — unwritable until claimed)
 - `GET /lists/:readId` → `{name, sets, updated}`
 - `PUT /lists/:readId` + header `X-Write-Key` → update (name changes ride along)
-- `POST /lists/:readId/claim` `{claimToken, writeKey, scannedAt}` → registers the CLAIMER's locally-generated key when this is the earliest recorded scan; returns `{ok:true, accepted:false}` for later scans without changing ownership.
+- `POST /lists/:readId/claim` `{claimToken, writeKey, scannedAt}` → registers the CLAIMER's locally-generated key when this is the earliest recorded scan; returns `{ok:true, accepted:false}` for later scans without changing ownership. Earlier-scan takeovers are honoured only within **24 hours of the first successful claim**; after that, ownership locks permanently (stops anyone who once saw a tag's claim token from stealing the write key later).
 - Caps: 100 sets, 20KB, name ≤ 60 chars. TTL 60 days from last write. CORS `*`.
-- Write-like endpoints have generous KV-backed rate limits: create and claim each allow 80 requests per 5 minutes per client IP; updates allow 300 requests per 5 minutes per client IP plus 180 successful updates per 5 minutes per list. Reads are not rate-limited.
+- Write-like endpoints have KV-backed rate limits sized for shared festival NAT: create and claim each allow 120 requests per 5 minutes per client IP; updates allow 450 requests per 5 minutes per client IP plus 180 successful updates per 5 minutes per list (per-list, so NAT-independent). Reads are not rate-limited.
 
 ## Gotchas that already bit us (read before touching)
 
@@ -94,7 +94,7 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 ## Design decisions worth knowing
 
 - Set end times aren't published; a set's inferred end = next set on the same stage, capped at 90 min. Overlaps under 20 min aren't flagged.
-- Claiming is intentionally invisible to the end user: opening a claim URL with no existing identity stores a silent local reservation. The Worker keeps the claim token metadata and lets the earliest local `scannedAt` own the Hexlace, so an accidental later tap cannot permanently steal a tag just because it had signal first.
+- Claiming is intentionally invisible to the end user: opening a claim URL with no existing identity stores a silent local reservation. The Worker keeps the claim token metadata and lets the earliest local `scannedAt` own the Hexlace, so an accidental later tap cannot steal a tag just because it had signal first. Earlier-scan takeovers close 24 hours after the first claim, locking ownership.
 - Publishing debounces 4s after each planner change; queued offline (`dirty` flag) and flushed on online/foreground/5-min tick. Workers Paid is enabled for write headroom; the Worker still rate-limits writes to protect against retry loops and abuse.
 - All remote strings render via `textContent` — keep it that way (XSS surface is friend names/artists from the API).
 

@@ -265,7 +265,6 @@
       row.querySelector(".planner-add")?.remove();
       const item = itemFromRow(row);
       if (!item) return;
-      row.classList.toggle("set-saved", hasSet(item));
       const button = document.createElement("button");
       button.type = "button";
       button.className = "planner-add";

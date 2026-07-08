@@ -1,6 +1,6 @@
 // Hexlaces - live set-list sharing. Each person's NFC tag (or QR code) carries
 // a permanent read-only link (?f=<readId>). Opening it collects that person's
-// list into the "Friend's sets collected" panel, refreshed whenever there's signal.
+// list into the "Friends' sets collected" panel, refreshed whenever there's signal.
 // A secret write key, held only in the owner's localStorage, is what publishes
 // changes - so tapping someone's tag can only ever read, never overwrite.
 // Giveaway tags add a claim token (?claim=). Opening one quietly records the
@@ -365,7 +365,7 @@
     const entries = loadCollected();
     elements.count.textContent = entries.length
       ? `${entries.length} friend${entries.length === 1 ? "" : "s"} collected`
-      : "No friend's sets collected yet";
+      : "No friends' sets collected yet";
     elements.empty.hidden = entries.length > 0;
     elements.list.innerHTML = "";
     entries.forEach(entry => {
