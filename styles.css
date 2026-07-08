@@ -173,7 +173,6 @@ footer p:last-child { margin-bottom: 0; }
 .update-banner:hover { transform: translateX(-50%) translateY(-1px); }
 .update-banner:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 @keyframes banner-in { from { opacity: 0; transform: translateX(-50%) translateY(.6rem); } }
-::view-transition-old(root), ::view-transition-new(root) { animation-duration: .18s; }
 body.stage-amp { --accent: #ec8cba; --accent-deep: #c76a97; }
 body.stage-fractal-forest { --accent: #ec4e58; --accent-deep: #bd3640; }
 body.stage-grove { --accent: #16af9c; --accent-deep: #0e8375; }

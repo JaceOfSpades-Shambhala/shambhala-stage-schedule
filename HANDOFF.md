@@ -1,6 +1,6 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v29**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v30**.
 
 ## What this is
 
@@ -45,7 +45,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (currently 29). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (currently 30). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
@@ -54,9 +54,9 @@ Every site release bumps ONE version number everywhere (currently 29). The piece
 
 The sed incantation used for bumps (adjust numbers):
 ```bash
-sed -i 's/?v=29/?v=30/g; s/<!-- v29 -->/<!-- v30 -->/' index.html
-sed -i 's/sw\.js?v=29/sw.js?v=30/; s/schedule-data\.js?v=29/schedule-data.js?v=30/' app.js
-sed -i 's/stage-schedule-v29/stage-schedule-v30/; s/?v=29/?v=30/g' sw.js
+sed -i 's/?v=30/?v=31/g; s/<!-- v30 -->/<!-- v31 -->/' index.html
+sed -i 's/sw\.js?v=30/sw.js?v=31/; s/schedule-data\.js?v=30/schedule-data.js?v=31/' app.js
+sed -i 's/stage-schedule-v30/stage-schedule-v31/; s/?v=30/?v=31/g' sw.js
 ```
 
 **Schedule-only edits during the festival do NOT bump `?v=`** — edit `schedule-data.js`, change its `SCHEDULE_VERSION` string, commit. Full instructions in [UPDATING.md](UPDATING.md). Open PWAs poll every 5 min and show a "tap to refresh" banner for both schedule and app updates.
@@ -109,4 +109,4 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 
 ## Version history (condensed)
 
-v15–16 pre-existing site → v17 SW network-timeout + schedule version stamp + update banner → v18 up-next-from-my-sets, Share button, View Transitions → v19 overlap flagging → v20 planner declutter (live now/next block, collapsible days, 20-min tolerance) → v21 Today-marker fix → v22 periodic background sync + UPDATING.md → v23 Hexlaces (worker + client) → v24 Hexlace panel declutter + `[hidden]` fix → v25 app-release detection in update banner → v26 audit fixes (crash-proof hash, offline-safe claims, 100-set cap, storage guards, ETag checks, worker hardening) → v28 morning-day consistency, collapsed inactive Hexlaces, date-mapping tests, schedule validation, and Worker-side write rate limits → v29 invisible Hexlace claim reservations with earliest-scan ownership.
+v15–16 pre-existing site → v17 SW network-timeout + schedule version stamp + update banner → v18 up-next-from-my-sets, Share button, View Transitions → v19 overlap flagging → v20 planner declutter (live now/next block, collapsible days, 20-min tolerance) → v21 Today-marker fix → v22 periodic background sync + UPDATING.md → v23 Hexlaces (worker + client) → v24 Hexlace panel declutter + `[hidden]` fix → v25 app-release detection in update banner → v26 audit fixes (crash-proof hash, offline-safe claims, 100-set cap, storage guards, ETag checks, worker hardening) → v28 morning-day consistency, collapsed inactive Hexlaces, date-mapping tests, schedule validation, and Worker-side write rate limits → v29 invisible Hexlace claim reservations with earliest-scan ownership → v30 disabled browser View Transitions after intermittent stuck snapshot overlays.

@@ -1,23 +1,23 @@
-const CACHE_NAME = "stage-schedule-v29";
+const CACHE_NAME = "stage-schedule-v30";
 const NETWORK_TIMEOUT_MS = 3500;
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=29",
-  "./camp-location.js?v=29",
-  "./schedule-data.js?v=29",
-  "./app.js?v=29",
-  "./planner.js?v=29",
-  "./qrcode.js?v=29",
-  "./hexlaces.js?v=29",
-  "./install.js?v=29",
+  "./styles.css?v=30",
+  "./camp-location.js?v=30",
+  "./schedule-data.js?v=30",
+  "./app.js?v=30",
+  "./planner.js?v=30",
+  "./qrcode.js?v=30",
+  "./hexlaces.js?v=30",
+  "./install.js?v=30",
   "./manifest.webmanifest",
-  "./favicon.ico?v=29",
-  "./favicon-32.png?v=29",
-  "./favicon-16.png?v=29",
-  "./apple-touch-icon.png?v=29",
-  "./icon-192.png?v=29",
-  "./icon-512.png?v=29"
+  "./favicon.ico?v=30",
+  "./favicon-32.png?v=30",
+  "./favicon-16.png?v=30",
+  "./apple-touch-icon.png?v=30",
+  "./icon-192.png?v=30",
+  "./icon-512.png?v=30"
 ];
 
 self.addEventListener("install", event => {

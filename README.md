@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v29 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v30 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
@@ -18,7 +18,7 @@ Schedule and planning:
 - Global artist search across all stages and days
 - Stage-specific Now Playing card using Salmo, BC time, with up-next and starts-in timing, current-set highlight, and early-morning rollover (a Friday-list 2:00 AM set counts as Saturday morning but stays in Friday's schedule)
 - My Set List planner (phone-local): tap-to-add, collapsible day groups (current day open by default), a live "Now / Up next from your sets" block, overlap flagging between saved sets (inferred set lengths, 20-minute tolerance), Share button (native share sheet with clipboard fallback), 100-set cap
-- Smooth stage/day transitions (View Transitions API, progressive)
+- Fast stage/day switching without browser snapshot transitions
 
 Hexlaces (live set-list sharing):
 
