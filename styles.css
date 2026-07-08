@@ -153,17 +153,18 @@ h2 { margin-bottom: 0; font-size: clamp(1.4rem, 5.6vw, 2rem); letter-spacing: -.
 .now-badge { width: max-content; padding: .12rem .42rem; border-radius: 999px; color: #161120; background: var(--accent); font-size: .66rem; font-weight: 950; letter-spacing: .08em; }
 /* Timeline treatment for the day/stage schedule list (not search results) */
 .set-list.timeline { position: relative; }
-.set-list.timeline::before { content: ""; position: absolute; top: 1.7rem; bottom: 1.7rem; left: calc(1.2rem + .7rem - 1px); width: 2px; background: linear-gradient(to bottom, var(--accent) 0 var(--timeline-progress, 0%), rgba(255, 255, 255, .13) var(--timeline-progress, 0%) 100%); transition: background .35s ease; }
-.set-list.timeline .set { grid-template-columns: 1.4rem minmax(4.2rem, auto) minmax(0, 1fr) auto; column-gap: .6rem; }
-.set-node { position: relative; z-index: 1; justify-self: center; width: 1.08rem; height: 1.08rem; background: transparent; }
-.set-node::before { content: ""; position: absolute; inset: -.2rem; border-radius: 999px; background: #17192c; }
-.set-node::after { content: ""; position: absolute; inset: .12rem; background: rgba(15, 17, 31, .96); border: 1.5px solid rgba(255, 255, 255, .32); clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0 50%); transition: inset .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.set-list.timeline .set { position: relative; grid-template-columns: 1.4rem minmax(4.2rem, auto) minmax(0, 1fr) auto; column-gap: .6rem; --timeline-line-before: rgba(255, 255, 255, .13); --timeline-line-after: rgba(255, 255, 255, .13); --timeline-node-bg: rgba(15, 17, 31, .96); --timeline-node-border: rgba(255, 255, 255, .32); --timeline-node-size: .9rem; --timeline-node-clearance: .64rem; }
+.set-list.timeline .set::before, .set-list.timeline .set::after { content: ""; position: absolute; left: calc(1.2rem + .7rem - 1px); width: 2px; pointer-events: none; z-index: 0; }
+.set-list.timeline .set::before { top: 0; bottom: calc(50% + var(--timeline-node-clearance)); background: var(--timeline-line-before); }
+.set-list.timeline .set::after { top: calc(50% + var(--timeline-node-clearance)); bottom: 0; background: var(--timeline-line-after); }
+.set-list.timeline .set:first-child::before, .set-list.timeline .set:last-child::after { display: none; }
+.set-list.timeline .set > * { position: relative; z-index: 1; }
+.set-node { justify-self: center; width: var(--timeline-node-size); height: var(--timeline-node-size); background: var(--timeline-node-border); clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0 50%); transition: width .2s ease, height .2s ease, background .2s ease; }
+.set-node::before { content: ""; position: absolute; inset: 2px; background: var(--timeline-node-bg); clip-path: inherit; }
 .set-done { opacity: .42; }
 .set-done .set-time { color: var(--muted); }
-.set-done .set-node::after { background: var(--accent); border-color: var(--accent); }
-.set-now .set-node { z-index: 2; width: 1.2rem; height: 1.2rem; }
-.set-now .set-node::before { inset: -.42rem; background: #282b4a; box-shadow: 0 0 0 .22rem rgba(255, 255, 255, .035), 0 0 0 .54rem color-mix(in srgb, var(--accent) 14%, transparent); }
-.set-now .set-node::after { inset: .02rem; background: var(--accent); border-color: rgba(255, 255, 255, .92); border-width: 2px; box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent); }
+.set-list.timeline .set-done { --timeline-line-before: var(--accent); --timeline-line-after: var(--accent); --timeline-node-bg: var(--accent); --timeline-node-border: var(--accent); }
+.set-list.timeline .set-now { --timeline-line-before: var(--accent); --timeline-node-bg: var(--accent); --timeline-node-border: rgba(255, 255, 255, .92); --timeline-node-size: 1.22rem; --timeline-node-clearance: .82rem; }
 .set-sub { color: var(--accent); font-size: .64rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 .set-next .set-sub { color: #f5bf4f; }
 .set-progress { display: block; height: 4px; margin-top: .12rem; border-radius: 999px; background: rgba(255, 255, 255, .13); overflow: hidden; }
@@ -186,6 +187,6 @@ body.stage-secret-garden { --accent: #90cd8d; --accent-deep: #5f9e5d; }
 body.stage-village { --accent: #8a6bc0; --accent-deep: #69499c; }
 @keyframes status-pulse { 50% { transform: scale(1.13); } }
 @media (min-width: 520px) { .stage-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); } .day-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (min-width: 650px) { .shell { padding-top: 5rem; } .live-panel { padding: 1.35rem; } .search-panel, .planner-panel { padding: 1.2rem 1.35rem; } .hexlace-panel { padding: 0; } .hexlace-panel-summary, .hexlace-panel-heading { padding: 1.2rem 1.35rem; } .hexlace-panel-body { padding: 0 1.35rem 1.2rem; } .schedule-heading { padding: 1.6rem 1.55rem 1.15rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem minmax(0, 1fr) auto; padding-left: 1.55rem; padding-right: 1.55rem; } .set-list.timeline .set { grid-template-columns: 1.4rem 5rem minmax(0, 1fr) auto; } .set-list.timeline::before { left: calc(1.55rem + .7rem - 1px); } }
+@media (min-width: 650px) { .shell { padding-top: 5rem; } .live-panel { padding: 1.35rem; } .search-panel, .planner-panel { padding: 1.2rem 1.35rem; } .hexlace-panel { padding: 0; } .hexlace-panel-summary, .hexlace-panel-heading { padding: 1.2rem 1.35rem; } .hexlace-panel-body { padding: 0 1.35rem 1.2rem; } .schedule-heading { padding: 1.6rem 1.55rem 1.15rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem minmax(0, 1fr) auto; padding-left: 1.55rem; padding-right: 1.55rem; } .set-list.timeline .set { grid-template-columns: 1.4rem 5rem minmax(0, 1fr) auto; } .set-list.timeline .set::before, .set-list.timeline .set::after { left: calc(1.55rem + .7rem - 1px); } }
 @media (max-width: 420px) { .schedule-heading { flex-direction: column; } .day-tabs .tab { flex-direction: column; gap: .12rem; } .planner-heading { align-items: stretch; flex-direction: column; } .planner-actions { justify-content: flex-start; } .planner-set { grid-template-columns: minmax(4.6rem, auto) minmax(0, 1fr); } .planner-remove { grid-column: 2; justify-self: start; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tab, .planner-action, .planner-remove, .planner-add, .install-button { transition: none; } .now-playing[data-status="active"] .status-dot, .update-banner, .planner-live-dot { animation: none; } }
