@@ -35,7 +35,6 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .install-button:hover { transform: translateY(-1px); border-color: rgba(255, 255, 255, .58); }
 .install-button:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .install-hint { max-width: 34ch; margin: .5rem 0 0; color: var(--muted); font-size: .78rem; }
-.notice { max-width: 62ch; margin: 1rem 0 0; padding: .78rem .92rem; border-left: 3px solid var(--accent); color: #e6e3ee; background: rgba(15, 17, 31, .48); border-radius: 0 .55rem .55rem 0; font-size: .88rem; }
 .live-panel, .search-panel, .planner-panel, .schedule-card { background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); backdrop-filter: blur(16px); }
 .live-panel { display: grid; gap: 1rem; padding: 1.15rem; border-radius: 1.1rem; }
 .now-playing { padding: 0 0 1rem; border-bottom: 1px solid var(--line); }
@@ -100,7 +99,6 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .planner-day-count { color: var(--muted); font-size: .75rem; font-weight: 650; }
 .planner-day-list { margin: 0; padding: 0; list-style: none; }
 .hexlace-list { display: grid; gap: .3rem; }
-.hexlace-mine-card { display: grid; gap: .6rem; margin-top: .4rem; padding: .8rem .9rem; border: 1px solid var(--line); border-radius: .7rem; background: rgba(0, 0, 0, .22); }
 .hexlace-hint { margin: 0; color: var(--muted); font-size: .8rem; }
 .hexlace-sharing-as { margin: 0; font-size: .95rem; }
 .hexlace-name-edit { padding: 0; border: none; background: none; color: var(--ink); cursor: pointer; font: inherit; text-decoration: underline dotted rgba(255, 255, 255, .45); text-underline-offset: .22rem; }
@@ -134,6 +132,7 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .planner-meta, .planner-empty, .planner-feedback { color: var(--muted); font-size: .78rem; font-weight: 650; }
 .planner-empty, .planner-feedback { margin: 0; }
 .planner-feedback:empty { display: none; }
+.hexlace-feedback { margin-top: .65rem; padding: 0 .2rem; }
 .planner-remove { min-height: 2rem; padding: .35rem .55rem; border-radius: 999px; font-size: .72rem; }
 .schedule-card { margin-top: 1rem; overflow: hidden; border-radius: 1.1rem; }
 .schedule-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1.3rem 1.2rem 1rem; border-bottom: 1px solid var(--line); }

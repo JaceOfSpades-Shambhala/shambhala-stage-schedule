@@ -1,6 +1,6 @@
 // Hexlaces - live set-list sharing. Each person's NFC tag (or QR code) carries
 // a permanent read-only link (?f=<readId>). Opening it collects that person's
-// list into the "Hexlaces Collected" panel, refreshed whenever there's signal.
+// list into the "Friend's sets collected" panel, refreshed whenever there's signal.
 // A secret write key, held only in the owner's localStorage, is what publishes
 // changes - so tapping someone's tag can only ever read, never overwrite.
 // Giveaway tags add a claim token (?claim=). Opening one quietly records the
@@ -25,6 +25,7 @@
   const REFRESH_MIN_AGE_MS = 60 * 1000;
 
   const elements = {
+    myPanel: document.querySelector("#my-hexlace"),
     panel: document.querySelector("#hexlaces"),
     count: document.querySelector("#hexlace-count"),
     list: document.querySelector("#hexlace-list"),
@@ -51,7 +52,7 @@
     nameCancel: document.querySelector("#hexlace-name-cancel"),
     feedback: document.querySelector("#hexlace-feedback")
   };
-  if (!elements.panel) return;
+  if (!elements.myPanel || !elements.panel) return;
 
   const friendOpenState = new Map();
   let editorMode = "";
@@ -131,12 +132,8 @@
     feedback.timeout = window.setTimeout(() => { elements.feedback.textContent = ""; }, 3200);
   }
 
-  function shouldOpenPanel() {
-    return isVisibleIdentity(loadIdentity()) || loadCollected().length > 0 || Boolean(editorMode);
-  }
-
-  function syncPanelOpen() {
-    if (shouldOpenPanel()) elements.panel.open = true;
+  function syncMyPanelOpen() {
+    if (editorMode) elements.myPanel.open = true;
   }
 
   function timeAgo(timestamp) {
@@ -160,7 +157,7 @@
   function renderMine() {
     const identity = loadIdentity();
     const visibleIdentity = isVisibleIdentity(identity);
-    syncPanelOpen();
+    syncMyPanelOpen();
     elements.setup.hidden = Boolean(visibleIdentity) || editorMode === "enable" || editorMode === "claim";
     elements.mine.hidden = !visibleIdentity || editorMode === "claim";
     elements.editor.hidden = !editorMode;
@@ -366,16 +363,15 @@
 
   function renderCollected() {
     const entries = loadCollected();
-    syncPanelOpen();
     elements.count.textContent = entries.length
-      ? `${entries.length} Hexlace${entries.length === 1 ? "" : "s"} collected`
-      : "No Hexlaces collected yet";
+      ? `${entries.length} friend${entries.length === 1 ? "" : "s"} collected`
+      : "No friend's sets collected yet";
     elements.empty.hidden = entries.length > 0;
     elements.list.innerHTML = "";
     entries.forEach(entry => {
       const group = document.createElement("details");
       group.className = "planner-day hexlace-friend";
-      group.open = friendOpenState.has(entry.readId) ? friendOpenState.get(entry.readId) : true;
+      group.open = friendOpenState.has(entry.readId) ? friendOpenState.get(entry.readId) : false;
       group.addEventListener("toggle", () => friendOpenState.set(entry.readId, group.open));
 
       const summary = document.createElement("summary");
@@ -509,6 +505,7 @@
     if (entry && !entry.pending && !entry.missing) feedback(`Collected ${entry.name}'s Hexlace.`);
     else if (entry && entry.missing) feedback("That Hexlace has expired or was removed.");
     else feedback("Hexlace saved - the list will load when you have signal.");
+    elements.panel.open = true;
     elements.panel.scrollIntoView({ block: "nearest" });
   }
 

@@ -339,7 +339,7 @@
     const timeline = buildStageTimeline(appState.stage);
     elements.dayLabel.textContent = appState.day.toUpperCase();
     elements.scheduleTitle.textContent = `${stageLabel} set times`;
-    elements.scheduleNote.textContent = `${entries.length} listed set${entries.length === 1 ? "" : "s"}. All times are shown as published.`;
+    elements.scheduleNote.textContent = "Unofficial guide - set times can change.";
     elements.noResults.hidden = true;
     elements.setList.classList.add("timeline");
     entries.forEach(([time, artist]) => {
@@ -386,29 +386,28 @@
   function renderNowPlaying() {
     const stageLabel = titleCaseStage(appState.stage);
     const status = getNowPlayingStatus(appState.stage);
-    const timeBasis = status.now.isPreview ? "Preview time (Salmo, BC)" : "Salmo, BC time";
     elements.nowPlaying.dataset.status = status.type;
     if (status.type === "active") {
       elements.nowPlayingLabel.textContent = `NOW PLAYING - ${stageLabel.toUpperCase()}`;
       elements.nowPlayingTitle.textContent = status.current.artist;
-      setNowPlayingDetails([`Started at ${status.current.time} - Up next: `, { tag: "strong", className: "now-playing-next", text: status.next.artist }, ` at ${status.next.time} - ${timeBasis}`]);
+      setNowPlayingDetails([`Started at ${status.current.time} - Up next: `, { tag: "strong", className: "now-playing-next", text: status.next.artist }, ` at ${status.next.time}`]);
       return;
     }
     if (status.type === "final") {
       elements.nowPlayingLabel.textContent = `FINAL LISTED SET - ${stageLabel.toUpperCase()}`;
       elements.nowPlayingTitle.textContent = status.current.artist;
-      setNowPlayingDetails([`Started at ${status.current.time}. The source schedule does not list an end time - ${timeBasis}`]);
+      setNowPlayingDetails([`Started at ${status.current.time}. The source schedule does not list an end time.`]);
       return;
     }
     if (status.type === "upcoming") {
       elements.nowPlayingLabel.textContent = `NO SET SCHEDULED RIGHT NOW - ${stageLabel.toUpperCase()}`;
       elements.nowPlayingTitle.textContent = `Next: ${status.next.artist}`;
-      setNowPlayingDetails([`${status.next.day} schedule - ${formatDate(status.next.date)} at ${status.next.time} - `, { tag: "strong", className: "now-playing-next", text: formatStartsIn(status.minutesUntilNext) }, ` - ${timeBasis}`]);
+      setNowPlayingDetails([`${formatDate(status.next.date)} at ${status.next.time} - `, { tag: "strong", className: "now-playing-next", text: formatStartsIn(status.minutesUntilNext) }]);
       return;
     }
     elements.nowPlayingLabel.textContent = `NO MORE LISTED SETS - ${stageLabel.toUpperCase()}`;
     elements.nowPlayingTitle.textContent = "No scheduled set right now";
-    setNowPlayingDetails([`The live status is only based on the 2026 schedule listed in this guide - ${timeBasis}`]);
+    setNowPlayingDetails(["The live status is only based on the 2026 schedule listed in this guide."]);
   }
 
   function renderLiveStatus() {
@@ -430,7 +429,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=30";
+  const SCHEDULE_ASSET = "schedule-data.js?v=31";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -519,6 +518,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=30").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=31").then(registerPeriodicSync).catch(() => {});
   });
 })();

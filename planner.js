@@ -323,14 +323,6 @@
   // (add/remove/clear) don't fight their choice within a session.
   const dayOpenState = new Map();
 
-  function currentScheduleDay() {
-    const now = getFestivalNow();
-    // Sets run well past midnight, so early-morning hours still belong to
-    // the previous schedule day.
-    const date = now.minutes < 10 * 60 ? addDays(now.date, -1) : now.date;
-    return DAYS.find(day => FESTIVAL_DATES[day] === date) || "";
-  }
-
   function buildSetRow(item, conflicts) {
     const row = document.createElement("li");
     row.className = "planner-set";
@@ -372,14 +364,12 @@
     elements.share.hidden = sets.length === 0;
     elements.clear.hidden = sets.length === 0;
     renderUpNext();
-    const currentDay = currentScheduleDay();
     DAYS.forEach(day => {
       const daySets = sets.filter(item => item.day === day);
       if (!daySets.length) return;
       const group = document.createElement("details");
       group.className = "planner-day";
-      // Outside the festival there is no current day, so every day stays open.
-      group.open = dayOpenState.has(day) ? dayOpenState.get(day) : (!currentDay || day === currentDay);
+      group.open = dayOpenState.has(day) ? dayOpenState.get(day) : false;
       group.addEventListener("toggle", () => dayOpenState.set(day, group.open));
       const summary = document.createElement("summary");
       summary.className = "planner-day-summary";
