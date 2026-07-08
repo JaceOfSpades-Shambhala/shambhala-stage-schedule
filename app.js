@@ -314,6 +314,29 @@
     return `UP NEXT - IN ${mins} MIN`;
   }
 
+  function timelineProgress(entries, nowKey) {
+    if (!entries.length) return "0%";
+    if (entries.length === 1) return nowKey >= entries[0].key ? "100%" : "0%";
+    if (nowKey < entries[0].key) return "0%";
+    const last = entries.at(-1);
+    const finalEnd = last.key + FINAL_SET_WINDOW_MINUTES;
+    if (nowKey >= finalEnd) return "100%";
+    let progress = 0;
+    entries.forEach((entry, index) => {
+      const next = entries[index + 1];
+      const nextKey = next ? next.key : finalEnd;
+      if (nowKey >= nextKey) {
+        progress = Math.max(progress, (index + 1) / (entries.length - 1));
+        return;
+      }
+      if (nowKey >= entry.key) {
+        const span = Math.max(1, nextKey - entry.key);
+        progress = Math.max(progress, (index + (nowKey - entry.key) / span) / (entries.length - 1));
+      }
+    });
+    return `${Math.max(0, Math.min(100, Math.round(progress * 100)))}%`;
+  }
+
   function renderSchedule() {
     const stageLabel = titleCaseStage(appState.stage);
     const entries = data[appState.day]?.[appState.stage] || [];
@@ -328,6 +351,7 @@
       elements.scheduleNote.textContent = `${matches.length} matching set${matches.length === 1 ? "" : "s"} across all listed stages and days.`;
       elements.noResults.textContent = "No matching artist was found across the listed stages and days.";
       elements.setList.classList.remove("timeline");
+      elements.setList.style.removeProperty("--timeline-progress");
       matches.forEach(appendSet);
       elements.noResults.hidden = matches.length !== 0;
       return;
@@ -342,6 +366,7 @@
     elements.scheduleNote.textContent = "Unofficial guide - set times can change.";
     elements.noResults.hidden = true;
     elements.setList.classList.add("timeline");
+    elements.setList.style.setProperty("--timeline-progress", timelineProgress(timeline.filter(entry => entry.day === appState.day), nowKey));
     entries.forEach(([time, artist]) => {
       const isCurrent = Boolean(current && current.day === appState.day && current.time === time && current.artist === artist);
       const isNext = Boolean(next && next.day === appState.day && next.time === time && next.artist === artist);
@@ -429,7 +454,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=31";
+  const SCHEDULE_ASSET = "schedule-data.js?v=32";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -518,6 +543,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=31").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=32").then(registerPeriodicSync).catch(() => {});
   });
 })();

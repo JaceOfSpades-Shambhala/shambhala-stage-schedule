@@ -83,7 +83,8 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .planner-live-details { margin: 0; color: var(--muted); font-size: .78rem; font-weight: 650; }
 .planner-list { display: grid; gap: .3rem; margin: 0; padding: 0; }
 .hexlace-panel { padding: 0; overflow: hidden; }
-.hexlace-panel-summary { padding: 1.05rem 1.15rem; cursor: pointer; list-style: none; }
+.hexlace-panel-summary, .hexlace-panel-heading { padding: 1.05rem 1.15rem; }
+.hexlace-panel-summary { cursor: pointer; list-style: none; }
 .hexlace-panel-summary::-webkit-details-marker { display: none; }
 .hexlace-summary-copy { display: grid; gap: .18rem; }
 .hexlace-summary-copy .control-label { margin-bottom: 0; }
@@ -152,13 +153,13 @@ h2 { margin-bottom: 0; font-size: clamp(1.4rem, 5.6vw, 2rem); letter-spacing: -.
 .now-badge { width: max-content; padding: .12rem .42rem; border-radius: 999px; color: #161120; background: var(--accent); font-size: .66rem; font-weight: 950; letter-spacing: .08em; }
 /* Timeline treatment for the day/stage schedule list (not search results) */
 .set-list.timeline { position: relative; }
-.set-list.timeline::before { content: ""; position: absolute; top: 1.7rem; bottom: 1.7rem; left: calc(1.2rem + .7rem - 1px); width: 2px; background: linear-gradient(rgba(255, 255, 255, .04), rgba(255, 255, 255, .16), rgba(255, 255, 255, .04)); }
+.set-list.timeline::before { content: ""; position: absolute; top: 1.7rem; bottom: 1.7rem; left: calc(1.2rem + .7rem - 1px); width: 2px; background: linear-gradient(to bottom, var(--accent) 0 var(--timeline-progress, 0%), rgba(255, 255, 255, .13) var(--timeline-progress, 0%) 100%); transition: background .35s ease; }
 .set-list.timeline .set { grid-template-columns: 1.4rem minmax(4.2rem, auto) minmax(0, 1fr) auto; column-gap: .6rem; }
-.set-node { position: relative; z-index: 1; justify-self: center; width: .9rem; height: .9rem; background: rgba(255, 255, 255, .13); border: 1.5px solid rgba(255, 255, 255, .28); clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%); }
-.set-saved .set-node { background: var(--accent); border-color: var(--accent); }
+.set-node { position: relative; z-index: 1; justify-self: center; width: .9rem; height: .9rem; background: rgba(15, 17, 31, .92); border: 1.5px solid rgba(255, 255, 255, .32); clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%); transform: rotate(90deg); transition: width .2s ease, height .2s ease, transform .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease; }
 .set-done { opacity: .42; }
 .set-done .set-time { color: var(--muted); }
-.set-done .set-node { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .18); }
+.set-done .set-node { background: var(--accent); border-color: var(--accent); }
+.set-now .set-node { z-index: 2; width: 1.12rem; height: 1.12rem; background: var(--accent); border-color: rgba(255, 255, 255, .92); border-width: 2px; transform: rotate(90deg) scale(1.28); box-shadow: 0 0 0 .34rem rgba(255, 255, 255, .06), 0 0 0 .62rem color-mix(in srgb, var(--accent) 18%, transparent); }
 .set-sub { color: var(--accent); font-size: .64rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 .set-next .set-sub { color: #f5bf4f; }
 .set-progress { display: block; height: 4px; margin-top: .12rem; border-radius: 999px; background: rgba(255, 255, 255, .13); overflow: hidden; }
@@ -181,6 +182,6 @@ body.stage-secret-garden { --accent: #90cd8d; --accent-deep: #5f9e5d; }
 body.stage-village { --accent: #8a6bc0; --accent-deep: #69499c; }
 @keyframes status-pulse { 50% { transform: scale(1.13); } }
 @media (min-width: 520px) { .stage-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); } .day-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (min-width: 650px) { .shell { padding-top: 5rem; } .live-panel { padding: 1.35rem; } .search-panel, .planner-panel { padding: 1.2rem 1.35rem; } .hexlace-panel { padding: 0; } .hexlace-panel-summary { padding: 1.2rem 1.35rem; } .hexlace-panel-body { padding: 0 1.35rem 1.2rem; } .schedule-heading { padding: 1.6rem 1.55rem 1.15rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem minmax(0, 1fr) auto; padding-left: 1.55rem; padding-right: 1.55rem; } .set-list.timeline .set { grid-template-columns: 1.4rem 5rem minmax(0, 1fr) auto; } .set-list.timeline::before { left: calc(1.55rem + .7rem - 1px); } }
+@media (min-width: 650px) { .shell { padding-top: 5rem; } .live-panel { padding: 1.35rem; } .search-panel, .planner-panel { padding: 1.2rem 1.35rem; } .hexlace-panel { padding: 0; } .hexlace-panel-summary, .hexlace-panel-heading { padding: 1.2rem 1.35rem; } .hexlace-panel-body { padding: 0 1.35rem 1.2rem; } .schedule-heading { padding: 1.6rem 1.55rem 1.15rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem minmax(0, 1fr) auto; padding-left: 1.55rem; padding-right: 1.55rem; } .set-list.timeline .set { grid-template-columns: 1.4rem 5rem minmax(0, 1fr) auto; } .set-list.timeline::before { left: calc(1.55rem + .7rem - 1px); } }
 @media (max-width: 420px) { .schedule-heading { flex-direction: column; } .day-tabs .tab { flex-direction: column; gap: .12rem; } .planner-heading { align-items: stretch; flex-direction: column; } .planner-actions { justify-content: flex-start; } .planner-set { grid-template-columns: minmax(4.6rem, auto) minmax(0, 1fr); } .planner-remove { grid-column: 2; justify-self: start; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tab, .planner-action, .planner-remove, .planner-add, .install-button { transition: none; } .now-playing[data-status="active"] .status-dot, .update-banner, .planner-live-dot { animation: none; } }

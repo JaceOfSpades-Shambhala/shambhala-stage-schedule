@@ -489,8 +489,10 @@
     const query = params.toString();
     history.replaceState({}, "", `${location.pathname}${query ? "?" + query : ""}${location.hash}`);
 
+    friendOpenState.clear();
     const identity = loadIdentity();
     if (identity && identity.readId === readId) {
+      renderCollected();
       feedback("That's your own Hexlace.");
       return;
     }
@@ -498,14 +500,17 @@
     // your Hexlace can never be replaced by tapping someone else's tag.
     if (claimToken && !identity) {
       try {
-        if (await claimHexlace(readId, claimToken)) return;
+        if (await claimHexlace(readId, claimToken)) {
+          renderCollected();
+          return;
+        }
       } catch {}
     }
+    friendOpenState.set(readId, true);
     const entry = await addCollected(readId, "");
     if (entry && !entry.pending && !entry.missing) feedback(`Collected ${entry.name}'s Hexlace.`);
     else if (entry && entry.missing) feedback("That Hexlace has expired or was removed.");
     else feedback("Hexlace saved - the list will load when you have signal.");
-    elements.panel.open = true;
     elements.panel.scrollIntoView({ block: "nearest" });
   }
 
