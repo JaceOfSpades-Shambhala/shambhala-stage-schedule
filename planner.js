@@ -16,7 +16,7 @@
   const elements = {
     panel: document.querySelector("#planner"),
     scheduleList: document.querySelector("#set-list"),
-    dayLabel: document.querySelector("#day-label"),
+    dayLabel: document.querySelector("#poster-day"),
     list: document.querySelector("#planner-list"),
     empty: document.querySelector("#planner-empty"),
     count: document.querySelector("#planner-count"),
@@ -254,7 +254,7 @@
 
   function setButtonState(button, item) {
     const saved = hasSet(item);
-    button.textContent = saved ? "Saved" : "+";
+    button.textContent = saved ? "✓ Saved" : "+ Save";
     button.classList.toggle("is-added", saved);
     button.setAttribute("aria-label", `${saved ? "Remove" : "Add"} ${item.artist} at ${item.time} from My Set List`);
     button.title = saved ? "Remove from My Set List" : "Add to My Set List";

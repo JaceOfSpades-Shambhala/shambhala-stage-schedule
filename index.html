@@ -7,28 +7,35 @@
   <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
   <title>Shambhala 2026 Stage Set Times</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=37">
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=37">
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=37">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=37">
-  <link rel="stylesheet" href="styles.css?v=37">
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=38">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=38">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=38">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=38">
+  <link rel="stylesheet" href="styles.css?v=38">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Camp Hexadecibel">
   <meta property="og:title" content="Shambhala 2026 Stage Set Times">
   <meta property="og:description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
-  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=37">
+  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=38">
   <meta property="og:url" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/">
   <meta name="twitter:card" content="summary">
 </head>
 <body>
-  <!-- v37 -->
+  <!-- v38 -->
   <a class="skip-link" href="#schedule">Skip to schedule</a>
-  <div class="aurora aurora-one" aria-hidden="true"></div>
-  <div class="aurora aurora-two" aria-hidden="true"></div>
+  <div class="hx-vortex" aria-hidden="true">
+    <div class="hx-vortex-glow"></div>
+    <svg viewBox="0 0 100 100">
+      <polygon points="50,0 93.3,25 93.3,75 50,100 6.7,75 6.7,25" transform="translate(50 50) rotate(-45) translate(-50 -50)"></polygon>
+      <polygon points="50,0 93.3,25 93.3,75 50,100 6.7,75 6.7,25" transform="translate(50 50) rotate(-30) scale(.845) translate(-50 -50)"></polygon>
+      <polygon points="50,0 93.3,25 93.3,75 50,100 6.7,75 6.7,25" transform="translate(50 50) rotate(-15) scale(.714) translate(-50 -50)"></polygon>
+      <polygon points="50,0 93.3,25 93.3,75 50,100 6.7,75 6.7,25" transform="translate(50 50) scale(.603) translate(-50 -50)"></polygon>
+    </svg>
+  </div>
 
   <main class="shell">
     <header class="hero">
-      <h1 class="hero-mark"><img class="hero-wordmark" src="wordmark.svg?v=37" alt="Shambhala Music Festival 2026 set times" width="800" height="253"></h1>
+      <h1 class="hero-mark"><img class="hero-wordmark" src="wordmark.svg?v=38" alt="Shambhala Music Festival 2026 set times" width="800" height="253"></h1>
       <p class="camp-credit"><span>Made by Camp Hexadecibel</span><span aria-hidden="true"> - </span><a id="camp-location-link" href="https://www.google.com/maps/search/?api=1&query=Shambhala%20Music%20Festival%20Salmo%20BC" target="_blank" rel="noreferrer">Come visit us</a></p>
       <button id="install-button" class="install-button" type="button" hidden>Add to Home Screen</button>
       <p id="install-hint" class="install-hint" hidden>On iPhone or iPad: tap the Share icon, then "Add to Home Screen".</p>
@@ -38,14 +45,13 @@
       <section id="now-playing" class="now-playing" data-status="checking" aria-live="polite" aria-atomic="true">
         <div class="now-playing-topline">
           <span class="status-dot" aria-hidden="true"></span>
-          <p id="now-playing-label" class="now-playing-label">NOW AT AMP</p>
+          <p id="now-playing-label" class="now-playing-label">ON NOW</p>
         </div>
         <h2 id="now-playing-title" class="now-playing-title">Checking the schedule...</h2>
         <p id="now-playing-details" class="now-playing-details">Checking set times...</p>
       </section>
 
       <div class="controls" aria-label="Schedule filters">
-        <p class="controls-intro">Tap a stage or pick a day.</p>
         <div>
           <p class="control-label">Stage</p>
           <nav id="stage-tabs" class="tabs stage-tabs" role="tablist" aria-label="Select a stage"></nav>
@@ -55,22 +61,23 @@
           <nav id="day-tabs" class="tabs day-tabs" role="tablist" aria-label="Select a day"></nav>
         </div>
       </div>
-    </section>
 
-    <section class="search-panel" aria-label="Artist search">
       <label class="search-wrap" for="artist-search">
         <span>Search all stages and days</span>
         <input id="artist-search" type="search" placeholder="Artist name (all stages)" autocomplete="off" enterkeyhint="search">
       </label>
     </section>
 
-    <section id="schedule" class="schedule-card" role="tabpanel" aria-live="polite">
-      <div class="schedule-heading">
-        <div>
-          <p id="day-label" class="eyebrow">THURSDAY</p>
-          <h2 id="schedule-title">AMP set times</h2>
-        </div>
+    <section id="stage-poster" class="stage-poster" aria-label="Stage and day">
+      <img id="poster-mark" class="poster-mark" src="stage-names/amp.png?v=38" alt="AMP">
+      <div class="poster-day-rule">
+        <span class="poster-rule" aria-hidden="true"></span>
+        <span id="poster-day" class="poster-day">THURSDAY</span>
+        <span class="poster-rule" aria-hidden="true"></span>
       </div>
+    </section>
+
+    <section id="schedule" class="schedule-card" role="tabpanel" aria-live="polite">
       <p id="schedule-note" class="schedule-note"></p>
       <ol id="set-list" class="set-list"></ol>
       <p id="no-results" class="empty-state" hidden>No matching artist was found across the listed stages and days.</p>
@@ -174,12 +181,12 @@
 
   <button id="update-banner" class="update-banner" type="button" hidden>Update available - tap to refresh</button>
 
-  <script src="camp-location.js?v=37"></script>
-  <script src="schedule-data.js?v=37"></script>
-  <script src="app.js?v=37"></script>
-  <script src="planner.js?v=37"></script>
-  <script src="qrcode.js?v=37"></script>
-  <script src="hexlaces.js?v=37"></script>
-  <script src="install.js?v=37"></script>
+  <script src="camp-location.js?v=38"></script>
+  <script src="schedule-data.js?v=38"></script>
+  <script src="app.js?v=38"></script>
+  <script src="planner.js?v=38"></script>
+  <script src="qrcode.js?v=38"></script>
+  <script src="hexlaces.js?v=38"></script>
+  <script src="install.js?v=38"></script>
 </body>
 </html>

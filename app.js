@@ -16,8 +16,8 @@
   const elements = {
     stageTabs: document.querySelector("#stage-tabs"),
     dayTabs: document.querySelector("#day-tabs"),
-    dayLabel: document.querySelector("#day-label"),
-    scheduleTitle: document.querySelector("#schedule-title"),
+    stagePoster: document.querySelector("#stage-poster"),
+    posterDay: document.querySelector("#poster-day"),
     scheduleNote: document.querySelector("#schedule-note"),
     setList: document.querySelector("#set-list"),
     noResults: document.querySelector("#no-results"),
@@ -309,15 +309,22 @@
     return `UP NEXT - IN ${mins} MIN`;
   }
 
-  // The official stage-name art used as the schedule title. Falls back to
+  // The official stage-name art used as the poster heading. Falls back to
   // plain text if an image ever fails to load.
-  function setStageTitleArt(stageLabel) {
+  function setPosterArt(stageLabel) {
     const art = document.createElement("img");
-    art.className = "schedule-title-art";
-    art.src = `stage-names/${appState.stage}.png?v=37`;
-    art.alt = `${stageLabel} set times`;
-    art.addEventListener("error", () => { elements.scheduleTitle.textContent = `${stageLabel} set times`; });
-    elements.scheduleTitle.replaceChildren(art);
+    art.id = "poster-mark";
+    art.className = "poster-mark";
+    art.src = `stage-names/${appState.stage}.png?v=38`;
+    art.alt = stageLabel;
+    art.addEventListener("error", () => {
+      const fallback = document.createElement("h2");
+      fallback.id = "poster-mark";
+      fallback.className = "poster-fallback";
+      fallback.textContent = stageLabel;
+      art.replaceWith(fallback);
+    });
+    elements.stagePoster.querySelector("#poster-mark").replaceWith(art);
   }
 
   function renderSchedule() {
@@ -328,8 +335,7 @@
     elements.setList.innerHTML = "";
     if (term) {
       const matches = getGlobalMatches(term);
-      elements.dayLabel.textContent = "ALL DAYS & STAGES";
-      elements.scheduleTitle.textContent = `Search results for "${term}"`;
+      elements.stagePoster.hidden = true;
       elements.scheduleNote.textContent = `${matches.length} matching set${matches.length === 1 ? "" : "s"} across all listed stages and days.`;
       elements.noResults.textContent = "No matching artist was found across the listed stages and days.";
       elements.setList.classList.remove("timeline");
@@ -342,8 +348,9 @@
     const next = status.next || null;
     const nowKey = nowToKey(status.now);
     const timeline = buildStageTimeline(appState.stage);
-    elements.dayLabel.textContent = appState.day.toUpperCase();
-    setStageTitleArt(stageLabel);
+    elements.stagePoster.hidden = false;
+    setPosterArt(stageLabel);
+    elements.posterDay.textContent = appState.day.toUpperCase();
     elements.scheduleNote.textContent = "Unofficial guide - set times can change.";
     elements.noResults.hidden = true;
     elements.setList.classList.add("timeline");
@@ -389,28 +396,27 @@
   }
 
   function renderNowPlaying() {
-    const stageLabel = titleCaseStage(appState.stage);
     const status = getNowPlayingStatus(appState.stage);
     elements.nowPlaying.dataset.status = status.type;
     if (status.type === "active") {
-      elements.nowPlayingLabel.textContent = `NOW PLAYING - ${stageLabel.toUpperCase()}`;
+      elements.nowPlayingLabel.textContent = "ON NOW";
       elements.nowPlayingTitle.textContent = status.current.artist;
       setNowPlayingDetails([`Started at ${status.current.time} - Up next: `, { tag: "strong", className: "now-playing-next", text: status.next.artist }, ` at ${status.next.time}`]);
       return;
     }
     if (status.type === "final") {
-      elements.nowPlayingLabel.textContent = `FINAL LISTED SET - ${stageLabel.toUpperCase()}`;
+      elements.nowPlayingLabel.textContent = "FINAL LISTED SET";
       elements.nowPlayingTitle.textContent = status.current.artist;
       setNowPlayingDetails([`Started at ${status.current.time}. The source schedule does not list an end time.`]);
       return;
     }
     if (status.type === "upcoming") {
-      elements.nowPlayingLabel.textContent = `NO SET SCHEDULED RIGHT NOW - ${stageLabel.toUpperCase()}`;
+      elements.nowPlayingLabel.textContent = "NO SET SCHEDULED RIGHT NOW";
       elements.nowPlayingTitle.textContent = `Next: ${status.next.artist}`;
       setNowPlayingDetails([`${formatDate(status.next.date)} at ${status.next.time} - `, { tag: "strong", className: "now-playing-next", text: formatStartsIn(status.minutesUntilNext) }]);
       return;
     }
-    elements.nowPlayingLabel.textContent = `NO MORE LISTED SETS - ${stageLabel.toUpperCase()}`;
+    elements.nowPlayingLabel.textContent = "NO MORE LISTED SETS";
     elements.nowPlayingTitle.textContent = "No scheduled set right now";
     setNowPlayingDetails(["The live status is only based on the 2026 schedule listed in this guide."]);
   }
@@ -434,7 +440,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=37";
+  const SCHEDULE_ASSET = "schedule-data.js?v=38";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -523,6 +529,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=37").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=38").then(registerPeriodicSync).catch(() => {});
   });
 })();
