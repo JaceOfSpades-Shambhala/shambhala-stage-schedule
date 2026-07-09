@@ -1,3 +1,18 @@
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/InterVariable.woff2?v=37") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/InterVariable-Italic.woff2?v=37") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
   --ink: #f8f7ff;
   --muted: #c8c6dc;
@@ -20,7 +35,7 @@ a:hover { color: #ffb5d9; }
 .skip-link { position: absolute; left: -999px; top: auto; }
 .skip-link:focus { left: 1rem; top: 1rem; z-index: 10; padding: .6rem .8rem; color: #111; background: #fff; border-radius: .5rem; }
 .aurora { position: fixed; pointer-events: none; z-index: -1; filter: blur(4px); opacity: .46; border-radius: 999px; }
-.aurora-one { width: 38rem; height: 38rem; top: -21rem; left: -10rem; background: #f15e9f; }
+.aurora-one { width: 38rem; height: 38rem; top: -21rem; left: -10rem; background: var(--accent); }
 .aurora-two { width: 32rem; height: 32rem; right: -12rem; top: 20rem; background: #33c7a5; }
 .shell { width: min(calc(100% - 2rem), 720px); margin: 0 auto; padding: 3.25rem 0 2.5rem; }
 .hero { margin-bottom: 1.15rem; }

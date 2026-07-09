@@ -314,7 +314,7 @@
   function setStageTitleArt(stageLabel) {
     const art = document.createElement("img");
     art.className = "schedule-title-art";
-    art.src = `stage-names/${appState.stage}.png?v=36`;
+    art.src = `stage-names/${appState.stage}.png?v=37`;
     art.alt = `${stageLabel} set times`;
     art.addEventListener("error", () => { elements.scheduleTitle.textContent = `${stageLabel} set times`; });
     elements.scheduleTitle.replaceChildren(art);
@@ -434,7 +434,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=36";
+  const SCHEDULE_ASSET = "schedule-data.js?v=37";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -523,6 +523,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=36").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=37").then(registerPeriodicSync).catch(() => {});
   });
 })();
