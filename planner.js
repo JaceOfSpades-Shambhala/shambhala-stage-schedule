@@ -163,10 +163,6 @@
   // The published schedule has no end times, so a set is assumed to run until
   // the next listed set on its own stage, capped at ASSUMED_SET_MINUTES.
   const ASSUMED_SET_MINUTES = 90;
-  // Overlaps shorter than this are treated as festival-normal (leave one set
-  // a little early) and not flagged.
-  const OVERLAP_IGNORE_MINUTES = 20;
-
   function setEndKey(match) {
     const nextOnStage = buildStageTimeline(match.stageId).find(entry => entry.key > match.key);
     const cap = match.key + ASSUMED_SET_MINUTES;
@@ -181,17 +177,19 @@
       .sort((a, b) => a.match.key - b.match.key || titleCaseStage(a.item.stageId).localeCompare(titleCaseStage(b.item.stageId)));
   }
 
-  function findOverlaps() {
-    const entries = savedTimeline();
+  function overlapMinutes(a, b) {
+    return Math.max(0, Math.min(a.end, b.end) - Math.max(a.match.key, b.match.key));
+  }
+
+  function findOverlaps(entries = savedTimeline()) {
     const overlaps = new Map();
-    const note = (item, artist) => overlaps.set(setId(item), [...(overlaps.get(setId(item)) || []), artist]);
+    const note = (item, clash) => overlaps.set(setId(item), [...(overlaps.get(setId(item)) || []), clash]);
     entries.forEach((a, index) => {
       entries.slice(index + 1).forEach(b => {
-        if (a.item.stageId === b.item.stageId) return;
-        const overlapMinutes = Math.min(a.end, b.end) - Math.max(a.match.key, b.match.key);
-        if (overlapMinutes >= OVERLAP_IGNORE_MINUTES) {
-          note(a.item, b.item.artist);
-          note(b.item, a.item.artist);
+        if (a.item.day !== b.item.day) return;
+        if (overlapMinutes(a, b) > 0) {
+          note(a.item, b);
+          note(b.item, a);
         }
       });
     });
@@ -321,9 +319,121 @@
   // Remembers days the user has manually opened or closed, so re-renders
   // (add/remove/clear) don't fight their choice within a session.
   const dayOpenState = new Map();
+  let expandedKey = null;
 
-  function buildSetRow(item, conflicts) {
-    const row = document.createElement("li");
+  function formatTimelineTime(key) {
+    const minutes = ((key % 1440) + 1440) % 1440;
+    const hour24 = Math.floor(minutes / 60);
+    const hour = hour24 % 12 || 12;
+    const minute = String(minutes % 60).padStart(2, "0");
+    return `${hour}:${minute} ${hour24 < 12 ? "AM" : "PM"}`;
+  }
+
+  function toggleOverlap(itemKey) {
+    expandedKey = expandedKey === itemKey ? null : itemKey;
+    renderPlanner();
+    const toggle = Array.from(elements.list.querySelectorAll(".planner-overlap-toggle"))
+      .find(button => button.dataset.plannerKey === itemKey);
+    toggle?.focus({ preventScroll: true });
+  }
+
+  function timelineTickSpacing(windowSpan) {
+    if (windowSpan <= 120) return { grid: 15, label: 30 };
+    if (windowSpan <= 240) return { grid: 30, label: 60 };
+    if (windowSpan <= 480) return { grid: 60, label: 120 };
+    return { grid: 120, label: 240 };
+  }
+
+  function buildOverlapTimeline(current, clashes, timelineId) {
+    const cluster = [current, ...clashes]
+      .sort((a, b) => a.match.key - b.match.key || titleCaseStage(a.item.stageId).localeCompare(titleCaseStage(b.item.stageId)));
+    const windowStart = Math.min(...cluster.map(entry => entry.match.key));
+    const windowEnd = Math.max(...cluster.map(entry => entry.end));
+    const windowSpan = Math.max(1, windowEnd - windowStart);
+
+    const timeline = document.createElement("div");
+    timeline.id = timelineId;
+    timeline.className = "planner-overlap-timeline";
+    timeline.setAttribute("role", "group");
+    timeline.setAttribute("aria-label", `Overlap timeline for ${current.item.artist}, ${formatTimelineTime(windowStart)} to ${formatTimelineTime(windowEnd)}`);
+
+    const bars = document.createElement("div");
+    bars.className = "planner-overlap-bars";
+
+    const spacing = timelineTickSpacing(windowSpan);
+    const tickKeys = [windowStart];
+    for (let key = windowStart + spacing.grid; key < windowEnd; key += spacing.grid) tickKeys.push(key);
+    if (tickKeys.at(-1) !== windowEnd) tickKeys.push(windowEnd);
+    const grid = document.createElement("div");
+    grid.className = "planner-overlap-grid";
+    grid.setAttribute("aria-hidden", "true");
+    tickKeys.forEach(key => {
+      const line = document.createElement("span");
+      line.className = "planner-overlap-grid-line";
+      line.style.left = `${((key - windowStart) / windowSpan) * 100}%`;
+      grid.append(line);
+    });
+    bars.append(grid);
+
+    cluster.forEach(entry => {
+      const track = document.createElement("div");
+      track.className = "planner-overlap-track";
+      const bar = document.createElement("div");
+      bar.className = "planner-overlap-bar";
+      bar.classList.toggle("is-selected", setId(entry.item) === setId(current.item));
+      bar.style.left = `${((entry.match.key - windowStart) / windowSpan) * 100}%`;
+      bar.style.width = `${((entry.end - entry.match.key) / windowSpan) * 100}%`;
+      bar.setAttribute("role", "img");
+      bar.setAttribute("aria-label", `${entry.item.artist}, ${formatTimelineTime(entry.match.key)} to ${formatTimelineTime(entry.end)}`);
+
+      const intersections = cluster
+        .filter(other => setId(other.item) !== setId(entry.item))
+        .map(other => ({ start: Math.max(entry.match.key, other.match.key), end: Math.min(entry.end, other.end) }))
+        .filter(range => range.end > range.start);
+      if (intersections.length) {
+        const overlapStart = Math.min(...intersections.map(range => range.start));
+        const overlapEnd = Math.max(...intersections.map(range => range.end));
+        const fill = document.createElement("span");
+        fill.className = "planner-overlap-fill";
+        fill.style.left = `${((overlapStart - entry.match.key) / (entry.end - entry.match.key)) * 100}%`;
+        fill.style.width = `${((overlapEnd - overlapStart) / (entry.end - entry.match.key)) * 100}%`;
+        bar.append(fill);
+      }
+
+      const label = document.createElement("span");
+      label.className = "planner-overlap-label";
+      label.textContent = entry.item.artist;
+      bar.append(label);
+      track.append(bar);
+      bars.append(track);
+    });
+
+    const axis = document.createElement("div");
+    axis.className = "planner-overlap-axis";
+    tickKeys.forEach((key, index) => {
+      const isEndpoint = index === 0 || index === tickKeys.length - 1;
+      const showLabel = isEndpoint || (key - windowStart) % spacing.label === 0;
+      if (!showLabel) return;
+      const label = document.createElement("span");
+      label.className = "planner-overlap-axis-label";
+      if (index === 0) label.classList.add("is-start");
+      if (index === tickKeys.length - 1) label.classList.add("is-end");
+      label.style.left = `${((key - windowStart) / windowSpan) * 100}%`;
+      label.textContent = formatTimelineTime(key);
+      axis.append(label);
+    });
+    bars.append(axis);
+    timeline.append(bars);
+    return timeline;
+  }
+
+  function buildSetRow(item, current, conflicts, rowIndex) {
+    const itemKey = setId(item);
+    const isExpanded = expandedKey === itemKey && conflicts.length > 0;
+    const timelineId = `planner-overlap-${rowIndex}`;
+    const wrap = document.createElement("li");
+    wrap.className = "planner-set-wrap";
+    const row = document.createElement("div");
     row.className = "planner-set";
     const time = document.createElement("span");
     time.className = "planner-time";
@@ -334,35 +444,66 @@
     artist.className = "planner-artist";
     artist.textContent = item.artist;
     details.append(artist);
-    if (conflicts) {
-      const badge = document.createElement("span");
-      badge.className = "overlap-badge";
-      badge.textContent = "Overlap";
-      details.append(badge);
-    }
+
     const meta = document.createElement("span");
     meta.className = "planner-meta";
-    meta.textContent = titleCaseStage(item.stageId) + (conflicts ? ` - Overlaps ${conflicts.join(", ")}` : "");
+    const stage = document.createElement("span");
+    stage.className = "planner-stage";
+    stage.textContent = titleCaseStage(item.stageId);
+    meta.append(stage);
+    if (conflicts.length) {
+      const badge = document.createElement("span");
+      badge.className = "overlap-badge";
+      badge.append(`${conflicts.length} overlap${conflicts.length === 1 ? "" : "s"}`);
+      const chevron = document.createElement("span");
+      chevron.className = "overlap-chevron";
+      chevron.textContent = "▾";
+      chevron.setAttribute("aria-hidden", "true");
+      badge.append(chevron);
+      meta.append(badge);
+    }
     details.append(meta);
+
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "planner-remove";
     remove.textContent = "Remove";
     remove.setAttribute("aria-label", `Remove ${item.artist} from My Set List`);
-    remove.addEventListener("click", () => removeSet(item));
+    remove.addEventListener("click", event => {
+      event.stopPropagation();
+      if (expandedKey === itemKey) expandedKey = null;
+      removeSet(item);
+    });
+    if (conflicts.length) {
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "planner-overlap-toggle";
+      toggle.dataset.plannerKey = itemKey;
+      toggle.setAttribute("aria-expanded", String(isExpanded));
+      toggle.setAttribute("aria-controls", timelineId);
+      toggle.setAttribute("aria-label", `${isExpanded ? "Hide" : "Show"} overlap details for ${item.artist}`);
+      toggle.addEventListener("click", () => toggleOverlap(itemKey));
+      row.append(toggle);
+    }
     row.append(time, details, remove);
-    return row;
+    wrap.append(row);
+    if (isExpanded && current) wrap.append(buildOverlapTimeline(current, conflicts, timelineId));
+    return wrap;
   }
 
   function renderPlanner() {
     const sets = sortedSets();
-    const overlaps = findOverlaps();
+    const timeline = savedTimeline();
+    const timelineById = new Map(timeline.map(entry => [setId(entry.item), entry]));
+    const overlaps = findOverlaps(timeline);
+    if (expandedKey && !(overlaps.get(expandedKey)?.length)) expandedKey = null;
     elements.count.textContent = `${sets.length} set${sets.length === 1 ? "" : "s"} saved`;
     elements.list.innerHTML = "";
     elements.empty.hidden = sets.length > 0;
     elements.share.hidden = sets.length === 0;
     elements.clear.hidden = sets.length === 0;
     renderUpNext();
+    let rowIndex = 0;
     DAYS.forEach(day => {
       const daySets = sets.filter(item => item.day === day);
       if (!daySets.length) return;
@@ -381,7 +522,11 @@
       summary.append(name, count);
       const list = document.createElement("ol");
       list.className = "planner-day-list";
-      daySets.forEach(item => list.append(buildSetRow(item, overlaps.get(setId(item)))));
+      daySets.forEach(item => {
+        const itemKey = setId(item);
+        list.append(buildSetRow(item, timelineById.get(itemKey), overlaps.get(itemKey) || [], rowIndex));
+        rowIndex += 1;
+      });
       group.append(summary, list);
       elements.list.append(group);
     });
