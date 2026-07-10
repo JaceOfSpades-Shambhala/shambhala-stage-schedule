@@ -173,6 +173,7 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .hexlace-editor-row input { flex: 1 1 12rem; min-width: 0; padding: .6rem .7rem; border: 1px solid rgba(255, 255, 255, .2); border-radius: .55rem; color: var(--ink); background: rgba(0, 0, 0, .22); outline: 0; }
 .hexlace-editor-row input:focus { outline: 3px solid var(--focus); outline-offset: 2px; }
 .hexlace-friend-foot { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .45rem 0 .15rem; }
+.hexlace-friend-foot .planner-remove { width: auto; max-width: 100%; min-height: 2rem; display: inline-flex; flex: none; align-items: center; justify-content: center; box-sizing: border-box; padding: .38rem .65rem; border-radius: 999px; appearance: none; -webkit-appearance: none; font-size: .72rem; line-height: 1.1; white-space: nowrap; }
 .hexlace-updated { color: var(--muted); font-size: .74rem; }
 .hexlace-empty-note { display: block; color: var(--muted); font-size: .82rem; }
 .hexlace-friend { padding-top: 0; }
@@ -207,7 +208,7 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .planner-empty, .planner-feedback { margin: 0; }
 .planner-feedback:empty { display: none; }
 .hexlace-feedback { margin-top: .65rem; padding: 0 .2rem; }
-.planner-remove { position: relative; z-index: 3; width: 36px; min-height: 36px; padding: 0; border-radius: 999px; background: rgba(255, 255, 255, .055); font-size: 1.05rem; font-weight: 800; line-height: 1; }
+.planner-row-actions .planner-remove { position: relative; z-index: 3; width: 36px; min-height: 36px; padding: 0; border-radius: 999px; background: rgba(255, 255, 255, .055); font-size: 1.05rem; font-weight: 800; line-height: 1; }
 .planner-row-actions { position: relative; z-index: 3; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .planner-ping-set { min-width: 3.25rem; min-height: 36px; padding: 0 10px; border-radius: 999px; font-size: .74rem; white-space: nowrap; }
 .planner-ping-set.is-active { color: var(--green); border-color: color-mix(in srgb, var(--green) 55%, transparent); background: color-mix(in srgb, var(--green) 16%, transparent); }
@@ -281,5 +282,5 @@ body.stage-village { --accent: #8a6bc0; --accent-deep: #69499c; }
 @media (min-width: 520px) { .stage-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (min-width: 650px) { .shell { padding-top: 5rem; } .live-panel { padding: 1.35rem; } .planner-panel { padding: 1.2rem 1.35rem; } .hexlace-panel { padding: 0; } .hexlace-panel-summary, .hexlace-panel-heading { padding: 1.2rem 1.35rem; } .hexlace-panel-body { padding: 0 1.35rem 1.2rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem minmax(0, 1fr) auto; padding-left: 1.55rem; padding-right: 1.55rem; } .set-list.timeline .set { grid-template-columns: 32px 84px minmax(0, 1fr) auto; } .set-list.timeline .set::before, .set-list.timeline .set::after { left: calc(1.55rem + 16px - 1px); } }
 @media (max-width: 420px) { .day-tabs .tab { flex-direction: column; gap: .12rem; } .planner-heading { align-items: stretch; flex-direction: column; } .planner-actions { justify-content: flex-start; } .set { padding-left: .9rem; padding-right: .9rem; } .set-list.timeline .set { grid-template-columns: 24px 72px minmax(0, 1fr) auto; column-gap: 8px; } .set-list.timeline .set::before, .set-list.timeline .set::after { left: calc(.9rem + 12px - 1px); } .planner-add { padding: .32rem .6rem; } }
-@media (max-width: 520px) { .planner-ping-current { align-items: flex-start; } .planner-set { grid-template-columns: 4.4rem minmax(0, 1fr) auto; gap: 7px; } .planner-row-actions { flex-direction: row; } .planner-ping-set, .planner-remove { min-height: 32px; } .planner-remove { width: 32px; } .planner-ping-set { min-width: 3rem; padding-left: 8px; padding-right: 8px; } }
+@media (max-width: 520px) { .planner-ping-current { align-items: flex-start; } .planner-set { grid-template-columns: 4.4rem minmax(0, 1fr) auto; gap: 7px; } .planner-row-actions { flex-direction: row; } .planner-ping-set, .planner-row-actions .planner-remove { min-height: 32px; } .planner-row-actions .planner-remove { width: 32px; } .planner-ping-set { min-width: 3rem; padding-left: 8px; padding-right: 8px; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tab, .planner-action, .planner-remove, .planner-add, .install-button, .set-node, .overlap-chevron { transition: none; } .now-playing[data-status="active"] .status-dot, .update-banner, .planner-live-dot { animation: none; } }

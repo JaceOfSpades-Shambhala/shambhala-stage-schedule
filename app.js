@@ -315,7 +315,7 @@
     const art = document.createElement("img");
     art.id = "poster-mark";
     art.className = "poster-mark";
-    art.src = `stage-names/${appState.stage}.png?v=44`;
+    art.src = `stage-names/${appState.stage}.png?v=45`;
     art.alt = stageLabel;
     art.addEventListener("error", () => {
       const fallback = document.createElement("h2");
@@ -440,7 +440,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=44";
+  const SCHEDULE_ASSET = "schedule-data.js?v=45";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -529,6 +529,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=44").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=45").then(registerPeriodicSync).catch(() => {});
   });
 })();
