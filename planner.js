@@ -12,6 +12,8 @@
   const FESTIVAL_TIME_ZONE = "America/Vancouver";
   const FESTIVAL_DATES = { Thursday: "2026-07-23", Friday: "2026-07-24", Saturday: "2026-07-25", Sunday: "2026-07-26" };
   const STORAGE_KEY = "shambhala-2026-my-set-list";
+  const PING_KEY = "shambhala-2026-ping";
+  const IDENTITY_KEY = "shambhala-2026-hexlace-identity";
   const data = window.SCHEDULE_DATA || {};
   const elements = {
     panel: document.querySelector("#planner"),
@@ -27,7 +29,13 @@
     liveNow: document.querySelector("#planner-live-now"),
     liveNowList: document.querySelector("#planner-live-now-list"),
     liveNext: document.querySelector("#planner-live-next"),
-    liveNextList: document.querySelector("#planner-live-next-list")
+    liveNextList: document.querySelector("#planner-live-next-list"),
+    pingCurrent: document.querySelector("#planner-ping-current"),
+    pingStatus: document.querySelector("#planner-ping-status"),
+    pingDetail: document.querySelector("#planner-ping-detail"),
+    pingEnd: document.querySelector("#planner-ping-end"),
+    pingCamp: document.querySelector("#planner-ping-camp"),
+    pingCampOptions: document.querySelector("#planner-ping-camp-options")
   };
   if (!elements.panel || !elements.scheduleList) return;
 
@@ -92,6 +100,11 @@
     const parts = new Intl.DateTimeFormat("en-CA", { timeZone: FESTIVAL_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
     const values = Object.fromEntries(parts.filter(part => part.type !== "literal").map(part => [part.type, part.value]));
     return { date: `${values.year}-${values.month}-${values.day}`, minutes: (Number(values.hour) % 24) * 60 + Number(values.minute) };
+  }
+
+  function festivalNowKey() {
+    const now = getFestivalNow();
+    return dateToSerial(now.date) * 1440 + now.minutes;
   }
 
   function buildStageTimeline(stageId) {
@@ -160,6 +173,71 @@
     return loadSets().sort((a, b) => sortKey(a) - sortKey(b) || titleCaseStage(a.stageId).localeCompare(titleCaseStage(b.stageId)));
   }
 
+  function loadPing() {
+    try {
+      const ping = JSON.parse(localStorage.getItem(PING_KEY) || "null");
+      if (!ping || !["camp", "set"].includes(ping.type)) return null;
+      if (!Number.isSafeInteger(ping.startKey) || !Number.isSafeInteger(ping.endKey) || ping.endKey <= ping.startKey) return null;
+      if (ping.endKey <= festivalNowKey()) return null;
+      if (ping.type === "set" && (!ping.day || !ping.stageId || !ping.time || !ping.artist)) return null;
+      return ping;
+    } catch {
+      return null;
+    }
+  }
+
+  function hasSharingIdentity() {
+    try {
+      const identity = JSON.parse(localStorage.getItem(IDENTITY_KEY) || "null");
+      return Boolean(identity?.readId && identity?.writeKey);
+    } catch {
+      return false;
+    }
+  }
+
+  function savePing(ping, message) {
+    try {
+      if (ping) localStorage.setItem(PING_KEY, JSON.stringify(ping));
+      else localStorage.removeItem(PING_KEY);
+    } catch {
+      setFeedback("Couldn't save your ping - your device storage may be full.");
+      return;
+    }
+    window.dispatchEvent(new CustomEvent("ping-changed"));
+    renderPlanner();
+    if (!hasSharingIdentity() && ping) {
+      const myHexlace = document.querySelector("#my-hexlace");
+      if (myHexlace) myHexlace.open = true;
+      setFeedback("Ping saved. Start sharing your Hexlace below so friends can see it.");
+      return;
+    }
+    if (message) setFeedback(message);
+  }
+
+  function pingMatchesSet(ping, item) {
+    return ping?.type === "set" && setId(ping) === setId(item);
+  }
+
+  function pingEndKey(match) {
+    const nextOnDay = buildStageTimeline(match.stageId).find(entry => entry.day === match.day && entry.key > match.key);
+    return nextOnDay?.key || match.key + ASSUMED_SET_MINUTES;
+  }
+
+  function setSetPing(item) {
+    const match = timelineMatch(item);
+    if (!match) { setFeedback("That set couldn't be matched to the schedule."); return; }
+    const endKey = pingEndKey(match);
+    if (festivalNowKey() >= endKey) { setFeedback("That set has already ended."); return; }
+    campOptionsOpen = false;
+    savePing({ type: "set", ...normaliseSet(item), startKey: match.key, endKey }, `Ping set for ${titleCaseStage(item.stageId)}.`);
+  }
+
+  function setCampPing(minutes) {
+    const startKey = festivalNowKey();
+    campOptionsOpen = false;
+    savePing({ type: "camp", startKey, endKey: startKey + minutes }, `Camp ping set for ${minutes === 60 ? "1 hour" : `${minutes} minutes`}.`);
+  }
+
   // The published schedule has no end times, so a set is assumed to run until
   // the next listed set on its own stage, capped at ASSUMED_SET_MINUTES.
   const ASSUMED_SET_MINUTES = 90;
@@ -215,7 +293,13 @@
   }
 
   function removeSet(item) {
+    const clearsPing = pingMatchesSet(loadPing(), item);
     saveSets(loadSets().filter(saved => setId(saved) !== setId(item)));
+    if (clearsPing) {
+      savePing(null, "Ping ended because that set was removed.");
+      enhanceScheduleRows();
+      return;
+    }
     renderPlanner();
     enhanceScheduleRows();
   }
@@ -320,6 +404,7 @@
   // (add/remove/clear) don't fight their choice within a session.
   const dayOpenState = new Map();
   let expandedKey = null;
+  let campOptionsOpen = false;
 
   function formatTimelineTime(key) {
     const minutes = ((key % 1440) + 1440) % 1440;
@@ -327,6 +412,27 @@
     const hour = hour24 % 12 || 12;
     const minute = String(minutes % 60).padStart(2, "0");
     return `${hour}:${minute} ${hour24 < 12 ? "AM" : "PM"}`;
+  }
+
+  function renderPlannerPing() {
+    if (!elements.pingCurrent || !elements.pingCampOptions) return;
+    const ping = loadPing();
+    const nowKey = festivalNowKey();
+    elements.pingCurrent.hidden = !ping;
+    elements.pingCampOptions.hidden = !campOptionsOpen;
+    elements.pingCamp.setAttribute("aria-expanded", String(campOptionsOpen));
+    if (!ping) return;
+    if (ping.type === "camp") {
+      elements.pingStatus.textContent = "At camp";
+      elements.pingDetail.textContent = `Around until ${formatTimelineTime(ping.endKey)}`;
+      return;
+    }
+    const stage = titleCaseStage(ping.stageId);
+    const minutesUntil = ping.startKey - nowKey;
+    if (minutesUntil > 30) elements.pingStatus.textContent = `Meet at ${stage} at ${ping.time}`;
+    else if (minutesUntil > 0) elements.pingStatus.textContent = `Heading to ${stage} for ${ping.time}`;
+    else elements.pingStatus.textContent = `Come meet me at ${stage}`;
+    elements.pingDetail.textContent = `${ping.artist} · Ends around ${formatTimelineTime(ping.endKey)}`;
   }
 
   function toggleOverlap(itemKey) {
@@ -427,7 +533,7 @@
     return timeline;
   }
 
-  function buildSetRow(item, current, conflicts, rowIndex) {
+  function buildSetRow(item, current, conflicts, rowIndex, activePing, nowKey) {
     const itemKey = setId(item);
     const isExpanded = expandedKey === itemKey && conflicts.length > 0;
     const timelineId = `planner-overlap-${rowIndex}`;
@@ -474,6 +580,24 @@
       if (expandedKey === itemKey) expandedKey = null;
       removeSet(item);
     });
+    const actions = document.createElement("span");
+    actions.className = "planner-row-actions";
+    const pingIsCurrent = pingMatchesSet(activePing, item);
+    const pingEnd = current?.match ? pingEndKey(current.match) : 0;
+    if (current?.match && nowKey < pingEnd) {
+      const meet = document.createElement("button");
+      meet.type = "button";
+      meet.className = "planner-ping-set";
+      meet.classList.toggle("is-active", pingIsCurrent);
+      meet.textContent = pingIsCurrent ? "Pinged" : "Meet here";
+      meet.setAttribute("aria-label", `${pingIsCurrent ? "Current ping" : "Ping friends to meet"} at ${titleCaseStage(item.stageId)} for ${item.artist}`);
+      meet.addEventListener("click", event => {
+        event.stopPropagation();
+        if (!pingIsCurrent) setSetPing(item);
+      });
+      actions.append(meet);
+    }
+    actions.append(remove);
     if (conflicts.length) {
       const toggle = document.createElement("button");
       toggle.type = "button";
@@ -485,7 +609,7 @@
       toggle.addEventListener("click", () => toggleOverlap(itemKey));
       row.append(toggle);
     }
-    row.append(time, details, remove);
+    row.append(time, details, actions);
     wrap.append(row);
     if (isExpanded && current) wrap.append(buildOverlapTimeline(current, conflicts, timelineId));
     return wrap;
@@ -493,6 +617,8 @@
 
   function renderPlanner() {
     const sets = sortedSets();
+    const activePing = loadPing();
+    const nowKey = festivalNowKey();
     const timeline = savedTimeline();
     const timelineById = new Map(timeline.map(entry => [setId(entry.item), entry]));
     const overlaps = findOverlaps(timeline);
@@ -502,6 +628,7 @@
     elements.empty.hidden = sets.length > 0;
     elements.share.hidden = sets.length === 0;
     elements.clear.hidden = sets.length === 0;
+    renderPlannerPing();
     renderUpNext();
     let rowIndex = 0;
     DAYS.forEach(day => {
@@ -524,7 +651,7 @@
       list.className = "planner-day-list";
       daySets.forEach(item => {
         const itemKey = setId(item);
-        list.append(buildSetRow(item, timelineById.get(itemKey), overlaps.get(itemKey) || [], rowIndex));
+        list.append(buildSetRow(item, timelineById.get(itemKey), overlaps.get(itemKey) || [], rowIndex, activePing, nowKey));
         rowIndex += 1;
       });
       group.append(summary, list);
@@ -576,8 +703,27 @@
   }
 
   elements.share.addEventListener("click", sharePlanner);
+  elements.pingCamp.addEventListener("click", () => {
+    campOptionsOpen = !campOptionsOpen;
+    renderPlannerPing();
+  });
+  elements.pingCampOptions.addEventListener("click", event => {
+    const button = event.target.closest("[data-ping-minutes]");
+    if (!button) return;
+    setCampPing(Number(button.dataset.pingMinutes));
+  });
+  elements.pingEnd.addEventListener("click", () => {
+    campOptionsOpen = false;
+    savePing(null, "Ping ended.");
+  });
   elements.clear.addEventListener("click", () => {
+    const hadSetPing = loadPing()?.type === "set";
     saveSets([]);
+    if (hadSetPing) {
+      savePing(null, "Set list and ping cleared.");
+      enhanceScheduleRows();
+      return;
+    }
     renderPlanner();
     enhanceScheduleRows();
     setFeedback("Cleared set list");
@@ -588,8 +734,12 @@
     renderPlanner();
     enhanceScheduleRows();
   });
+  window.addEventListener("ping-restored", () => renderPlanner());
   document.addEventListener("visibilitychange", () => { if (!document.hidden) renderUpNext(); });
   renderPlanner();
   enhanceScheduleRows();
-  window.setInterval(renderUpNext, 30000);
+  window.setInterval(() => {
+    renderUpNext();
+    renderPlannerPing();
+  }, 30000);
 })();

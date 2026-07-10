@@ -9,7 +9,7 @@
 //                                with claimable:true instead returns { readId,
 //                                claimToken } and stores NO write key, so a
 //                                giveaway tag is unwritable until claimed
-//   GET  /lists/:readId       -> read,   returns { name, sets, updated }
+//   GET  /lists/:readId       -> read,   returns { name, sets, ping, updated }
 //   PUT  /lists/:readId       -> update, requires header X-Write-Key
 //   POST /lists/:readId/claim -> the recipient sends the claim token plus a
 //                                write key THEY generated and the local time
@@ -30,6 +30,8 @@ const MAX_SETS = 100;
 const MAX_BYTES = 20000;
 const MAX_NAME = 60;
 const MAX_ARTIST_LENGTH = 120;
+const MAX_SET_PING_MINUTES = 12 * 60;
+const CAMP_PING_MINUTES = new Set([30, 60, 90]);
 const MIN_KEY_LENGTH = 16;
 const READ_ID_LENGTH = 8;
 const VALID_DAYS = new Set(["Thursday", "Friday", "Saturday", "Sunday"]);
@@ -107,7 +109,7 @@ async function enforceRateLimit(request, env, kind, id = clientBucket(request)) 
   });
 }
 
-// Validates and returns a clean { name, sets } payload, or throws a message.
+// Validates and returns a clean { name, sets, ping } payload, or throws a message.
 function cleanSet(set) {
   if (!set || typeof set !== "object" || Array.isArray(set)) throw "Each set must be an object.";
   const day = typeof set.day === "string" ? set.day.trim() : "";
@@ -120,6 +122,32 @@ function cleanSet(set) {
   return { day, stageId, time, artist };
 }
 
+function sameSet(a, b) {
+  return a.day === b.day && a.stageId === b.stageId && a.time === b.time && a.artist === b.artist;
+}
+
+function cleanPing(value, sets) {
+  if (value == null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) throw "ping must be an object or null.";
+  const startKey = Number(value.startKey);
+  const endKey = Number(value.endKey);
+  if (!Number.isSafeInteger(startKey) || !Number.isSafeInteger(endKey) || startKey <= 0 || endKey <= startKey) {
+    throw "Ping times are invalid.";
+  }
+  const duration = endKey - startKey;
+  if (value.type === "camp") {
+    if (!CAMP_PING_MINUTES.has(duration)) throw "Camp pings must last 30, 60, or 90 minutes.";
+    return { type: "camp", startKey, endKey };
+  }
+  if (value.type === "set") {
+    const set = cleanSet(value);
+    if (!sets.some(saved => sameSet(saved, set))) throw "A set ping must reference a saved set.";
+    if (duration > MAX_SET_PING_MINUTES) throw "A set ping lasts too long.";
+    return { type: "set", ...set, startKey, endKey };
+  }
+  throw "Ping type must be camp or set.";
+}
+
 function cleanPayload(body) {
   if (!body || typeof body !== "object") throw "Body must be a JSON object.";
   const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -127,7 +155,8 @@ function cleanPayload(body) {
   if (name.length > MAX_NAME) throw `Name must be ${MAX_NAME} characters or fewer.`;
   if (!Array.isArray(body.sets)) throw "sets must be an array.";
   if (body.sets.length > MAX_SETS) throw `Too many sets (max ${MAX_SETS}).`;
-  return { name, sets: body.sets.map(cleanSet) };
+  const sets = body.sets.map(cleanSet);
+  return { name, sets, ping: cleanPing(body.ping, sets) };
 }
 
 function serialize(payload) {
@@ -189,7 +218,7 @@ export default {
         ]);
         if (!writeKey || !stored) return json({ error: "Invalid or expired handoff." }, 410);
         const list = JSON.parse(stored);
-        return json({ readId, writeKey, name: list.name || "", sets: Array.isArray(list.sets) ? list.sets : [] });
+        return json({ readId, writeKey, name: list.name || "", sets: Array.isArray(list.sets) ? list.sets : [], ping: list.ping || null });
       }
 
       if (parts[0] !== "lists") return json({ error: "Not found." }, 404);

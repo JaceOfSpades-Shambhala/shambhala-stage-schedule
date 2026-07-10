@@ -11,6 +11,7 @@
   const IDENTITY_KEY = "shambhala-2026-hexlace-identity";
   const COLLECTED_KEY = "shambhala-2026-hexlaces-collected";
   const SETS_KEY = "shambhala-2026-my-set-list";
+  const PING_KEY = "shambhala-2026-ping";
   const HANDOFF_COOKIE = "shambhala-2026-hexlace-handoff";
   const HANDOFF_MAX_AGE_SECONDS = 24 * 60 * 60;
   const STAGES = [
@@ -25,6 +26,7 @@
   const PUBLISH_DEBOUNCE_MS = 4000;
   const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
   const REFRESH_MIN_AGE_MS = 60 * 1000;
+  const FESTIVAL_TIME_ZONE = "America/Vancouver";
 
   const elements = {
     myPanel: document.querySelector("#my-hexlace"),
@@ -151,6 +153,37 @@
     }
   }
 
+  function myPing() {
+    try {
+      const ping = JSON.parse(localStorage.getItem(PING_KEY) || "null");
+      return ping && ["camp", "set"].includes(ping.type) && Number.isSafeInteger(ping.endKey) && ping.endKey > festivalNowKey() ? ping : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function dateToSerial(date) {
+    const [year, month, day] = date.split("-").map(Number);
+    return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+  }
+
+  function festivalNowKey() {
+    const preview = new URLSearchParams(window.location.search).get("preview");
+    const previewMatch = preview && preview.match(/^(2026-07-\d{2})T(\d{2}):(\d{2})$/);
+    if (previewMatch) return dateToSerial(previewMatch[1]) * 1440 + Number(previewMatch[2]) * 60 + Number(previewMatch[3]);
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: FESTIVAL_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.filter(part => part.type !== "literal").map(part => [part.type, part.value]));
+    return dateToSerial(`${values.year}-${values.month}-${values.day}`) * 1440 + (Number(values.hour) % 24) * 60 + Number(values.minute);
+  }
+
+  function formatPingTime(key) {
+    const minutes = ((key % 1440) + 1440) % 1440;
+    const hour24 = Math.floor(minutes / 60);
+    const hour = hour24 % 12 || 12;
+    const minute = String(minutes % 60).padStart(2, "0");
+    return `${hour}:${minute} ${hour24 < 12 ? "AM" : "PM"}`;
+  }
+
   function shareUrl(readId) {
     return `${location.origin}${location.pathname.replace(/index\.html$/, "")}?f=${readId}`;
   }
@@ -234,6 +267,10 @@
         try { localStorage.setItem(SETS_KEY, JSON.stringify(result.body.sets)); } catch {}
         window.dispatchEvent(new CustomEvent("setlist-restored"));
       }
+      if (!myPing() && result.body.ping) {
+        try { localStorage.setItem(PING_KEY, JSON.stringify(result.body.ping)); } catch {}
+        window.dispatchEvent(new CustomEvent("ping-restored"));
+      }
       renderMine();
       feedback("Your Hexlace moved into the Home Screen app.");
       return true;
@@ -268,21 +305,21 @@
     }
   }
 
-  function markDirtyAndPublishSoon() {
+  function markDirtyAndPublishSoon(delay = PUBLISH_DEBOUNCE_MS) {
     const identity = loadIdentity();
     if (!identity) return;
     identity.dirty = true;
     saveIdentity(identity);
     renderMine();
     window.clearTimeout(publishTimer);
-    publishTimer = window.setTimeout(publish, PUBLISH_DEBOUNCE_MS);
+    publishTimer = window.setTimeout(publish, delay);
   }
 
   async function createSharingIdentity(name) {
     const result = await api("/lists", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, sets: mySets() })
+      body: JSON.stringify({ name, sets: mySets(), ping: myPing() })
     });
     if (!result.ok || !result.body?.readId) return false;
     const identity = { readId: result.body.readId, writeKey: result.body.writeKey, name, lastPublished: Date.now() };
@@ -301,7 +338,7 @@
       const result = await api(`/lists/${identity.readId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-Write-Key": identity.writeKey },
-        body: JSON.stringify({ name: identity.name, sets: mySets() })
+        body: JSON.stringify({ name: identity.name, sets: mySets(), ping: myPing() })
       });
       if (result.ok) {
         identity.dirty = false;
@@ -462,6 +499,36 @@
 
   // --- Collecting friends --------------------------------------------------
 
+  function buildFriendPing(ping) {
+    if (!ping || !Number.isSafeInteger(ping.startKey) || !Number.isSafeInteger(ping.endKey)) return null;
+    const nowKey = festivalNowKey();
+    if (ping.endKey <= nowKey) return null;
+    const card = document.createElement("span");
+    card.className = "hexlace-ping";
+    const label = document.createElement("span");
+    label.className = "hexlace-ping-label";
+    label.textContent = "Ping";
+    const status = document.createElement("span");
+    status.className = "hexlace-ping-status";
+    const detail = document.createElement("span");
+    detail.className = "hexlace-ping-detail";
+    if (ping.type === "camp") {
+      status.textContent = "At camp";
+      detail.textContent = `Around until ${formatPingTime(ping.endKey)}`;
+    } else if (ping.type === "set") {
+      const stage = stageLabel(ping.stageId);
+      const minutesUntil = ping.startKey - nowKey;
+      if (minutesUntil > 30) status.textContent = `Meeting at ${stage} at ${ping.time}`;
+      else if (minutesUntil > 0) status.textContent = `Heading to ${stage} for ${ping.time}`;
+      else status.textContent = `Come meet me at ${stage}`;
+      detail.textContent = `${ping.artist} · Ends around ${formatPingTime(ping.endKey)}`;
+    } else {
+      return null;
+    }
+    card.append(label, status, detail);
+    return card;
+  }
+
   function renderCollected() {
     const entries = loadCollected();
     elements.count.textContent = entries.length
@@ -485,6 +552,11 @@
       const sets = Array.isArray(entry.sets) ? entry.sets : [];
       count.textContent = entry.pending ? "waiting for signal" : `${sets.length} set${sets.length === 1 ? "" : "s"}`;
       summary.append(name, count);
+      const ping = buildFriendPing(entry.ping);
+      if (ping) {
+        summary.classList.add("has-ping");
+        summary.append(ping);
+      }
       group.append(summary);
 
       const list = document.createElement("ol");
@@ -546,12 +618,14 @@
     if (result.ok && result.body) {
       entry.name = result.body.name;
       entry.sets = result.body.sets;
+      entry.ping = result.body.ping || null;
       entry.updated = result.body.updated;
       entry.pending = false;
       entry.missing = false;
       entry.lastFetched = Date.now();
     } else if (result.status === 404) {
       entry.missing = true;
+      entry.ping = null;
       entry.pending = false;
       entry.lastFetched = Date.now();
     }
@@ -561,7 +635,7 @@
   async function addCollected(readId, provisionalName) {
     const entries = loadCollected();
     if (!entries.some(entry => entry.readId === readId)) {
-      entries.push({ readId, name: provisionalName || "", sets: [], pending: true });
+      entries.push({ readId, name: provisionalName || "", sets: [], ping: null, pending: true });
       saveCollected(entries);
     }
     renderCollected();
@@ -681,6 +755,7 @@
   }
 
   window.addEventListener("setlist-changed", markDirtyAndPublishSoon);
+  window.addEventListener("ping-changed", () => markDirtyAndPublishSoon(0));
   window.prepareHexlaceHandoff = async () => {
     let identity = loadIdentity();
     if (!identity) return true;
@@ -703,6 +778,7 @@
     refreshCollected(false);
     renderMine();
   }, REFRESH_INTERVAL_MS);
+  window.setInterval(renderCollected, 30000);
 
   renderMine();
   renderCollected();

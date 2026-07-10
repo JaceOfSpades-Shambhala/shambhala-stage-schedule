@@ -137,6 +137,46 @@ test("list payloads are normalized and successful updates renew the write key TT
   assert.deepEqual((await read.json()).sets, [{ day: "Friday", stageId: "amp", time: "11:00 PM", artist: "PEEKABOO" }]);
 });
 
+test("camp and saved-set pings are normalized while malformed pings are rejected", async () => {
+  const env = { LISTS: new MemoryKv() };
+  const set = { day: "Friday", stageId: "pagoda", time: "2:00 PM", artist: "TEST ARTIST" };
+  const startKey = 29748000;
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({
+      name: "Tester",
+      sets: [set],
+      ping: { type: "set", ...set, startKey, endKey: startKey + 60, ignored: "not stored" }
+    })
+  }), env);
+  assert.equal(created.status, 201);
+  const { readId, writeKey } = await created.json();
+
+  const read = await worker.fetch(makeRequest(`/lists/${readId}`), env);
+  assert.deepEqual((await read.json()).ping, { type: "set", ...set, startKey, endKey: startKey + 60 });
+
+  const camp = await worker.fetch(makeRequest(`/lists/${readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": writeKey },
+    body: JSON.stringify({ name: "Tester", sets: [set], ping: { type: "camp", startKey, endKey: startKey + 90 } })
+  }), env);
+  assert.equal(camp.status, 200);
+
+  const invalidDuration = await worker.fetch(makeRequest(`/lists/${readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": writeKey },
+    body: JSON.stringify({ name: "Tester", sets: [set], ping: { type: "camp", startKey, endKey: startKey + 45 } })
+  }), env);
+  assert.equal(invalidDuration.status, 400);
+
+  const unsavedSet = await worker.fetch(makeRequest(`/lists/${readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": writeKey },
+    body: JSON.stringify({ name: "Tester", sets: [], ping: { type: "set", ...set, startKey, endKey: startKey + 60 } })
+  }), env);
+  assert.equal(unsavedSet.status, 400);
+});
+
 test("malformed set data and exhausted generated IDs never create or overwrite a list", async () => {
   const malformedEnv = { LISTS: new MemoryKv() };
   const malformed = await worker.fetch(makeRequest("/lists", {
@@ -192,7 +232,7 @@ test("24-hour handoff tokens transfer ownership once without storing the raw wri
     body: JSON.stringify({ token })
   }), env);
   assert.equal(redeemed.status, 200);
-  assert.deepEqual(await redeemed.json(), { readId, writeKey, name: "Tester", sets });
+  assert.deepEqual(await redeemed.json(), { readId, writeKey, name: "Tester", sets, ping: null });
 
   const replayed = await worker.fetch(makeRequest("/handoffs/redeem", {
     method: "POST",
