@@ -45,7 +45,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (v45 at the time of writing). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (v46 at the time of writing). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
@@ -54,9 +54,9 @@ Every site release bumps ONE version number everywhere (v45 at the time of writi
 
 The sed incantation used for bumps (adjust numbers):
 ```bash
-sed -i 's/?v=44/?v=45/g; s/<!-- v44 -->/<!-- v45 -->/' index.html
-sed -i 's/sw\.js?v=44/sw.js?v=45/; s/schedule-data\.js?v=44/schedule-data.js?v=45/' app.js
-sed -i 's/stage-schedule-v44/stage-schedule-v45/; s/?v=44/?v=45/g' sw.js
+sed -i 's/?v=45/?v=46/g; s/<!-- v45 -->/<!-- v46 -->/' index.html
+sed -i 's/sw\.js?v=45/sw.js?v=46/; s/schedule-data\.js?v=45/schedule-data.js?v=46/' app.js
+sed -i 's/stage-schedule-v45/stage-schedule-v46/; s/?v=45/?v=46/g' sw.js
 ```
 
 **Schedule-only edits during the festival do NOT bump `?v=`** — edit `schedule-data.js`, change its `SCHEDULE_VERSION` string, commit. Full instructions in [UPDATING.md](UPDATING.md). Open PWAs poll every 5 min and show a "tap to refresh" banner for both schedule and app updates.

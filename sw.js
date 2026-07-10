@@ -1,32 +1,36 @@
-const CACHE_NAME = "stage-schedule-v45";
+const CACHE_NAME = "stage-schedule-v46";
 const NETWORK_TIMEOUT_MS = 3500;
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=45",
-  "./camp-location.js?v=45",
-  "./schedule-data.js?v=45",
-  "./app.js?v=45",
-  "./planner.js?v=45",
-  "./qrcode.js?v=45",
-  "./hexlaces.js?v=45",
-  "./install.js?v=45",
-  "./wordmark.svg?v=45",
-  "./fonts/InterVariable.woff2?v=45",
-  "./stage-names/amp.png?v=45",
-  "./stage-names/fractal-forest.png?v=45",
-  "./stage-names/grove.png?v=45",
-  "./stage-names/living-room.png?v=45",
-  "./stage-names/pagoda.png?v=45",
-  "./stage-names/secret-garden.png?v=45",
-  "./stage-names/village.png?v=45",
+  "./styles.css?v=46",
+  "./camp-location.js?v=46",
+  "./schedule-data.js?v=46",
+  "./search-normalize.js?v=46",
+  "./preview-time.js?v=46",
+  "./app.js?v=46",
+  "./planner.js?v=46",
+  "./qrcode.js?v=46",
+  "./hexlace-api.js?v=46",
+  "./hexlaces.js?v=46",
+  "./install.js?v=46",
+  "./wordmark.svg?v=46",
+  "./fonts/InterVariable.woff2?v=46",
+  "./fonts/InterVariable-Italic.woff2?v=46",
+  "./stage-names/amp.png?v=46",
+  "./stage-names/fractal-forest.png?v=46",
+  "./stage-names/grove.png?v=46",
+  "./stage-names/living-room.png?v=46",
+  "./stage-names/pagoda.png?v=46",
+  "./stage-names/secret-garden.png?v=46",
+  "./stage-names/village.png?v=46",
   "./manifest.webmanifest",
-  "./favicon.ico?v=45",
-  "./favicon-32.png?v=45",
-  "./favicon-16.png?v=45",
-  "./apple-touch-icon.png?v=45",
-  "./icon-192.png?v=45",
-  "./icon-512.png?v=45"
+  "./favicon.ico?v=46",
+  "./favicon-32.png?v=46",
+  "./favicon-16.png?v=46",
+  "./apple-touch-icon.png?v=46",
+  "./icon-192.png?v=46",
+  "./icon-512.png?v=46"
 ];
 
 self.addEventListener("install", event => {
@@ -87,7 +91,9 @@ async function respond(event) {
     settled,
     new Promise(resolve => setTimeout(() => resolve(null), NETWORK_TIMEOUT_MS))
   ]);
-  if (response) return response;
+  // A fast server/CDN error is no more useful offline than a failed request.
+  // Preserve it only when there is no cached response to fall back to.
+  if (response?.ok) return response;
 
   const cached = await caches.match(request);
   if (cached) return cached;
@@ -98,5 +104,5 @@ async function respond(event) {
 
   // Nothing cached yet (likely a first visit): let the slow network finish.
   const late = await settled;
-  return late || Response.error();
+  return late || response || Response.error();
 }

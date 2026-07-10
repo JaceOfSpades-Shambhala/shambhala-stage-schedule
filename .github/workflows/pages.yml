@@ -15,7 +15,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  worker-validation:
+    name: Validate Worker deployment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check Worker syntax
+        run: node --check worker/src/index.js
+      - name: Validate Worker bundle and configuration
+        run: npx --yes wrangler@4 deploy --dry-run
+
   deploy:
+    needs: worker-validation
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -38,3 +54,15 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+  release-health:
+    name: Verify live release and Hexlace API
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Pages release marker
+        run: |
+          curl --fail --retry 3 --retry-delay 5 --silent --show-error "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index.html?release=${GITHUB_SHA}" | grep -E '<!-- v[0-9]+ -->'
+      - name: Smoke-test Hexlace API
+        run: |
+          curl --fail --retry 3 --retry-delay 5 --silent --show-error https://shambhala-setlists.hexadecibel.workers.dev/ | grep -Fx 'Shambhala set-list sharing API.'

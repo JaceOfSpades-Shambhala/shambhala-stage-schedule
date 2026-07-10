@@ -14,6 +14,7 @@
   const PING_KEY = "shambhala-2026-ping";
   const HANDOFF_COOKIE = "shambhala-2026-hexlace-handoff";
   const HANDOFF_MAX_AGE_SECONDS = 24 * 60 * 60;
+  const API_TIMEOUT_MS = 12000;
   const STAGES = [
     { id: "amp", label: "AMP" },
     { id: "fractal-forest", label: "Fractal Forest" },
@@ -178,8 +179,8 @@
 
   function festivalNowKey() {
     const preview = new URLSearchParams(window.location.search).get("preview");
-    const previewMatch = preview && preview.match(/^(2026-07-\d{2})T(\d{2}):(\d{2})$/);
-    if (previewMatch) return dateToSerial(previewMatch[1]) * 1440 + Number(previewMatch[2]) * 60 + Number(previewMatch[3]);
+    const previewTime = window.parseSchedulePreview(preview);
+    if (previewTime) return dateToSerial(previewTime.date) * 1440 + previewTime.minutes;
     const parts = new Intl.DateTimeFormat("en-CA", { timeZone: FESTIVAL_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
     const values = Object.fromEntries(parts.filter(part => part.type !== "literal").map(part => [part.type, part.value]));
     return dateToSerial(`${values.year}-${values.month}-${values.day}`) * 1440 + (Number(values.hour) % 24) * 60 + Number(values.minute);
@@ -218,7 +219,7 @@
   }
 
   async function api(path, options) {
-    const response = await fetch(`${API_BASE}${path}`, options);
+    const response = await window.fetchHexlaceApi(`${API_BASE}${path}`, options, API_TIMEOUT_MS);
     let body = null;
     try { body = await response.json(); } catch {}
     return { ok: response.ok, status: response.status, body };

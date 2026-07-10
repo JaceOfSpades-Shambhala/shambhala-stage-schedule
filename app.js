@@ -48,7 +48,7 @@
   }
 
   function normaliseForSearch(value) {
-    return String(value ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[’‘]/g, "'").toLowerCase().trim();
+    return window.normaliseScheduleSearch(value);
   }
 
   function clearSearch() {
@@ -117,8 +117,8 @@
 
   function getFestivalNow() {
     const preview = new URLSearchParams(window.location.search).get("preview");
-    const previewMatch = preview && preview.match(/^(2026-07-\d{2})T(\d{2}):(\d{2})$/);
-    if (previewMatch) return { date: previewMatch[1], minutes: Number(previewMatch[2]) * 60 + Number(previewMatch[3]), isPreview: true };
+    const previewTime = window.parseSchedulePreview(preview);
+    if (previewTime) return { ...previewTime, isPreview: true };
     const parts = new Intl.DateTimeFormat("en-CA", { timeZone: FESTIVAL_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
     const values = Object.fromEntries(parts.filter(part => part.type !== "literal").map(part => [part.type, part.value]));
     return { date: `${values.year}-${values.month}-${values.day}`, minutes: (Number(values.hour) % 24) * 60 + Number(values.minute), isPreview: false };
@@ -202,9 +202,7 @@
       button.className = "tab";
       button.type = "button";
       button.textContent = stage.label;
-      button.setAttribute("role", "tab");
-      button.setAttribute("aria-selected", String(stage.id === appState.stage));
-      button.setAttribute("aria-controls", "schedule");
+      button.setAttribute("aria-pressed", String(stage.id === appState.stage));
       button.addEventListener("click", () => switchStage(stage.id));
       elements.stageTabs.append(button);
     });
@@ -215,9 +213,7 @@
       button.className = "tab";
       button.type = "button";
       button.disabled = !available;
-      button.setAttribute("role", "tab");
-      button.setAttribute("aria-selected", String(day === appState.day));
-      button.setAttribute("aria-controls", "schedule");
+      button.setAttribute("aria-pressed", String(day === appState.day));
       button.addEventListener("click", () => switchDay(day));
       const label = document.createElement("span");
       label.textContent = day;
@@ -315,7 +311,7 @@
     const art = document.createElement("img");
     art.id = "poster-mark";
     art.className = "poster-mark";
-    art.src = `stage-names/${appState.stage}.png?v=45`;
+    art.src = `stage-names/${appState.stage}.png?v=46`;
     art.alt = stageLabel;
     art.addEventListener("error", () => {
       const fallback = document.createElement("h2");
@@ -440,7 +436,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=45";
+  const SCHEDULE_ASSET = "schedule-data.js?v=46";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -529,6 +525,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=45").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=46").then(registerPeriodicSync).catch(() => {});
   });
 })();

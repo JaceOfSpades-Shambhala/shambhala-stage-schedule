@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v45 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v46 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
@@ -127,6 +127,8 @@ npm test
 ```
 
 This runs the date-mapping tests and validates `schedule-data.js`. Use `npm run validate:schedule` when you only want the schedule data check.
+
+See [TESTING.md](TESTING.md) for the browser/device release checklist, including offline, accessibility, storage-recovery, NFC, QR, install, and sharing flows.
 
 ## Publishing and releases
 
