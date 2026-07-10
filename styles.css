@@ -54,7 +54,11 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .install-button:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--accent) 30%, transparent); }
 .install-button:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .install-hint { max-width: 34ch; margin: .5rem 0 0; color: var(--muted); font-size: .78rem; }
-.live-panel, .planner-panel, .schedule-card { background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); backdrop-filter: blur(16px); }
+.live-panel, .planner-panel, .schedule-card { background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }
+/* Chrome can leave the tall, clipped schedule layer blank after scrolling when
+   it combines backdrop-filter with the timeline's clipped marker layers. Keep
+   the frosted treatment on the compact cards, but paint the schedule directly. */
+.live-panel, .planner-panel { backdrop-filter: blur(16px); }
 .live-panel { display: grid; gap: 1rem; padding: 1.15rem; border-radius: 1.1rem; }
 .now-playing { padding: 0 0 1rem; border-bottom: 1px solid var(--line); }
 .now-playing-topline { display: flex; align-items: center; gap: .48rem; }
