@@ -23,6 +23,11 @@
     { id: "secret-garden", label: "Secret Garden" },
     { id: "village", label: "Village" }
   ];
+  const PING_LOCATIONS = {
+    camp: "At camp",
+    river: "At the river",
+    vendors: "At the vendors"
+  };
   const PUBLISH_DEBOUNCE_MS = 4000;
   const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
   const REFRESH_MIN_AGE_MS = 60 * 1000;
@@ -87,6 +92,10 @@
 
   function stageLabel(stageId) {
     return STAGES.find(stage => stage.id === stageId)?.label || stageId;
+  }
+
+  function isPingLocation(value) {
+    return Object.prototype.hasOwnProperty.call(PING_LOCATIONS, value);
   }
 
   function loadIdentity() {
@@ -156,7 +165,7 @@
   function myPing() {
     try {
       const ping = JSON.parse(localStorage.getItem(PING_KEY) || "null");
-      return ping && ["camp", "set"].includes(ping.type) && Number.isSafeInteger(ping.endKey) && ping.endKey > festivalNowKey() ? ping : null;
+      return ping && (ping.type === "set" || isPingLocation(ping.type)) && Number.isSafeInteger(ping.endKey) && ping.endKey > festivalNowKey() ? ping : null;
     } catch {
       return null;
     }
@@ -505,34 +514,33 @@
     if (ping.endKey <= nowKey) return null;
     const card = document.createElement("span");
     card.className = "hexlace-ping";
-    const label = document.createElement("span");
-    label.className = "hexlace-ping-label";
-    label.textContent = "Ping";
     const status = document.createElement("span");
     status.className = "hexlace-ping-status";
     const detail = document.createElement("span");
     detail.className = "hexlace-ping-detail";
-    if (ping.type === "camp") {
-      status.textContent = "At camp";
-      detail.textContent = `Around until ${formatPingTime(ping.endKey)}`;
+    if (isPingLocation(ping.type)) {
+      card.classList.add("is-location");
+      status.textContent = PING_LOCATIONS[ping.type];
+      detail.textContent = ` - ${Math.max(0, ping.endKey - nowKey)} min left`;
     } else if (ping.type === "set") {
+      card.classList.add("is-set");
       const stage = stageLabel(ping.stageId);
       const minutesUntil = ping.startKey - nowKey;
       if (minutesUntil > 30) status.textContent = `Meeting at ${stage} at ${ping.time}`;
       else if (minutesUntil > 0) status.textContent = `Heading to ${stage} for ${ping.time}`;
       else status.textContent = `Come meet me at ${stage}`;
-      detail.textContent = `${ping.artist} · Ends around ${formatPingTime(ping.endKey)}`;
+      detail.textContent = ` - until ${formatPingTime(ping.endKey)}`;
     } else {
       return null;
     }
-    card.append(label, status, detail);
+    card.append(status, detail);
     return card;
   }
 
   function renderCollected() {
     const entries = loadCollected();
     elements.count.textContent = entries.length
-      ? `${entries.length} friend${entries.length === 1 ? "" : "s"} collected`
+      ? `${entries.length} friend${entries.length === 1 ? "" : "s"}`
       : "No friends' sets collected yet";
     elements.empty.hidden = entries.length > 0;
     elements.list.innerHTML = "";
@@ -540,23 +548,32 @@
       const group = document.createElement("details");
       group.className = "planner-day hexlace-friend";
       group.open = friendOpenState.has(entry.readId) ? friendOpenState.get(entry.readId) : false;
-      group.addEventListener("toggle", () => friendOpenState.set(entry.readId, group.open));
 
       const summary = document.createElement("summary");
-      summary.className = "planner-day-summary";
-      const name = document.createElement("span");
-      name.className = "planner-day-name";
+      summary.className = "planner-day-summary hexlace-friend-summary";
+      const copy = document.createElement("span");
+      copy.className = "hexlace-friend-summary-copy";
+      const heading = document.createElement("span");
+      heading.className = "hexlace-friend-heading";
+      const name = document.createElement("strong");
+      name.className = "hexlace-friend-name";
       name.textContent = entry.name || "Loading...";
       const count = document.createElement("span");
-      count.className = "planner-day-count";
+      count.className = "hexlace-friend-count";
       const sets = Array.isArray(entry.sets) ? entry.sets : [];
       count.textContent = entry.pending ? "waiting for signal" : `${sets.length} set${sets.length === 1 ? "" : "s"}`;
-      summary.append(name, count);
+      heading.append(name, document.createTextNode(" · "), count);
+      copy.append(heading);
       const ping = buildFriendPing(entry.ping);
-      if (ping) {
-        summary.classList.add("has-ping");
-        summary.append(ping);
-      }
+      if (ping) copy.append(ping);
+      const view = document.createElement("span");
+      view.className = "hexlace-friend-view";
+      view.textContent = group.open ? "Hide" : "View";
+      summary.append(copy, view);
+      group.addEventListener("toggle", () => {
+        friendOpenState.set(entry.readId, group.open);
+        view.textContent = group.open ? "Hide" : "View";
+      });
       group.append(summary);
 
       const list = document.createElement("ol");

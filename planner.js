@@ -14,6 +14,11 @@
   const STORAGE_KEY = "shambhala-2026-my-set-list";
   const PING_KEY = "shambhala-2026-ping";
   const IDENTITY_KEY = "shambhala-2026-hexlace-identity";
+  const PING_LOCATIONS = {
+    camp: { label: "Camp", status: "At camp" },
+    river: { label: "River", status: "At the river" },
+    vendors: { label: "Vendors", status: "At the vendors" }
+  };
   const data = window.SCHEDULE_DATA || {};
   const elements = {
     panel: document.querySelector("#planner"),
@@ -31,16 +36,24 @@
     liveNext: document.querySelector("#planner-live-next"),
     liveNextList: document.querySelector("#planner-live-next-list"),
     pingCurrent: document.querySelector("#planner-ping-current"),
+    pingState: document.querySelector("#planner-ping-state"),
     pingStatus: document.querySelector("#planner-ping-status"),
     pingDetail: document.querySelector("#planner-ping-detail"),
     pingEnd: document.querySelector("#planner-ping-end"),
-    pingCamp: document.querySelector("#planner-ping-camp"),
-    pingCampOptions: document.querySelector("#planner-ping-camp-options")
+    pingLocation: document.querySelector("#planner-ping-location"),
+    pingPicker: document.querySelector("#planner-ping-picker"),
+    pingLocationOptions: document.querySelector("#planner-ping-location-options"),
+    pingDurationOptions: document.querySelector("#planner-ping-duration-options"),
+    pingDurationLabel: document.querySelector("#planner-ping-duration-label")
   };
   if (!elements.panel || !elements.scheduleList) return;
 
   function titleCaseStage(stageId) {
     return STAGES.find(stage => stage.id === stageId)?.label || "AMP";
+  }
+
+  function isPingLocation(value) {
+    return Object.prototype.hasOwnProperty.call(PING_LOCATIONS, value);
   }
 
   // A malformed percent-encoding in the URL hash otherwise throws and aborts.
@@ -176,7 +189,7 @@
   function loadPing() {
     try {
       const ping = JSON.parse(localStorage.getItem(PING_KEY) || "null");
-      if (!ping || !["camp", "set"].includes(ping.type)) return null;
+      if (!ping || !(ping.type === "set" || isPingLocation(ping.type))) return null;
       if (!Number.isSafeInteger(ping.startKey) || !Number.isSafeInteger(ping.endKey) || ping.endKey <= ping.startKey) return null;
       if (ping.endKey <= festivalNowKey()) return null;
       if (ping.type === "set" && (!ping.day || !ping.stageId || !ping.time || !ping.artist)) return null;
@@ -228,14 +241,18 @@
     if (!match) { setFeedback("That set couldn't be matched to the schedule."); return; }
     const endKey = pingEndKey(match);
     if (festivalNowKey() >= endKey) { setFeedback("That set has already ended."); return; }
-    campOptionsOpen = false;
+    pingPickerOpen = false;
+    pendingLocation = "";
     savePing({ type: "set", ...normaliseSet(item), startKey: match.key, endKey }, `Ping set for ${titleCaseStage(item.stageId)}.`);
   }
 
-  function setCampPing(minutes) {
+  function setLocationPing(location, minutes) {
+    if (!isPingLocation(location)) return;
+    const config = PING_LOCATIONS[location];
     const startKey = festivalNowKey();
-    campOptionsOpen = false;
-    savePing({ type: "camp", startKey, endKey: startKey + minutes }, `Camp ping set for ${minutes === 60 ? "1 hour" : `${minutes} minutes`}.`);
+    pingPickerOpen = false;
+    pendingLocation = "";
+    savePing({ type: location, startKey, endKey: startKey + minutes }, `${config.label} ping set for ${minutes === 60 ? "1 hour" : `${minutes} minutes`}.`);
   }
 
   // The published schedule has no end times, so a set is assumed to run until
@@ -404,7 +421,8 @@
   // (add/remove/clear) don't fight their choice within a session.
   const dayOpenState = new Map();
   let expandedKey = null;
-  let campOptionsOpen = false;
+  let pingPickerOpen = false;
+  let pendingLocation = "";
 
   function formatTimelineTime(key) {
     const minutes = ((key % 1440) + 1440) % 1440;
@@ -415,24 +433,31 @@
   }
 
   function renderPlannerPing() {
-    if (!elements.pingCurrent || !elements.pingCampOptions) return;
+    if (!elements.pingCurrent || !elements.pingPicker) return;
     const ping = loadPing();
     const nowKey = festivalNowKey();
     elements.pingCurrent.hidden = !ping;
-    elements.pingCampOptions.hidden = !campOptionsOpen;
-    elements.pingCamp.setAttribute("aria-expanded", String(campOptionsOpen));
+    elements.pingPicker.hidden = !pingPickerOpen;
+    elements.pingLocationOptions.hidden = !pingPickerOpen || Boolean(pendingLocation);
+    elements.pingDurationOptions.hidden = !pingPickerOpen || !pendingLocation;
+    elements.pingLocation.setAttribute("aria-expanded", String(pingPickerOpen));
+    if (pendingLocation) elements.pingDurationLabel.textContent = `How long at ${PING_LOCATIONS[pendingLocation].label}?`;
     if (!ping) return;
-    if (ping.type === "camp") {
-      elements.pingStatus.textContent = "At camp";
-      elements.pingDetail.textContent = `Around until ${formatTimelineTime(ping.endKey)}`;
+    if (isPingLocation(ping.type)) {
+      elements.pingState.textContent = "Pinging now";
+      elements.pingStatus.textContent = PING_LOCATIONS[ping.type].status;
+      elements.pingDetail.textContent = `Ends ${formatTimelineTime(ping.endKey)} - ${Math.max(0, ping.endKey - nowKey)} min left`;
       return;
     }
     const stage = titleCaseStage(ping.stageId);
     const minutesUntil = ping.startKey - nowKey;
+    elements.pingState.textContent = minutesUntil > 0 ? "Ping scheduled" : "Pinging now";
     if (minutesUntil > 30) elements.pingStatus.textContent = `Meet at ${stage} at ${ping.time}`;
     else if (minutesUntil > 0) elements.pingStatus.textContent = `Heading to ${stage} for ${ping.time}`;
     else elements.pingStatus.textContent = `Come meet me at ${stage}`;
-    elements.pingDetail.textContent = `${ping.artist} · Ends around ${formatTimelineTime(ping.endKey)}`;
+    elements.pingDetail.textContent = minutesUntil > 0
+      ? `${ping.artist} · Starts ${ping.time} · Ends ${formatTimelineTime(ping.endKey)}`
+      : `${ping.artist} · Ends ${formatTimelineTime(ping.endKey)} - ${Math.max(0, ping.endKey - nowKey)} min left`;
   }
 
   function toggleOverlap(itemKey) {
@@ -573,8 +598,9 @@
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "planner-remove";
-    remove.textContent = "Remove";
+    remove.textContent = "−";
     remove.setAttribute("aria-label", `Remove ${item.artist} from My Set List`);
+    remove.title = "Remove from My Set List";
     remove.addEventListener("click", event => {
       event.stopPropagation();
       if (expandedKey === itemKey) expandedKey = null;
@@ -589,7 +615,7 @@
       meet.type = "button";
       meet.className = "planner-ping-set";
       meet.classList.toggle("is-active", pingIsCurrent);
-      meet.textContent = pingIsCurrent ? "Pinged" : "Meet here";
+      meet.textContent = "Ping";
       meet.setAttribute("aria-label", `${pingIsCurrent ? "Current ping" : "Ping friends to meet"} at ${titleCaseStage(item.stageId)} for ${item.artist}`);
       meet.addEventListener("click", event => {
         event.stopPropagation();
@@ -703,17 +729,25 @@
   }
 
   elements.share.addEventListener("click", sharePlanner);
-  elements.pingCamp.addEventListener("click", () => {
-    campOptionsOpen = !campOptionsOpen;
+  elements.pingLocation.addEventListener("click", () => {
+    pingPickerOpen = !pingPickerOpen;
+    pendingLocation = "";
     renderPlannerPing();
   });
-  elements.pingCampOptions.addEventListener("click", event => {
-    const button = event.target.closest("[data-ping-minutes]");
+  elements.pingLocationOptions.addEventListener("click", event => {
+    const button = event.target.closest("[data-ping-location]");
     if (!button) return;
-    setCampPing(Number(button.dataset.pingMinutes));
+    pendingLocation = button.dataset.pingLocation || "";
+    renderPlannerPing();
+  });
+  elements.pingDurationOptions.addEventListener("click", event => {
+    const button = event.target.closest("[data-ping-minutes]");
+    if (!button || !pendingLocation) return;
+    setLocationPing(pendingLocation, Number(button.dataset.pingMinutes));
   });
   elements.pingEnd.addEventListener("click", () => {
-    campOptionsOpen = false;
+    pingPickerOpen = false;
+    pendingLocation = "";
     savePing(null, "Ping ended.");
   });
   elements.clear.addEventListener("click", () => {

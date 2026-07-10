@@ -137,7 +137,7 @@ test("list payloads are normalized and successful updates renew the write key TT
   assert.deepEqual((await read.json()).sets, [{ day: "Friday", stageId: "amp", time: "11:00 PM", artist: "PEEKABOO" }]);
 });
 
-test("camp and saved-set pings are normalized while malformed pings are rejected", async () => {
+test("fixed-location and saved-set pings are normalized while malformed pings are rejected", async () => {
   const env = { LISTS: new MemoryKv() };
   const set = { day: "Friday", stageId: "pagoda", time: "2:00 PM", artist: "TEST ARTIST" };
   const startKey = 29748000;
@@ -161,6 +161,17 @@ test("camp and saved-set pings are normalized while malformed pings are rejected
     body: JSON.stringify({ name: "Tester", sets: [set], ping: { type: "camp", startKey, endKey: startKey + 90 } })
   }), env);
   assert.equal(camp.status, 200);
+
+  for (const location of ["river", "vendors"]) {
+    const locationUpdate = await worker.fetch(makeRequest(`/lists/${readId}`, {
+      method: "PUT",
+      headers: { "X-Write-Key": writeKey },
+      body: JSON.stringify({ name: "Tester", sets: [set], ping: { type: location, startKey, endKey: startKey + 30 } })
+    }), env);
+    assert.equal(locationUpdate.status, 200);
+    const locationRead = await worker.fetch(makeRequest(`/lists/${readId}`), env);
+    assert.deepEqual((await locationRead.json()).ping, { type: location, startKey, endKey: startKey + 30 });
+  }
 
   const invalidDuration = await worker.fetch(makeRequest(`/lists/${readId}`, {
     method: "PUT",

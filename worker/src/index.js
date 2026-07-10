@@ -31,7 +31,8 @@ const MAX_BYTES = 20000;
 const MAX_NAME = 60;
 const MAX_ARTIST_LENGTH = 120;
 const MAX_SET_PING_MINUTES = 12 * 60;
-const CAMP_PING_MINUTES = new Set([30, 60, 90]);
+const LOCATION_PING_MINUTES = new Set([30, 60, 90]);
+const VALID_PING_LOCATIONS = new Set(["camp", "river", "vendors"]);
 const MIN_KEY_LENGTH = 16;
 const READ_ID_LENGTH = 8;
 const VALID_DAYS = new Set(["Thursday", "Friday", "Saturday", "Sunday"]);
@@ -135,9 +136,9 @@ function cleanPing(value, sets) {
     throw "Ping times are invalid.";
   }
   const duration = endKey - startKey;
-  if (value.type === "camp") {
-    if (!CAMP_PING_MINUTES.has(duration)) throw "Camp pings must last 30, 60, or 90 minutes.";
-    return { type: "camp", startKey, endKey };
+  if (VALID_PING_LOCATIONS.has(value.type)) {
+    if (!LOCATION_PING_MINUTES.has(duration)) throw "Location pings must last 30, 60, or 90 minutes.";
+    return { type: value.type, startKey, endKey };
   }
   if (value.type === "set") {
     const set = cleanSet(value);
@@ -145,7 +146,7 @@ function cleanPing(value, sets) {
     if (duration > MAX_SET_PING_MINUTES) throw "A set ping lasts too long.";
     return { type: "set", ...set, startKey, endKey };
   }
-  throw "Ping type must be camp or set.";
+  throw "Ping type must be camp, river, vendors, or set.";
 }
 
 function cleanPayload(body) {

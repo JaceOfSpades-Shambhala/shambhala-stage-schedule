@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v42 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v43 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
@@ -24,7 +24,7 @@ Hexlaces (live set-list sharing):
 
 - Every sharer gets a permanent read-only link (`?f=<id>`) carried on their NFC tag and shown as an always-visible QR; opening it collects their live list into a "Friend's sets collected" panel that auto-refreshes (open/foreground/every 5 min) and stays readable offline
 - Editable display name; publishing is automatic and debounced, queued while offline
-- Passive pings: one tap on a saved set invites friends to meet there, while an "I'm at camp" action offers 30/60/90-minute availability; pings expire automatically and never send notifications
+- Passive pings: one tap on a saved set invites friends to meet there, while a nested location picker offers 30/60/90-minute availability at camp, the river, or vendors; pings expire automatically and never send notifications
 - Giveaway tags with claim tokens: opening one quietly records the local scan time, works offline, and lets the earliest scan own the Hexlace once signal returns (contention closes 24 hours after the first claim)
 - On iOS 17.2+, a claimed Hexlace and its saved sets follow into a newly installed Home Screen app through a 24-hour, one-time opaque handoff cookie
 - Android can write tags in-app (Web NFC); iOS writes tags once with the NFC Tools app
