@@ -380,17 +380,60 @@
     setFeedback.timeout = window.setTimeout(() => { elements.feedback.textContent = ""; }, 2200);
   }
 
-  function liveEntry(artist, detailText) {
+  function liveEntry(artist, detailText, overlapAction = null) {
     const wrap = document.createElement("div");
     wrap.className = "planner-live-entry";
-    const title = document.createElement("p");
+    const copy = document.createElement("span");
+    copy.className = "planner-live-copy";
+    const title = document.createElement("strong");
     title.className = "planner-live-title";
     title.textContent = artist;
-    const details = document.createElement("p");
+    const details = document.createElement("span");
     details.className = "planner-live-details";
     details.textContent = detailText;
-    wrap.append(title, details);
+    copy.append(title, details);
+    wrap.append(copy);
+    if (overlapAction) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "planner-live-overlap";
+      button.textContent = overlapAction.label;
+      button.setAttribute("aria-label", `${overlapAction.label}; open overlap timeline for ${overlapAction.item.artist}`);
+      button.addEventListener("click", () => openPlannerOverlap(overlapAction.item));
+      wrap.append(button);
+    }
     return wrap;
+  }
+
+  function liveSummary(lead, mode, nowKey, overlaps) {
+    if (!lead) return null;
+    const conflicts = overlaps.get(setId(lead.item)) || [];
+    const nearby = conflicts.filter(entry => {
+      const startsAfterLead = entry.match.key - lead.match.key;
+      if (startsAfterLead < 0 || startsAfterLead > 30) return false;
+      return mode === "now"
+        ? entry.match.key <= nowKey && nowKey < entry.end
+        : entry.match.key > nowKey;
+    });
+    const later = conflicts.filter(entry => entry.match.key - lead.match.key > 30);
+    const groupSize = 1 + nearby.length;
+    const hasOverlap = conflicts.length > 0;
+    const action = hasOverlap ? {
+      item: lead.item,
+      label: groupSize > 1 ? "View overlap" : `+${later.length} overlap${later.length === 1 ? "" : "s"}`
+    } : null;
+
+    if (groupSize > 1) {
+      const timing = mode === "now"
+        ? `· ${later.length ? `+${later.length} later` : "playing within 30 min"}`
+        : `· ${lead.item.time} · ${formatStartsIn(lead.match.key - nowKey).replace(/^Starts /, "")}`;
+      return liveEntry(`${groupSize} sets ${mode === "now" ? "now" : "up next"}`, timing, action);
+    }
+
+    const detail = mode === "now"
+      ? `· ${titleCaseStage(lead.item.stageId)} · until ${formatTimelineTime(lead.end)}`
+      : `· ${titleCaseStage(lead.item.stageId)} · ${lead.item.time} · ${formatStartsIn(lead.match.key - nowKey).replace(/^Starts /, "")}`;
+    return liveEntry(lead.item.artist, detail, later.length ? action : null);
   }
 
   function renderUpNext() {
@@ -399,22 +442,21 @@
     const nowKey = dateToSerial(now.date) * 1440 + now.minutes;
     const timeline = savedTimeline();
     const playing = timeline.filter(entry => entry.match.key <= nowKey && nowKey < entry.end);
-    const next = timeline.find(entry => entry.match.key > nowKey);
-    const upcoming = next ? timeline.filter(entry => entry.match.key === next.match.key) : [];
+    const next = timeline.find(entry => entry.match.key > nowKey) || null;
+    const overlaps = findOverlaps(timeline);
 
-    elements.upNext.hidden = !playing.length && !upcoming.length;
+    elements.upNext.hidden = !playing.length && !next;
+    elements.upNext.dataset.state = playing.length ? "now" : "next";
     elements.liveNow.hidden = !playing.length;
-    elements.liveNext.hidden = !upcoming.length;
+    elements.liveNext.hidden = !next;
 
     elements.liveNowList.innerHTML = "";
-    playing.forEach(entry => elements.liveNowList.append(
-      liveEntry(entry.item.artist, `Started at ${entry.item.time} - ${titleCaseStage(entry.item.stageId)}`)
-    ));
+    const nowSummary = liveSummary(playing[0], "now", nowKey, overlaps);
+    if (nowSummary) elements.liveNowList.append(nowSummary);
 
     elements.liveNextList.innerHTML = "";
-    upcoming.forEach(entry => elements.liveNextList.append(
-      liveEntry(entry.item.artist, `${entry.item.time} at ${titleCaseStage(entry.item.stageId)} - ${formatStartsIn(entry.match.key - nowKey)}`)
-    ));
+    const nextSummary = liveSummary(next, "next", nowKey, overlaps);
+    if (nextSummary) elements.liveNextList.append(nextSummary);
   }
 
   // Remembers days the user has manually opened or closed, so re-renders
@@ -423,6 +465,24 @@
   let expandedKey = null;
   let pingPickerOpen = false;
   let pendingLocation = "";
+
+  function openPlannerOverlap(item) {
+    const itemKey = setId(item);
+    if (!(findOverlaps(savedTimeline()).get(itemKey)?.length)) return;
+    dayOpenState.set(item.day, true);
+    expandedKey = itemKey;
+    renderPlanner();
+    window.requestAnimationFrame(() => {
+      const toggle = Array.from(elements.list.querySelectorAll(".planner-overlap-toggle"))
+        .find(button => button.dataset.plannerKey === itemKey);
+      const timeline = toggle?.getAttribute("aria-controls")
+        ? document.getElementById(toggle.getAttribute("aria-controls"))
+        : null;
+      const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      (timeline || toggle)?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+      toggle?.focus({ preventScroll: true });
+    });
+  }
 
   function formatTimelineTime(key) {
     const minutes = ((key % 1440) + 1440) % 1440;
@@ -444,6 +504,7 @@
     if (pendingLocation) elements.pingDurationLabel.textContent = `How long at ${PING_LOCATIONS[pendingLocation].label}?`;
     if (!ping) return;
     if (isPingLocation(ping.type)) {
+      elements.pingCurrent.dataset.state = "location";
       elements.pingState.textContent = "Pinging now";
       elements.pingStatus.textContent = PING_LOCATIONS[ping.type].status;
       elements.pingDetail.textContent = `Ends ${formatTimelineTime(ping.endKey)} - ${Math.max(0, ping.endKey - nowKey)} min left`;
@@ -451,13 +512,15 @@
     }
     const stage = titleCaseStage(ping.stageId);
     const minutesUntil = ping.startKey - nowKey;
-    elements.pingState.textContent = minutesUntil > 0 ? "Ping scheduled" : "Pinging now";
-    if (minutesUntil > 30) elements.pingStatus.textContent = `Meet at ${stage} at ${ping.time}`;
-    else if (minutesUntil > 0) elements.pingStatus.textContent = `Heading to ${stage} for ${ping.time}`;
-    else elements.pingStatus.textContent = `Come meet me at ${stage}`;
-    elements.pingDetail.textContent = minutesUntil > 0
-      ? `${ping.artist} · Starts ${ping.time} · Ends ${formatTimelineTime(ping.endKey)}`
-      : `${ping.artist} · Ends ${formatTimelineTime(ping.endKey)} - ${Math.max(0, ping.endKey - nowKey)} min left`;
+    const isFuture = minutesUntil > 0;
+    elements.pingCurrent.dataset.state = isFuture ? "future" : "active";
+    elements.pingState.textContent = isFuture ? `Ping set · starts ${ping.time}` : "Pinging now";
+    elements.pingStatus.textContent = isFuture
+      ? `Heading to ${stage} for ${ping.artist} at ${ping.time}`
+      : `Come meet me at ${stage}`;
+    elements.pingDetail.textContent = isFuture
+      ? `Becomes “Come meet me at ${stage}” at ${ping.time} - ends ${formatTimelineTime(ping.endKey)}`
+      : `${ping.artist} - until ${formatTimelineTime(ping.endKey)}`;
   }
 
   function toggleOverlap(itemKey) {

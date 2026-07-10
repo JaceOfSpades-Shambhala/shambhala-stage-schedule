@@ -526,6 +526,7 @@
       card.classList.add("is-set");
       const stage = stageLabel(ping.stageId);
       const minutesUntil = ping.startKey - nowKey;
+      card.classList.add(minutesUntil > 0 ? "is-future" : "is-active");
       if (minutesUntil > 30) status.textContent = `Meeting at ${stage} at ${ping.time}`;
       else if (minutesUntil > 0) status.textContent = `Heading to ${stage} for ${ping.time}`;
       else status.textContent = `Come meet me at ${stage}`;
