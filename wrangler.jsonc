@@ -7,7 +7,7 @@
 {
   "name": "shambhala-setlists",
   "main": "worker/src/index.js",
-  "compatibility_date": "2026-07-01",
+  "compatibility_date": "2026-07-09",
   "kv_namespaces": [
     { "binding": "LISTS", "id": "61bdc52caedc49c0acefbd5ae92cb5fe" }
   ]

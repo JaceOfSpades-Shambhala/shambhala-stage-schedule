@@ -15,6 +15,8 @@
 //                                write key THEY generated and the local time
 //                                they first scanned it. The earliest scan wins,
 //                                even if another phone reached the server first.
+//   POST /lists/:readId/handoff -> create a 24-hour, single-use PWA transfer
+//   POST /handoffs/redeem       -> exchange that opaque token for ownership
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -27,7 +29,12 @@ const TTL_SECONDS = 60 * 24 * 60 * 60; // lists expire 60 days after their last 
 const MAX_SETS = 100;
 const MAX_BYTES = 20000;
 const MAX_NAME = 60;
+const MAX_ARTIST_LENGTH = 120;
 const MIN_KEY_LENGTH = 16;
+const READ_ID_LENGTH = 8;
+const VALID_DAYS = new Set(["Thursday", "Friday", "Saturday", "Sunday"]);
+const VALID_STAGE_IDS = new Set(["amp", "fractal-forest", "grove", "living-room", "pagoda", "secret-garden", "village"]);
+const TIME_PATTERN = /^(1[0-2]|[1-9]):[0-5]\d\s(?:AM|PM)$/;
 // Per-IP limits are sized for festival reality: a whole camp can sit behind
 // one carrier-NAT/hotspot IP, so bursts of legitimate traffic share a bucket.
 // The per-list update cap is per readId (NAT-independent) and stays tighter.
@@ -42,6 +49,7 @@ const RATE_LIMITS = {
 // gets signal) without leaving the write key stealable forever by anyone who
 // once saw the tag's claim token.
 const CLAIM_CONTENTION_WINDOW_MS = 24 * 60 * 60 * 1000;
+const HANDOFF_TTL_SECONDS = 24 * 60 * 60;
 // Base58-ish alphabet: no 0/O/1/l/I, so ids are safe to read aloud or retype.
 const ID_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
 
@@ -50,6 +58,15 @@ function randomId(length) {
   let out = "";
   for (const b of bytes) out += ID_ALPHABET[b % ID_ALPHABET.length];
   return out;
+}
+
+function isReadId(value) {
+  return typeof value === "string" && value.length === READ_ID_LENGTH && [...value].every(character => ID_ALPHABET.includes(character));
+}
+
+async function handoffKey(token) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return `handoff:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function json(data, status = 200) {
@@ -91,6 +108,18 @@ async function enforceRateLimit(request, env, kind, id = clientBucket(request)) 
 }
 
 // Validates and returns a clean { name, sets } payload, or throws a message.
+function cleanSet(set) {
+  if (!set || typeof set !== "object" || Array.isArray(set)) throw "Each set must be an object.";
+  const day = typeof set.day === "string" ? set.day.trim() : "";
+  const stageId = typeof set.stageId === "string" ? set.stageId.trim() : "";
+  const time = typeof set.time === "string" ? set.time.trim() : "";
+  const artist = typeof set.artist === "string" ? set.artist.trim() : "";
+  if (!VALID_DAYS.has(day) || !VALID_STAGE_IDS.has(stageId) || !TIME_PATTERN.test(time) || !artist || artist.length > MAX_ARTIST_LENGTH) {
+    throw "Each set needs a valid day, stage, time, and artist.";
+  }
+  return { day, stageId, time, artist };
+}
+
 function cleanPayload(body) {
   if (!body || typeof body !== "object") throw "Body must be a JSON object.";
   const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -98,12 +127,12 @@ function cleanPayload(body) {
   if (name.length > MAX_NAME) throw `Name must be ${MAX_NAME} characters or fewer.`;
   if (!Array.isArray(body.sets)) throw "sets must be an array.";
   if (body.sets.length > MAX_SETS) throw `Too many sets (max ${MAX_SETS}).`;
-  return { name, sets: body.sets };
+  return { name, sets: body.sets.map(cleanSet) };
 }
 
 function serialize(payload) {
   const blob = JSON.stringify({ ...payload, updated: Date.now() });
-  if (blob.length > MAX_BYTES) throw "List is too large.";
+  if (new TextEncoder().encode(blob).byteLength > MAX_BYTES) throw "List is too large.";
   return blob;
 }
 
@@ -139,20 +168,47 @@ export default {
       return new Response("Shambhala set-list sharing API.", { headers: CORS });
     }
 
-    if (parts[0] !== "lists") return json({ error: "Not found." }, 404);
-
     try {
+      // POST /handoffs/redeem — the installed PWA consumes the cookie copied
+      // by iOS and receives the existing owner identity. The KV record holds
+      // only a hash of the opaque token and is removed before credentials are
+      // returned, making normal redemption single-use.
+      if (request.method === "POST" && parts.length === 2 && parts[0] === "handoffs" && parts[1] === "redeem") {
+        const limited = await enforceRateLimit(request, env, "claim");
+        if (limited) return limited;
+        const body = await readJson(request);
+        const token = body && typeof body.token === "string" ? body.token.trim() : "";
+        if (token.length < 24 || token.length > 128) return json({ error: "Invalid or expired handoff." }, 410);
+        const key = await handoffKey(token);
+        const readId = await env.LISTS.get(key);
+        if (!isReadId(readId)) return json({ error: "Invalid or expired handoff." }, 410);
+        await env.LISTS.delete(key);
+        const [writeKey, stored] = await Promise.all([
+          env.LISTS.get(`auth:${readId}`),
+          env.LISTS.get(`list:${readId}`)
+        ]);
+        if (!writeKey || !stored) return json({ error: "Invalid or expired handoff." }, 410);
+        const list = JSON.parse(stored);
+        return json({ readId, writeKey, name: list.name || "", sets: Array.isArray(list.sets) ? list.sets : [] });
+      }
+
+      if (parts[0] !== "lists") return json({ error: "Not found." }, 404);
+
       // POST /lists — create a list.
       if (request.method === "POST" && parts.length === 1) {
         const limited = await enforceRateLimit(request, env, "create");
         if (limited) return limited;
         const body = await readJson(request);
         const blob = serialize(cleanPayload(body));
-        let readId;
+        let readId = null;
         for (let attempt = 0; attempt < 5; attempt++) {
-          readId = randomId(8);
-          if (!(await env.LISTS.get(`list:${readId}`))) break;
+          const candidate = randomId(READ_ID_LENGTH);
+          if (!(await env.LISTS.get(`list:${candidate}`))) {
+            readId = candidate;
+            break;
+          }
         }
+        if (!readId) return json({ error: "Couldn't create a unique list. Please try again." }, 503);
         await env.LISTS.put(`list:${readId}`, blob, { expirationTtl: TTL_SECONDS });
         // A giveaway tag is created unclaimed: no write key exists yet, so it
         // cannot be published to until someone claims it and sets one.
@@ -173,6 +229,7 @@ export default {
         const limited = await enforceRateLimit(request, env, "claim");
         if (limited) return limited;
         const readId = parts[1];
+        if (!isReadId(readId)) return json({ error: "Not found." }, 404);
         const claim = parseClaimRecord(await env.LISTS.get(`claim:${readId}`));
         if (!claim) return json({ error: "Not claimable." }, 409);
         const body = await readJson(request);
@@ -198,11 +255,29 @@ export default {
         return json({ ok: true, accepted });
       }
 
+      // POST /lists/:readId/handoff — Safari proves ownership and receives a
+      // random 24-hour token suitable for a first-party transfer cookie. The
+      // raw write key is never stored in that cookie or the handoff KV record.
+      if (request.method === "POST" && parts.length === 3 && parts[2] === "handoff") {
+        const limited = await enforceRateLimit(request, env, "updateIp");
+        if (limited) return limited;
+        const readId = parts[1];
+        if (!isReadId(readId)) return json({ error: "Not found." }, 404);
+        const expected = await env.LISTS.get(`auth:${readId}`);
+        if (!expected) return json({ error: "Not found." }, 404);
+        if ((request.headers.get("X-Write-Key") || "") !== expected) return json({ error: "Invalid write key." }, 403);
+        const token = randomId(48);
+        await env.LISTS.put(await handoffKey(token), readId, { expirationTtl: HANDOFF_TTL_SECONDS });
+        return json({ token, expiresIn: HANDOFF_TTL_SECONDS }, 201);
+      }
+
       // GET /lists/:readId — read a shared list.
       if (request.method === "GET" && parts.length === 2) {
-        const stored = await env.LISTS.get(`list:${parts[1]}`);
+        const readId = parts[1];
+        if (!isReadId(readId)) return json({ error: "Not found." }, 404);
+        const stored = await env.LISTS.get(`list:${readId}`);
         if (!stored) return json({ error: "Not found." }, 404);
-        return new Response(stored, { headers: { "Content-Type": "application/json", ...CORS } });
+        return new Response(stored, { headers: { "Content-Type": "application/json", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store", ...CORS } });
       }
 
       // PUT /lists/:readId — update a list; requires the secret write key.
@@ -210,6 +285,7 @@ export default {
         const limitedByIp = await enforceRateLimit(request, env, "updateIp");
         if (limitedByIp) return limitedByIp;
         const readId = parts[1];
+        if (!isReadId(readId)) return json({ error: "Not found." }, 404);
         const expected = await env.LISTS.get(`auth:${readId}`);
         if (!expected) return json({ error: "Not found." }, 404);
         if ((request.headers.get("X-Write-Key") || "") !== expected) return json({ error: "Invalid write key." }, 403);
@@ -217,6 +293,7 @@ export default {
         if (limitedByList) return limitedByList;
         const blob = serialize(cleanPayload(await readJson(request)));
         await env.LISTS.put(`list:${readId}`, blob, { expirationTtl: TTL_SECONDS });
+        await env.LISTS.put(`auth:${readId}`, expected, { expirationTtl: TTL_SECONDS });
         return json({ ok: true, updated: JSON.parse(blob).updated });
       }
     } catch (message) {

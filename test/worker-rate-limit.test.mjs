@@ -5,18 +5,27 @@ import worker from "../worker/src/index.js";
 class MemoryKv {
   constructor() {
     this.values = new Map();
+    this.writes = [];
   }
 
   async get(key) {
     return this.values.get(key) ?? null;
   }
 
-  async put(key, value) {
+  async put(key, value, options) {
     this.values.set(key, String(value));
+    this.writes.push({ key, value: String(value), options });
   }
 
   async delete(key) {
     this.values.delete(key);
+  }
+}
+
+class CollidingListKv extends MemoryKv {
+  async get(key) {
+    if (key.startsWith("list:")) return "occupied";
+    return super.get(key);
   }
 }
 
@@ -102,4 +111,93 @@ test("ownership locks once the 24h contention window closes", async () => {
   }), env);
   assert.deepEqual(await staleTakeover.json(), { ok: true, accepted: false });
   assert.equal(await env.LISTS.get(`auth:${readId}`), "owner-write-key-1234");
+});
+
+test("list payloads are normalized and successful updates renew the write key TTL", async () => {
+  const env = { LISTS: new MemoryKv() };
+  const set = { day: "Friday", stageId: "amp", time: "11:00 PM", artist: "PEEKABOO", ignored: "not stored" };
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "  Tester  ", sets: [set] })
+  }), env);
+  assert.equal(created.status, 201);
+  const { readId, writeKey } = await created.json();
+
+  const updated = await worker.fetch(makeRequest(`/lists/${readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": writeKey },
+    body: JSON.stringify({ name: "Tester", sets: [set] })
+  }), env);
+  assert.equal(updated.status, 200);
+  const authWrites = env.LISTS.writes.filter(write => write.key === `auth:${readId}`);
+  assert.equal(authWrites.at(-1).options.expirationTtl, 60 * 24 * 60 * 60);
+
+  const read = await worker.fetch(makeRequest(`/lists/${readId}`), env);
+  assert.equal(read.headers.get("Cache-Control"), "no-store");
+  assert.deepEqual((await read.json()).sets, [{ day: "Friday", stageId: "amp", time: "11:00 PM", artist: "PEEKABOO" }]);
+});
+
+test("malformed set data and exhausted generated IDs never create or overwrite a list", async () => {
+  const malformedEnv = { LISTS: new MemoryKv() };
+  const malformed = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Tester", sets: [{ day: "Monday", stageId: "amp", time: "25:00 PM", artist: "" }] })
+  }), malformedEnv);
+  assert.equal(malformed.status, 400);
+  assert.match(await malformed.text(), /Each set needs a valid day/);
+
+  const collisionEnv = { LISTS: new CollidingListKv() };
+  const collision = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Tester", sets: [] })
+  }), collisionEnv);
+  assert.equal(collision.status, 503);
+  assert.equal(collisionEnv.LISTS.writes.some(write => write.key.startsWith("list:")), false);
+});
+
+test("24-hour handoff tokens transfer ownership once without storing the raw write key", async () => {
+  const env = { LISTS: new MemoryKv() };
+  const sets = [{ day: "Friday", stageId: "amp", time: "11:00 PM", artist: "PEEKABOO" }];
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Tester", sets })
+  }), env);
+  const { readId, writeKey } = await created.json();
+
+  const forbidden = await worker.fetch(makeRequest(`/lists/${readId}/handoff`, {
+    method: "POST",
+    headers: { "X-Write-Key": "wrong-write-key-1234" }
+  }), env);
+  assert.equal(forbidden.status, 403);
+
+  const handoff = await worker.fetch(makeRequest(`/lists/${readId}/handoff`, {
+    method: "POST",
+    headers: { "X-Write-Key": writeKey }
+  }), env);
+  assert.equal(handoff.status, 201);
+  const { token, expiresIn } = await handoff.json();
+  assert.equal(expiresIn, 24 * 60 * 60);
+  assert.equal(typeof token, "string");
+  assert.ok(token.length >= 24);
+
+  const transferWrite = env.LISTS.writes.find(write => write.key.startsWith("handoff:"));
+  assert.ok(transferWrite);
+  assert.equal(transferWrite.options.expirationTtl, 24 * 60 * 60);
+  assert.equal(transferWrite.key.includes(token), false);
+  assert.equal(transferWrite.value, readId);
+  assert.equal(transferWrite.value.includes(writeKey), false);
+
+  const redeemed = await worker.fetch(makeRequest("/handoffs/redeem", {
+    method: "POST",
+    body: JSON.stringify({ token })
+  }), env);
+  assert.equal(redeemed.status, 200);
+  assert.deepEqual(await redeemed.json(), { readId, writeKey, name: "Tester", sets });
+
+  const replayed = await worker.fetch(makeRequest("/handoffs/redeem", {
+    method: "POST",
+    headers: { "CF-Connecting-IP": "203.0.113.20" },
+    body: JSON.stringify({ token })
+  }), env);
+  assert.equal(replayed.status, 410);
 });

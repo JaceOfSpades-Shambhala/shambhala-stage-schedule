@@ -16,6 +16,10 @@
   });
 
   button.addEventListener("click", async () => {
+    // Refresh the 24-hour iOS handoff ticket immediately before installation.
+    // Other platforms simply resolve false and continue with their prompt.
+    const handoffReady = typeof window.prepareHexlaceHandoff !== "function" || await window.prepareHexlaceHandoff();
+    if (isIOS && !handoffReady) return;
     if (deferredPrompt) {
       const promptEvent = deferredPrompt;
       deferredPrompt = null;

@@ -584,6 +584,10 @@
   });
   new MutationObserver(() => enhanceScheduleRows()).observe(elements.scheduleList, { childList: true });
   window.addEventListener("hashchange", () => window.setTimeout(enhanceScheduleRows, 0));
+  window.addEventListener("setlist-restored", () => {
+    renderPlanner();
+    enhanceScheduleRows();
+  });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) renderUpNext(); });
   renderPlanner();
   enhanceScheduleRows();

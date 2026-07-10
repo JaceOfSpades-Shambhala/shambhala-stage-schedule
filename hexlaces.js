@@ -11,6 +11,8 @@
   const IDENTITY_KEY = "shambhala-2026-hexlace-identity";
   const COLLECTED_KEY = "shambhala-2026-hexlaces-collected";
   const SETS_KEY = "shambhala-2026-my-set-list";
+  const HANDOFF_COOKIE = "shambhala-2026-hexlace-handoff";
+  const HANDOFF_MAX_AGE_SECONDS = 24 * 60 * 60;
   const STAGES = [
     { id: "amp", label: "AMP" },
     { id: "fractal-forest", label: "Fractal Forest" },
@@ -60,6 +62,9 @@
   let giveawayLink = "";
   let renderedQrUrl = "";
   let claiming = false;
+  let preparingHandoff = false;
+  let redeemingHandoff = false;
+  let handoffPreparedThisPage = false;
 
   // Unambiguous alphabet (no 0/O/1/l/I), matching the Worker's id style.
   const KEY_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -93,6 +98,31 @@
 
   function saveIdentity(identity) {
     try { localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity)); } catch {}
+  }
+
+  function isStandalone() {
+    return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  }
+
+  function appCookiePath() {
+    const path = location.pathname || "/";
+    if (path.endsWith("/")) return path;
+    return path.slice(0, path.lastIndexOf("/") + 1) || "/";
+  }
+
+  function handoffCookie() {
+    const prefix = `${HANDOFF_COOKIE}=`;
+    const cookie = document.cookie.split(";").map(part => part.trim()).find(part => part.startsWith(prefix));
+    if (!cookie) return "";
+    try { return decodeURIComponent(cookie.slice(prefix.length)); } catch { return ""; }
+  }
+
+  function setHandoffCookie(token) {
+    document.cookie = `${HANDOFF_COOKIE}=${encodeURIComponent(token)}; Max-Age=${HANDOFF_MAX_AGE_SECONDS}; Path=${appCookiePath()}; Secure; SameSite=Strict`;
+  }
+
+  function clearHandoffCookie() {
+    document.cookie = `${HANDOFF_COOKIE}=; Max-Age=0; Path=${appCookiePath()}; Secure; SameSite=Strict`;
   }
 
   function isVisibleIdentity(identity) {
@@ -152,6 +182,69 @@
     return { ok: response.ok, status: response.status, body };
   }
 
+  async function prepareHandoff(identity = loadIdentity(), force = false) {
+    // iOS copies first-party cookies into a newly installed Home Screen app.
+    // Safari keeps the write key in localStorage and exposes only this opaque,
+    // expiring ticket for that one-time bootstrap.
+    if (isStandalone() || preparingHandoff || !identity || identity.pendingClaim) return false;
+    if (!force && (handoffPreparedThisPage || handoffCookie())) return true;
+    preparingHandoff = true;
+    try {
+      const result = await api(`/lists/${identity.readId}/handoff`, {
+        method: "POST",
+        headers: { "X-Write-Key": identity.writeKey }
+      });
+      if (!result.ok || !result.body?.token) return false;
+      setHandoffCookie(result.body.token);
+      handoffPreparedThisPage = true;
+      return true;
+    } catch {
+      return false;
+    } finally {
+      preparingHandoff = false;
+    }
+  }
+
+  async function redeemHandoff() {
+    if (!isStandalone() || loadIdentity() || redeemingHandoff) return false;
+    const token = handoffCookie();
+    if (!token) return false;
+    redeemingHandoff = true;
+    try {
+      const result = await api("/handoffs/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token })
+      });
+      if (!result.ok || !result.body?.readId || !result.body?.writeKey) {
+        if (result.status === 410) {
+          clearHandoffCookie();
+          feedback("Hexlace transfer expired. Open the site in Safari before installing again.");
+        }
+        return false;
+      }
+      clearHandoffCookie();
+      saveIdentity({
+        readId: result.body.readId,
+        writeKey: result.body.writeKey,
+        name: result.body.name || "",
+        lastPublished: Date.now()
+      });
+      if (!mySets().length && Array.isArray(result.body.sets) && result.body.sets.length) {
+        try { localStorage.setItem(SETS_KEY, JSON.stringify(result.body.sets)); } catch {}
+        window.dispatchEvent(new CustomEvent("setlist-restored"));
+      }
+      renderMine();
+      feedback("Your Hexlace moved into the Home Screen app.");
+      return true;
+    } catch {
+      // Keep the cookie so a temporary connection failure can retry later.
+      return false;
+    } finally {
+      redeemingHandoff = false;
+    }
+  }
+
   // --- My Hexlace: publishing ---------------------------------------------
 
   function renderMine() {
@@ -192,7 +285,9 @@
       body: JSON.stringify({ name, sets: mySets() })
     });
     if (!result.ok || !result.body?.readId) return false;
-    saveIdentity({ readId: result.body.readId, writeKey: result.body.writeKey, name, lastPublished: Date.now() });
+    const identity = { readId: result.body.readId, writeKey: result.body.writeKey, name, lastPublished: Date.now() };
+    saveIdentity(identity);
+    await prepareHandoff(identity);
     return true;
   }
 
@@ -221,6 +316,7 @@
         identity.invalid = true;
       }
       saveIdentity(identity);
+      if (result.ok) await prepareHandoff(identity);
       renderMine();
       return result.ok;
     } catch {
@@ -332,6 +428,7 @@
             return false;
           }
           saveIdentity(claimed);
+          await prepareHandoff(claimed);
           if (claimed.name) return publish(options);
           renderMine();
           return true;
@@ -354,9 +451,13 @@
 
   function syncMine() {
     const identity = loadIdentity();
-    if (!identity) return;
+    if (!identity) {
+      redeemHandoff();
+      return;
+    }
     if (identity.pendingClaim) flushPendingClaim({ fallbackToNew: Boolean(identity.claimScannedAt) });
     else if (identity.dirty) publish({ fallbackToNew: Boolean(identity.claimScannedAt) });
+    else prepareHandoff(identity);
   }
 
   // --- Collecting friends --------------------------------------------------
@@ -464,7 +565,9 @@
       saveCollected(entries);
     }
     renderCollected();
-    await fetchEntry(readId);
+    // Preserve an offline scan for a later refresh instead of surfacing a
+    // network failure as an unhandled rejection.
+    try { await fetchEntry(readId); } catch {}
     renderCollected();
     return loadCollected().find(entry => entry.readId === readId);
   }
@@ -578,6 +681,16 @@
   }
 
   window.addEventListener("setlist-changed", markDirtyAndPublishSoon);
+  window.prepareHexlaceHandoff = async () => {
+    let identity = loadIdentity();
+    if (!identity) return true;
+    if (identity.pendingClaim) await flushPendingClaim({ fallbackToNew: Boolean(identity.claimScannedAt) });
+    identity = loadIdentity();
+    if (!identity) return true;
+    const prepared = await prepareHandoff(identity, true);
+    if (!prepared) feedback("Connect to the internet before installing so your Hexlace can transfer.");
+    return prepared;
+  };
   window.addEventListener("online", () => { syncMine(); refreshCollected(false); });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
@@ -595,5 +708,7 @@
   renderCollected();
   handleIncomingLink();
   flushPendingClaim();
+  if (isStandalone()) redeemHandoff();
+  else prepareHandoff();
   window.setTimeout(() => refreshCollected(false), 2500);
 })();

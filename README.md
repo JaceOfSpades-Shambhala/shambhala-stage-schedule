@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v35 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v41 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
@@ -17,7 +17,7 @@ Schedule and planning:
 - Stage and day filtering across seven stages, with automatic current-day selection and a Today marker (calendar-accurate, independent of stage)
 - Global artist search across all stages and days
 - Stage-specific Now Playing card using Salmo, BC time, with up-next and starts-in timing, current-set highlight, and early-morning rollover (a Friday-list 2:00 AM set counts as Saturday morning but stays in Friday's schedule)
-- My Set List planner (phone-local): tap-to-add, collapsible day groups (current day open by default), a live "Now / Up next from your sets" block, overlap flagging between saved sets (inferred set lengths, 20-minute tolerance), Share button (native share sheet with clipboard fallback), 100-set cap
+- My Set List planner (phone-local): tap-to-add, collapsible day groups, a live "Now / Up next from your sets" block, overlap flagging between saved sets (inferred set lengths, 20-minute tolerance), Share button (native share sheet with clipboard fallback), 100-set cap
 - Fast stage/day switching without browser snapshot transitions
 
 Hexlaces (live set-list sharing):
@@ -25,6 +25,7 @@ Hexlaces (live set-list sharing):
 - Every sharer gets a permanent read-only link (`?f=<id>`) carried on their NFC tag and shown as an always-visible QR; opening it collects their live list into a "Friend's sets collected" panel that auto-refreshes (open/foreground/every 5 min) and stays readable offline
 - Editable display name; publishing is automatic and debounced, queued while offline
 - Giveaway tags with claim tokens: opening one quietly records the local scan time, works offline, and lets the earliest scan own the Hexlace once signal returns (contention closes 24 hours after the first claim)
+- On iOS 17.2+, a claimed Hexlace and its saved sets follow into a newly installed Home Screen app through a 24-hour, one-time opaque handoff cookie
 - Android can write tags in-app (Web NFC); iOS writes tags once with the NFC Tools app
 
 Infrastructure:
