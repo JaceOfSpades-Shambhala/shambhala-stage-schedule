@@ -25,7 +25,7 @@
   const elements = {
     panel: document.querySelector("#planner"),
     scheduleList: document.querySelector("#set-list"),
-    dayLabel: document.querySelector("#stage-mark-day"),
+    dayLabel: document.querySelector("#schedule-day"),
     list: document.querySelector("#planner-list"),
     empty: document.querySelector("#planner-empty"),
     count: document.querySelector("#planner-count"),
