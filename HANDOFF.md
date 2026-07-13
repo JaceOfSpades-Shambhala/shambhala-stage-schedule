@@ -1,6 +1,6 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v48**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v49**.
 
 ## What this is
 
@@ -47,7 +47,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (v48 at the time of writing). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (v49 at the time of writing). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
@@ -56,9 +56,9 @@ Every site release bumps ONE version number everywhere (v48 at the time of writi
 
 The sed incantation used for bumps (adjust numbers):
 ```bash
-sed -i 's/?v=47/?v=48/g; s/<!-- v47 -->/<!-- v48 -->/' index.html
-sed -i 's/sw\.js?v=47/sw.js?v=48/; s/schedule-metadata\.js?v=47/schedule-metadata.js?v=48/' app.js
-sed -i 's/stage-schedule-v47/stage-schedule-v48/; s/?v=47/?v=48/g' sw.js
+sed -i 's/?v=48/?v=49/g; s/<!-- v48 -->/<!-- v49 -->/' index.html
+sed -i 's/?v=48/?v=49/g' app.js styles.css manifest.webmanifest
+sed -i 's/stage-schedule-v48/stage-schedule-v49/; s/?v=48/?v=49/g' sw.js
 ```
 
 **Schedule-only edits during the festival do NOT bump `?v=`** — edit `schedule-data.js` and/or `schedule-metadata.js`, change the metadata `SCHEDULE_VERSION` string, and commit. Full instructions are in [UPDATING.md](UPDATING.md). Open PWAs poll every 5 min and show a "tap to refresh" banner for both schedule and app updates.
@@ -118,6 +118,6 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 
 ## Version history (condensed)
 
-Latest: v48 adds copy-only browser/PWA Hexlace connection codes and private cross-context synchronization while retaining the audit-safe schedule, undo, accessibility, offline caching, and Worker fixes documented above.
+Latest: v49 relocates the stage-title poster into a compact mark header at the top of the live panel (so the set list stays above the fold when switching stages/days), restyles the selected stage/day pills as accent-tinted glass, and adds an explicit empty-state message for stage/day combos with no listed sets. v48 added copy-only browser/PWA Hexlace connection codes and private cross-context synchronization while retaining the audit-safe schedule, undo, accessibility, offline caching, and Worker fixes documented above.
 
 v15–16 pre-existing site → v17 SW network-timeout + schedule version stamp + update banner → v18 up-next-from-my-sets, Share button, View Transitions → v19 overlap flagging → v20 planner declutter (live now/next block, collapsible days, 20-min tolerance) → v21 Today-marker fix → v22 periodic background sync + UPDATING.md → v23 Hexlaces (worker + client) → v24 Hexlace panel declutter + `[hidden]` fix → v25 app-release detection in update banner → v26 audit fixes (crash-proof hash, offline-safe claims, 100-set cap, storage guards, ETag checks, worker hardening) → v28 morning-day consistency, collapsed inactive Hexlaces, date-mapping tests, schedule validation, and Worker-side write rate limits → v29 invisible Hexlace claim reservations with earliest-scan ownership → v30 disabled browser View Transitions after intermittent stuck snapshot overlays → v31 cleaner live-status copy and collapsed Hexlace/planner sections by default → v32 fixed Friend's sets panel and changed schedule markers into a time-progress rail → v33 masked timeline markers to remove rail artifacts → v34 switched to segmented timeline rails without marker rings.
