@@ -12,18 +12,18 @@ test("release assets and service-worker precache use one version and include bot
   ]);
   const releaseSources = [html, serviceWorker, css, manifest, app];
   const referencedVersions = new Set(releaseSources.flatMap(source => [...source.matchAll(/\?v=(\d+)/g)].map(match => match[1])));
-  assert.deepEqual([...referencedVersions], ["48"], "Every release asset query must use exactly v48.");
-  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "48", "The Pages release marker must be v48.");
-  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "48", "The service-worker cache must be v48.");
-  assert.match(readme, /authoritative deployed version[^\n]*\bv48\b/i);
-  assert.match(handoff, /current release \*\*v48\*\*/i);
-  assert.match(handoff, /release bumps ONE version number everywhere \(v48 at the time of writing\)/);
-  assert.match(serviceWorker, /InterVariable\.woff2\?v=48/);
-  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=48/);
-  assert.match(css, /InterVariable\.woff2\?v=48/);
-  assert.match(css, /InterVariable-Italic\.woff2\?v=48/);
-  assert.match(serviceWorker, /schedule-metadata\.js\?v=48/);
-  assert.match(serviceWorker, /undo\.js\?v=48/);
+  assert.deepEqual([...referencedVersions], ["49"], "Every release asset query must use exactly v49.");
+  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "49", "The Pages release marker must be v49.");
+  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "49", "The service-worker cache must be v49.");
+  assert.match(readme, /authoritative deployed version[^\n]*\bv49\b/i);
+  assert.match(handoff, /current release \*\*v49\*\*/i);
+  assert.match(handoff, /release bumps ONE version number everywhere \(v49 at the time of writing\)/);
+  assert.match(serviceWorker, /InterVariable\.woff2\?v=49/);
+  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=49/);
+  assert.match(css, /InterVariable\.woff2\?v=49/);
+  assert.match(css, /InterVariable-Italic\.woff2\?v=49/);
+  assert.match(serviceWorker, /schedule-metadata\.js\?v=49/);
+  assert.match(serviceWorker, /undo\.js\?v=49/);
 });
 
 test("schedule and overlap policy stay explicit", async () => {

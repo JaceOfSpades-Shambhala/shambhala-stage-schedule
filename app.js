@@ -15,8 +15,8 @@
   const elements = {
     stageTabs: document.querySelector("#stage-tabs"),
     dayTabs: document.querySelector("#day-tabs"),
-    stagePoster: document.querySelector("#stage-poster"),
-    posterDay: document.querySelector("#poster-day"),
+    stageMarkHeader: document.querySelector("#stage-mark-header"),
+    stageMarkDay: document.querySelector("#stage-mark-day"),
     scheduleNote: document.querySelector("#schedule-note"),
     setList: document.querySelector("#set-list"),
     noResults: document.querySelector("#no-results"),
@@ -327,22 +327,22 @@
     return `UP NEXT - IN ${mins} MIN`;
   }
 
-  // The official stage-name art used as the poster heading. Falls back to
-  // plain text if an image ever fails to load.
-  function setPosterArt(stageLabel) {
+  // The official stage-name art used in the live panel's mark header. Falls
+  // back to plain text if an image ever fails to load.
+  function setStageMarkArt(stageLabel) {
     const art = document.createElement("img");
-    art.id = "poster-mark";
-    art.className = "poster-mark";
-    art.src = `stage-names/${appState.stage}.png?v=48`;
+    art.id = "stage-mark";
+    art.className = "stage-mark";
+    art.src = `stage-names/${appState.stage}.png?v=49`;
     art.alt = stageLabel;
     art.addEventListener("error", () => {
       const fallback = document.createElement("h2");
-      fallback.id = "poster-mark";
-      fallback.className = "poster-fallback";
+      fallback.id = "stage-mark";
+      fallback.className = "stage-mark-fallback";
       fallback.textContent = stageLabel;
       art.replaceWith(fallback);
     });
-    elements.stagePoster.querySelector("#poster-mark").replaceWith(art);
+    elements.stageMarkHeader.querySelector("#stage-mark").replaceWith(art);
   }
 
   function renderSchedule() {
@@ -350,10 +350,11 @@
     const entries = data[appState.day]?.[appState.stage] || [];
     const term = appState.term.trim();
     document.body.className = `stage-${appState.stage}`;
+    setStageMarkArt(stageLabel);
+    elements.stageMarkDay.textContent = appState.day.toUpperCase();
     elements.setList.innerHTML = "";
     if (term) {
       const matches = getGlobalMatches(term);
-      elements.stagePoster.hidden = true;
       elements.scheduleNote.textContent = `${matches.length} matching set${matches.length === 1 ? "" : "s"} across all listed stages and days.`;
       elements.noResults.textContent = "No matching artist was found across the listed stages and days.";
       elements.setList.classList.remove("timeline");
@@ -366,11 +367,11 @@
     const next = status.next || null;
     const nowKey = nowToKey(status.now);
     const timeline = buildStageTimeline(appState.stage);
-    elements.stagePoster.hidden = false;
-    setPosterArt(stageLabel);
-    elements.posterDay.textContent = appState.day.toUpperCase();
     elements.scheduleNote.textContent = "Unofficial guide - set times can change.";
-    elements.noResults.hidden = true;
+    // Safety net: the auto-jump on stage switch should make an empty stage/day
+    // combo unreachable, but never render a silently empty card if one slips in.
+    elements.noResults.textContent = `No sets listed for ${stageLabel} on ${appState.day}.`;
+    elements.noResults.hidden = entries.length !== 0;
     elements.setList.classList.add("timeline");
     entries.forEach(([time, artist]) => {
       const isCurrent = Boolean(current && current.day === appState.day && current.time === time && current.artist === artist);
@@ -465,7 +466,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-metadata.js?v=48";
+  const SCHEDULE_ASSET = "schedule-metadata.js?v=49";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -557,6 +558,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=48").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=49").then(registerPeriodicSync).catch(() => {});
   });
 })();
