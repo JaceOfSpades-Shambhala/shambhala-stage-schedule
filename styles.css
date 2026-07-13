@@ -1,13 +1,13 @@
 @font-face {
   font-family: "Inter";
-  src: url("fonts/InterVariable.woff2?v=50") format("woff2");
+  src: url("fonts/InterVariable.woff2?v=51") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Inter";
-  src: url("fonts/InterVariable-Italic.woff2?v=50") format("woff2");
+  src: url("fonts/InterVariable-Italic.woff2?v=51") format("woff2");
   font-weight: 100 900;
   font-style: italic;
   font-display: swap;
@@ -231,7 +231,7 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .planner-overlap-axis-label.is-start { transform: none; }
 .planner-overlap-axis-label.is-end { transform: translateX(-100%); }
 .stage-mark-header { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 6px 0 12px; border-bottom: 1px solid var(--line); }
-.stage-mark { display: block; width: 150px; max-height: 64px; height: auto; object-fit: contain; filter: invert(1); }
+.stage-mark { display: block; width: 150px; height: 64px; object-fit: contain; filter: invert(1); }
 .stage-mark-fallback { margin: 0; font-size: 1.35rem; font-weight: 900; line-height: 1; letter-spacing: -.03em; }
 .schedule-day-rule { display: flex; align-items: center; gap: 14px; padding: 1rem 1.2rem 0; }
 .schedule-day-line { flex: 1; height: 1px; background: var(--line); }
