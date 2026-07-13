@@ -42,7 +42,7 @@ test("schedule and overlap policy stay explicit", async () => {
 test("deployment checks verify the exact Pages marker and deployed Worker revision", async () => {
   const workflow = await read(".github/workflows/pages.yml");
   assert.match(workflow, /expected_marker=\$\(grep -oE '<!-- v\[0-9\]\+ -->' index\.html\)/);
-  assert.match(workflow, /grep -Fx "\$expected_marker"/);
+  assert.match(workflow, /grep -F "\$expected_marker"/);
   assert.match(workflow, /wrangler@4 deploy --var BUILD_SHA:\$\{\{ github\.sha \}\}/);
   assert.match(workflow, /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
   assert.match(workflow, /\.build == \$sha/);
