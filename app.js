@@ -11,7 +11,6 @@
   const DAYS = ["Thursday", "Friday", "Saturday", "Sunday"];
   const FESTIVAL_TIME_ZONE = "America/Vancouver";
   const FESTIVAL_DATES = { Thursday: "2026-07-23", Friday: "2026-07-24", Saturday: "2026-07-25", Sunday: "2026-07-26" };
-  const FINAL_SET_WINDOW_MINUTES = 180;
   const data = window.SCHEDULE_DATA || {};
   const elements = {
     stageTabs: document.querySelector("#stage-tabs"),
@@ -31,6 +30,7 @@
     updateBanner: document.querySelector("#update-banner")
   };
   const appState = { stage: "amp", day: "Thursday", term: "" };
+  let lastObservedFestivalDay = null;
 
   function titleCaseStage(stageId) {
     return STAGES.find(stage => stage.id === stageId)?.label || "AMP";
@@ -109,10 +109,24 @@
         if (previousMinutes !== -1 && minutes < previousMinutes) rolloverDays += 1;
         previousMinutes = minutes;
         const date = addDays(baseDate, rolloverDays);
-        timeline.push({ day, date, time, artist, minutes, key: dateToSerial(date) * 1440 + minutes });
+        timeline.push({ day, stageId, date, time, artist, minutes, key: dateToSerial(date) * 1440 + minutes });
       });
     });
     return timeline.sort((a, b) => a.key - b.key);
+  }
+
+  function inferredFinalEnd(entry) {
+    const time = window.SCHEDULE_FINAL_END_TIMES?.[entry.day]?.[entry.stageId];
+    if (!time) return null;
+    const minutes = parseSetTime(time);
+    const date = minutes <= entry.minutes ? addDays(entry.date, 1) : entry.date;
+    return { time, key: dateToSerial(date) * 1440 + minutes };
+  }
+
+  function scheduledEnd(entry, timeline, index) {
+    const next = timeline[index + 1];
+    if (next?.day === entry.day) return { time: next.time, key: next.key };
+    return inferredFinalEnd(entry);
   }
 
   function getFestivalNow() {
@@ -129,11 +143,15 @@
     const nowKey = nowToKey(now);
     const timeline = buildStageTimeline(stageId);
     const nextIndex = timeline.findIndex(item => item.key > nowKey);
-    const previous = nextIndex === -1 ? timeline.at(-1) : timeline[nextIndex - 1];
+    const previousIndex = nextIndex === -1 ? timeline.length - 1 : nextIndex - 1;
+    const previous = timeline[previousIndex];
     const next = nextIndex === -1 ? null : timeline[nextIndex];
     if (previous && previous.key <= nowKey) {
-      if (next && previous.day === next.day) return { type: "active", current: previous, next, now, minutesUntilNext: next.key - nowKey };
-      if (nowKey - previous.key <= FINAL_SET_WINDOW_MINUTES) return { type: "final", current: previous, next, now };
+      const end = scheduledEnd(previous, timeline, previousIndex);
+      if (end && nowKey < end.key) {
+        if (next && previous.day === next.day) return { type: "active", current: previous, next, end, now, minutesUntilNext: next.key - nowKey };
+        return { type: "final", current: previous, next, end, now };
+      }
     }
     if (next) return { type: "upcoming", next, now, minutesUntilNext: next.key - nowKey };
     return { type: "unavailable", now };
@@ -196,12 +214,14 @@
 
   function renderTabs() {
     const currentScheduleDay = getCurrentFestivalDay();
+    const focusedControl = document.activeElement?.dataset.scheduleControl || "";
     elements.stageTabs.innerHTML = "";
     STAGES.forEach(stage => {
       const button = document.createElement("button");
       button.className = "tab";
       button.type = "button";
       button.textContent = stage.label;
+      button.dataset.scheduleControl = `stage:${stage.id}`;
       button.setAttribute("aria-pressed", String(stage.id === appState.stage));
       button.addEventListener("click", () => switchStage(stage.id));
       elements.stageTabs.append(button);
@@ -213,6 +233,7 @@
       button.className = "tab";
       button.type = "button";
       button.disabled = !available;
+      button.dataset.scheduleControl = `day:${day}`;
       button.setAttribute("aria-pressed", String(day === appState.day));
       button.addEventListener("click", () => switchDay(day));
       const label = document.createElement("span");
@@ -228,6 +249,7 @@
       }
       elements.dayTabs.append(button);
     });
+    if (focusedControl) document.querySelector(`[data-schedule-control="${focusedControl}"]`)?.focus({ preventScroll: true });
   }
 
   function getGlobalMatches(term) {
@@ -311,7 +333,7 @@
     const art = document.createElement("img");
     art.id = "poster-mark";
     art.className = "poster-mark";
-    art.src = `stage-names/${appState.stage}.png?v=46`;
+    art.src = `stage-names/${appState.stage}.png?v=48`;
     art.alt = stageLabel;
     art.addEventListener("error", () => {
       const fallback = document.createElement("h2");
@@ -360,7 +382,7 @@
       let progress = null;
       if (isCurrent) {
         state = "now";
-        const endEntry = index === -1 ? null : timeline[index + 1];
+        const endEntry = index === -1 ? null : scheduledEnd(timeline[index], timeline, index);
         if (endEntry) {
           const span = endEntry.key - key;
           progress = span > 0 ? Math.max(0, Math.min(100, Math.round((nowKey - key) / span * 100))) : null;
@@ -403,7 +425,7 @@
     if (status.type === "final") {
       elements.nowPlayingLabel.textContent = "FINAL LISTED SET";
       elements.nowPlayingTitle.textContent = status.current.artist;
-      setNowPlayingDetails([`Started at ${status.current.time}. The source schedule does not list an end time.`]);
+      setNowPlayingDetails([`Started at ${status.current.time} - ends ${status.end.time} (inferred from the printed schedule).`]);
       return;
     }
     if (status.type === "upcoming") {
@@ -418,6 +440,13 @@
   }
 
   function renderLiveStatus() {
+    const currentDay = getCurrentFestivalDay();
+    if (currentDay && lastObservedFestivalDay && currentDay !== lastObservedFestivalDay && appState.day === lastObservedFestivalDay && isAvailable(currentDay, appState.stage)) {
+      appState.day = currentDay;
+      updateUrl();
+      renderTabs();
+    }
+    lastObservedFestivalDay = currentDay;
     renderSchedule();
     renderNowPlaying();
   }
@@ -436,7 +465,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-data.js?v=46";
+  const SCHEDULE_ASSET = "schedule-metadata.js?v=48";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -477,7 +506,7 @@
       if (currentVersion) {
         const response = await fetch(SCHEDULE_ASSET, { cache: "no-cache" });
         if (response.ok) {
-          const latest = (await response.text()).match(/SCHEDULE_VERSION\s*=\s*"([^"]+)"/)?.[1];
+          const latest = (await response.text()).match(/SCHEDULE_VERSION\s*=\s*["']([^"']+)["']/)?.[1];
           if (latest && latest !== currentVersion) return showUpdateBanner();
         }
       }
@@ -506,6 +535,9 @@
   elements.updateBanner?.addEventListener("click", () => window.location.reload());
 
   getInitialState();
+  updateUrl();
+  lastObservedFestivalDay = getCurrentFestivalDay();
+  navigator.storage?.persist?.().catch(() => {});
   updateCampLocationLink();
   renderScheduleVersion();
   render();
@@ -525,6 +557,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=46").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=48").then(registerPeriodicSync).catch(() => {});
   });
 })();

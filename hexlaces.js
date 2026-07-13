@@ -13,6 +13,7 @@
   const SETS_KEY = "shambhala-2026-my-set-list";
   const PING_KEY = "shambhala-2026-ping";
   const HANDOFF_COOKIE = "shambhala-2026-hexlace-handoff";
+  const HANDOFF_REDEMPTION_KEY = "shambhala-2026-hexlace-handoff-redemption";
   const HANDOFF_MAX_AGE_SECONDS = 24 * 60 * 60;
   const API_TIMEOUT_MS = 12000;
   const STAGES = [
@@ -30,6 +31,7 @@
     vendors: "At the vendors"
   };
   const PUBLISH_DEBOUNCE_MS = 4000;
+  const OWNER_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
   const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
   const REFRESH_MIN_AGE_MS = 60 * 1000;
   const FESTIVAL_TIME_ZONE = "America/Vancouver";
@@ -42,13 +44,24 @@
     empty: document.querySelector("#hexlace-empty"),
     setup: document.querySelector("#hexlace-setup"),
     enable: document.querySelector("#hexlace-enable"),
+    bringOver: document.querySelector("#hexlace-bring-over"),
+    connectEditor: document.querySelector("#hexlace-connect-editor"),
+    connectInput: document.querySelector("#hexlace-connect-input"),
+    connectRedeem: document.querySelector("#hexlace-connect-redeem"),
+    connectCancel: document.querySelector("#hexlace-connect-cancel"),
     mine: document.querySelector("#hexlace-mine"),
     myName: document.querySelector("#hexlace-name"),
     status: document.querySelector("#hexlace-status"),
     rename: document.querySelector("#hexlace-rename"),
     shareLink: document.querySelector("#hexlace-share-link"),
+    replace: document.querySelector("#hexlace-replace"),
     qr: document.querySelector("#hexlace-qr"),
+    shareUrl: document.querySelector("#hexlace-share-url"),
     nfc: document.querySelector("#hexlace-nfc"),
+    connectApp: document.querySelector("#hexlace-connect-app"),
+    connectCode: document.querySelector("#hexlace-connect-code"),
+    connectCodeValue: document.querySelector("#hexlace-connect-code-value"),
+    connectCopy: document.querySelector("#hexlace-connect-copy"),
     giveaway: document.querySelector("#hexlace-giveaway"),
     giveawayResult: document.querySelector("#hexlace-giveaway-result"),
     giveawayQr: document.querySelector("#hexlace-giveaway-qr"),
@@ -73,6 +86,9 @@
   let preparingHandoff = false;
   let redeemingHandoff = false;
   let handoffPreparedThisPage = false;
+  let pullingOwner = false;
+  let connectCode = "";
+  let collectedRenderSignature = "";
 
   // Unambiguous alphabet (no 0/O/1/l/I), matching the Worker's id style.
   const KEY_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -89,6 +105,9 @@
     qr.addData(url);
     qr.make();
     container.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+    const image = container.querySelector("svg");
+    image?.setAttribute("role", "img");
+    image?.setAttribute("aria-label", "QR code for this Hexlace link");
   }
 
   function stageLabel(stageId) {
@@ -109,7 +128,24 @@
   }
 
   function saveIdentity(identity) {
-    try { localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity)); } catch {}
+    try {
+      localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
+      const saved = JSON.parse(localStorage.getItem(IDENTITY_KEY) || "null");
+      return Boolean(saved && saved.readId === identity.readId && saved.writeKey === identity.writeKey);
+    } catch {
+      return false;
+    }
+  }
+
+  function storeJson(key, value) {
+    try {
+      if (value == null) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(value));
+      if (value == null) return localStorage.getItem(key) === null;
+      return localStorage.getItem(key) === JSON.stringify(value);
+    } catch {
+      return false;
+    }
   }
 
   function isStandalone() {
@@ -137,6 +173,22 @@
     document.cookie = `${HANDOFF_COOKIE}=; Max-Age=0; Path=${appCookiePath()}; Secure; SameSite=Strict`;
   }
 
+  function handoffRedemptionId(token) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(HANDOFF_REDEMPTION_KEY) || "null");
+      if (saved?.token === token && typeof saved.redemptionId === "string") return saved.redemptionId;
+      const redemptionId = randomKey(24);
+      localStorage.setItem(HANDOFF_REDEMPTION_KEY, JSON.stringify({ token, redemptionId }));
+      return redemptionId;
+    } catch {
+      return randomKey(24);
+    }
+  }
+
+  function clearHandoffRedemption() {
+    try { localStorage.removeItem(HANDOFF_REDEMPTION_KEY); } catch {}
+  }
+
   function isVisibleIdentity(identity) {
     return Boolean(identity && (identity.name || !identity.silentClaim));
   }
@@ -152,6 +204,26 @@
 
   function saveCollected(entries) {
     try { localStorage.setItem(COLLECTED_KEY, JSON.stringify(entries)); } catch {}
+  }
+
+  function friendIds() {
+    return [...new Set(loadCollected().map(entry => entry.readId).filter(Boolean))];
+  }
+
+  function restoreFriendIds(ids) {
+    const existing = new Map(loadCollected().map(entry => [entry.readId, entry]));
+    const restored = [...new Set(Array.isArray(ids) ? ids : [])]
+      .filter(readId => typeof readId === "string" && readId.length === 8)
+      .map(readId => existing.get(readId) || { readId, name: "", sets: [], ping: null, pending: true });
+    if (!storeJson(COLLECTED_KEY, restored)) return false;
+    collectedRenderSignature = "";
+    renderCollected();
+    window.setTimeout(() => refreshCollected(false), 0);
+    return true;
+  }
+
+  function friendCollectionChanged() {
+    window.dispatchEvent(new CustomEvent("hexlace-friends-changed"));
   }
 
   function mySets() {
@@ -228,7 +300,7 @@
   async function prepareHandoff(identity = loadIdentity(), force = false) {
     // iOS copies first-party cookies into a newly installed Home Screen app.
     // Safari keeps the write key in localStorage and exposes only this opaque,
-    // expiring ticket for that one-time bootstrap.
+    // expiring ticket for that single installed app's retryable bootstrap.
     if (isStandalone() || preparingHandoff || !identity || identity.pendingClaim) return false;
     if (!force && (handoffPreparedThisPage || handoffCookie())) return true;
     preparingHandoff = true;
@@ -248,47 +320,108 @@
     }
   }
 
-  async function redeemHandoff() {
-    if (!isStandalone() || loadIdentity() || redeemingHandoff) return false;
-    const token = handoffCookie();
-    if (!token) return false;
+  function persistTransferredState(body) {
+    const remoteSets = Array.isArray(body.sets) ? body.sets : [];
+    const mergedSets = [...remoteSets];
+    const seenSets = new Set(remoteSets.map(set => JSON.stringify(set)));
+    for (const set of mySets()) {
+      const key = JSON.stringify(set);
+      if (!seenSets.has(key)) {
+        seenSets.add(key);
+        mergedSets.push(set);
+      }
+    }
+    const localPing = myPing();
+    const mergedPing = localPing || body.ping || null;
+    const remoteFriendIds = Array.isArray(body.friends) ? body.friends : [];
+    const mergedFriendIds = [...new Set([...remoteFriendIds, ...friendIds()])];
+    if (!storeJson(SETS_KEY, mergedSets)) return false;
+    if (!storeJson(PING_KEY, mergedPing)) return false;
+    if (!restoreFriendIds(mergedFriendIds)) return false;
+    const dirty = JSON.stringify(mergedSets) !== JSON.stringify(remoteSets)
+      || JSON.stringify(mergedPing) !== JSON.stringify(body.ping || null)
+      || JSON.stringify(mergedFriendIds) !== JSON.stringify(remoteFriendIds);
+    const saved = saveIdentity({
+      readId: body.readId,
+      writeKey: body.writeKey,
+      name: body.name || "",
+      revision: Number.isSafeInteger(body.revision) ? body.revision : 1,
+      lastPublished: Date.now(),
+      dirty
+    });
+    if (!saved) return false;
+    window.dispatchEvent(new CustomEvent("setlist-restored"));
+    window.dispatchEvent(new CustomEvent("ping-restored"));
+    return true;
+  }
+
+  async function redeemTransfer(value, automatic = false) {
+    if (loadIdentity() || redeemingHandoff) return false;
+    const redemptionId = handoffRedemptionId(value);
     redeemingHandoff = true;
     try {
       const result = await api("/handoffs/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token })
+        body: JSON.stringify(automatic ? { token: value, redemptionId } : { code: value, redemptionId })
       });
       if (!result.ok || !result.body?.readId || !result.body?.writeKey) {
-        if (result.status === 410) {
+        if (result.status === 410 && automatic) {
           clearHandoffCookie();
+          clearHandoffRedemption();
           feedback("Hexlace transfer expired. Open the site in Safari before installing again.");
+        } else if (result.status === 410) {
+          feedback("That connection code expired or was already used.");
         }
         return false;
       }
-      clearHandoffCookie();
-      saveIdentity({
-        readId: result.body.readId,
-        writeKey: result.body.writeKey,
-        name: result.body.name || "",
-        lastPublished: Date.now()
-      });
-      if (!mySets().length && Array.isArray(result.body.sets) && result.body.sets.length) {
-        try { localStorage.setItem(SETS_KEY, JSON.stringify(result.body.sets)); } catch {}
-        window.dispatchEvent(new CustomEvent("setlist-restored"));
+      if (!persistTransferredState(result.body)) {
+        feedback("Your Hexlace could not be saved on this device. The transfer can be retried.");
+        return false;
       }
-      if (!myPing() && result.body.ping) {
-        try { localStorage.setItem(PING_KEY, JSON.stringify(result.body.ping)); } catch {}
-        window.dispatchEvent(new CustomEvent("ping-restored"));
-      }
+      if (automatic) clearHandoffCookie();
+      clearHandoffRedemption();
+      elements.connectEditor.hidden = true;
+      elements.connectInput.value = "";
       renderMine();
-      feedback("Your Hexlace moved into the Home Screen app.");
+      feedback("Your Hexlace is connected in this app and browser.");
+      if (loadIdentity()?.dirty) window.setTimeout(syncMine, 0);
       return true;
     } catch {
-      // Keep the cookie so a temporary connection failure can retry later.
+      feedback("Couldn't connect yet - check your signal and try again.");
       return false;
     } finally {
       redeemingHandoff = false;
+    }
+  }
+
+  async function redeemHandoff() {
+    if (!isStandalone() || loadIdentity() || redeemingHandoff) return false;
+    const token = handoffCookie();
+    return token ? redeemTransfer(token, true) : false;
+  }
+
+  async function createConnectCode() {
+    const identity = loadIdentity();
+    if (!identity || identity.pendingClaim) return;
+    elements.connectApp.disabled = true;
+    try {
+      const result = await api(`/lists/${identity.readId}/connect-code`, {
+        method: "POST",
+        headers: { "X-Write-Key": identity.writeKey }
+      });
+      if (!result.ok || !result.body?.code) {
+        feedback("Couldn't make a connection code - check your signal.");
+        return;
+      }
+      connectCode = result.body.code;
+      elements.connectCodeValue.textContent = connectCode;
+      elements.connectCode.hidden = false;
+      copyText(connectCode, "Connection code copied.");
+    } catch {
+      feedback("Couldn't make a connection code - check your signal.");
+    } finally {
+      elements.connectApp.disabled = false;
     }
   }
 
@@ -301,14 +434,22 @@
     elements.setup.hidden = Boolean(visibleIdentity) || editorMode === "enable" || editorMode === "claim";
     elements.mine.hidden = !visibleIdentity || editorMode === "claim";
     elements.editor.hidden = !editorMode;
+    elements.bringOver.hidden = !isStandalone() || Boolean(visibleIdentity);
+    elements.connectApp.hidden = isStandalone() || !visibleIdentity;
     if (!visibleIdentity) return;
     elements.myName.textContent = identity.name || "(no name yet)";
     if (identity.pendingClaim) elements.status.textContent = "Changes waiting for signal to publish.";
     else if (identity.invalid) elements.status.textContent = "This sharing link stopped working. Tap your name to try re-publishing.";
+    else if (identity.conflict) elements.status.textContent = "Your Hexlace changed in another app. Choose which copy to keep before publishing.";
     else if (identity.dirty) elements.status.textContent = "Changes waiting for signal to publish.";
     else if (identity.lastPublished) elements.status.textContent = `Live - published ${timeAgo(identity.lastPublished)}.`;
     else elements.status.textContent = "Live.";
+    if (elements.replace) elements.replace.hidden = !identity.conflict;
     const url = shareUrl(identity.readId);
+    if (elements.shareUrl) {
+      elements.shareUrl.href = url;
+      elements.shareUrl.textContent = url;
+    }
     if (url !== renderedQrUrl) {
       renderQr(elements.qr, url);
       renderedQrUrl = url;
@@ -322,6 +463,7 @@
     saveIdentity(identity);
     renderMine();
     window.clearTimeout(publishTimer);
+    if (window.hasActiveUndo?.()) return;
     publishTimer = window.setTimeout(publish, delay);
   }
 
@@ -329,10 +471,10 @@
     const result = await api("/lists", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, sets: mySets(), ping: myPing() })
+      body: JSON.stringify({ name, sets: mySets(), ping: myPing(), friends: friendIds() })
     });
     if (!result.ok || !result.body?.readId) return false;
-    const identity = { readId: result.body.readId, writeKey: result.body.writeKey, name, lastPublished: Date.now() };
+    const identity = { readId: result.body.readId, writeKey: result.body.writeKey, name, revision: Number.isSafeInteger(result.body.revision) ? result.body.revision : 1, lastPublished: Date.now() };
     saveIdentity(identity);
     await prepareHandoff(identity);
     return true;
@@ -348,12 +490,19 @@
       const result = await api(`/lists/${identity.readId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-Write-Key": identity.writeKey },
-        body: JSON.stringify({ name: identity.name, sets: mySets(), ping: myPing() })
+        body: JSON.stringify({ name: identity.name, sets: mySets(), ping: myPing(), friends: friendIds(), revision: identity.revision, force: options.force === true })
       });
       if (result.ok) {
         identity.dirty = false;
         identity.invalid = false;
+        identity.conflict = false;
+        identity.revision = Number.isSafeInteger(result.body?.revision) ? result.body.revision : identity.revision;
         identity.lastPublished = Date.now();
+      } else if (result.status === 409 && result.body?.currentRevision) {
+        identity.dirty = true;
+        identity.conflict = true;
+        identity.conflictRevision = result.body.currentRevision;
+        feedback("This Hexlace changed in another app. Choose which copy to keep.");
       } else if (result.status === 403 || result.status === 404) {
         if (options.fallbackToNew && identity.claimScannedAt) {
           const created = await createSharingIdentity(identity.name);
@@ -385,6 +534,7 @@
   function closeEditor() {
     editorMode = "";
     renderMine();
+    window.requestAnimationFrame(() => (isVisibleIdentity(loadIdentity()) ? elements.rename : elements.enable)?.focus());
   }
 
   async function saveName() {
@@ -430,11 +580,7 @@
   async function createGiveaway() {
     elements.giveaway.disabled = true;
     try {
-      const result = await api("/lists", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Unclaimed Hexlace", sets: [], claimable: true })
-      });
+      const result = await window.requestHexlaceGiveaway(api);
       if (!result.ok || !result.body?.readId) { feedback("Couldn't create one - check your signal."); return; }
       giveawayLink = `${shareUrl(result.body.readId)}&claim=${result.body.claimToken}`;
       elements.giveawayUrl.textContent = giveawayLink;
@@ -450,7 +596,7 @@
   function claimHexlace(readId, claimToken) {
     // Adopt the tag right away with a locally generated key so naming and
     // list-building work offline; the claim is sent (and retried) on signal.
-    saveIdentity({ readId, writeKey: randomKey(24), name: "", pendingClaim: claimToken, claimScannedAt: Date.now(), silentClaim: true, dirty: true });
+    saveIdentity({ readId, writeKey: randomKey(24), name: "", revision: 1, pendingClaim: claimToken, claimScannedAt: Date.now(), silentClaim: true, dirty: true });
     flushPendingClaim();
     return true;
   }
@@ -469,6 +615,7 @@
         const claimed = loadIdentity();
         if (claimed && claimed.readId === identity.readId) {
           delete claimed.pendingClaim;
+          if (Number.isSafeInteger(result.body?.revision) && result.body.revision > 0) claimed.revision = result.body.revision;
           if (result.body?.accepted === false && claimed.silentClaim && !claimed.name) {
             try { localStorage.removeItem(IDENTITY_KEY); } catch {}
             renderMine();
@@ -496,15 +643,56 @@
     return false;
   }
 
-  function syncMine() {
+  async function pullOwnerState(identity = loadIdentity()) {
+    if (!identity || identity.pendingClaim || identity.dirty || pullingOwner || navigator.onLine === false) return false;
+    pullingOwner = true;
+    try {
+      const result = await api(`/lists/${identity.readId}/owner`, {
+        cache: "no-store",
+        headers: { "X-Write-Key": identity.writeKey }
+      });
+      if (!result.ok) {
+        if (result.status === 403 || result.status === 404) {
+          identity.invalid = true;
+          saveIdentity(identity);
+          renderMine();
+        }
+        return false;
+      }
+      const remoteRevision = Number(result.body?.revision);
+      if (!Number.isSafeInteger(remoteRevision) || remoteRevision <= (identity.revision || 1)) return true;
+      if (!storeJson(SETS_KEY, Array.isArray(result.body.sets) ? result.body.sets : [])) return false;
+      if (!storeJson(PING_KEY, result.body.ping || null)) return false;
+      if (!restoreFriendIds(result.body.friends)) return false;
+      identity.name = result.body.name || identity.name;
+      identity.revision = remoteRevision;
+      identity.invalid = false;
+      identity.conflict = false;
+      identity.lastPublished = Number(result.body.updated) || Date.now();
+      if (!saveIdentity(identity)) return false;
+      window.dispatchEvent(new CustomEvent("setlist-restored"));
+      window.dispatchEvent(new CustomEvent("ping-restored"));
+      renderMine();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      pullingOwner = false;
+    }
+  }
+
+  async function syncMine() {
     const identity = loadIdentity();
     if (!identity) {
-      redeemHandoff();
+      await redeemHandoff();
       return;
     }
-    if (identity.pendingClaim) flushPendingClaim({ fallbackToNew: Boolean(identity.claimScannedAt) });
-    else if (identity.dirty) publish({ fallbackToNew: Boolean(identity.claimScannedAt) });
-    else prepareHandoff(identity);
+    if (identity.pendingClaim) await flushPendingClaim({ fallbackToNew: Boolean(identity.claimScannedAt) });
+    else if (identity.dirty) await publish({ fallbackToNew: Boolean(identity.claimScannedAt) });
+    else {
+      await pullOwnerState(identity);
+      await prepareHandoff(loadIdentity());
+    }
   }
 
   // --- Collecting friends --------------------------------------------------
@@ -541,6 +729,9 @@
 
   function renderCollected() {
     const entries = loadCollected();
+    const signature = JSON.stringify([entries, [...friendOpenState], Math.floor(Date.now() / 60000)]);
+    if (signature === collectedRenderSignature) return;
+    collectedRenderSignature = signature;
     elements.count.textContent = entries.length
       ? `${entries.length} friend${entries.length === 1 ? "" : "s"}`
       : "No friends' sets collected yet";
@@ -563,7 +754,7 @@
       const count = document.createElement("span");
       count.className = "hexlace-friend-count";
       const sets = Array.isArray(entry.sets) ? entry.sets : [];
-      count.textContent = entry.pending ? "waiting for signal" : `${sets.length} set${sets.length === 1 ? "" : "s"}`;
+      count.textContent = entry.pending ? "waiting for signal" : `${sets.length} ${entry.missing ? "cached " : ""}set${sets.length === 1 ? "" : "s"}`;
       heading.append(name, document.createTextNode(" · "), count);
       copy.append(heading);
       const ping = buildFriendPing(entry.ping);
@@ -575,35 +766,48 @@
       group.addEventListener("toggle", () => {
         friendOpenState.set(entry.readId, group.open);
         view.textContent = group.open ? "Hide" : "View";
+        if (group.open) populateSetRows();
       });
       group.append(summary);
 
+      if (entry.missing && sets.length) {
+        const stale = document.createElement("p");
+        stale.className = "hexlace-hint";
+        stale.textContent = "This Hexlace is no longer available. Showing the last sets saved on this device.";
+        group.append(stale);
+      }
+
       const list = document.createElement("ol");
       list.className = "planner-day-list";
-      sets.forEach(item => {
-        const row = document.createElement("li");
-        row.className = "planner-set";
-        const time = document.createElement("span");
-        time.className = "planner-time";
-        time.textContent = item.time || "";
-        const details = document.createElement("span");
-        details.className = "planner-details";
-        const artist = document.createElement("span");
-        artist.className = "planner-artist";
-        artist.textContent = item.artist || "";
-        const meta = document.createElement("span");
-        meta.className = "planner-meta";
-        meta.textContent = `${item.day || ""} - ${stageLabel(item.stageId)}`;
-        details.append(artist, meta);
-        row.append(time, details);
-        list.append(row);
-      });
-      if (!sets.length && !entry.pending) {
-        const note = document.createElement("li");
-        note.className = "planner-set hexlace-empty-note";
-        note.textContent = entry.missing ? "This Hexlace has expired or was removed." : "No sets saved yet.";
-        list.append(note);
+      function populateSetRows() {
+        if (list.dataset.populated === "true") return;
+        list.dataset.populated = "true";
+        sets.forEach(item => {
+          const row = document.createElement("li");
+          row.className = "planner-set";
+          const time = document.createElement("span");
+          time.className = "planner-time";
+          time.textContent = item.time || "";
+          const details = document.createElement("span");
+          details.className = "planner-details";
+          const artist = document.createElement("span");
+          artist.className = "planner-artist";
+          artist.textContent = item.artist || "";
+          const meta = document.createElement("span");
+          meta.className = "planner-meta";
+          meta.textContent = `${item.day || ""} - ${stageLabel(item.stageId)}`;
+          details.append(artist, meta);
+          row.append(time, details);
+          list.append(row);
+        });
+        if (!sets.length && !entry.pending) {
+          const note = document.createElement("li");
+          note.className = "planner-set hexlace-empty-note";
+          note.textContent = entry.missing ? "This Hexlace has expired or was removed." : "No sets saved yet.";
+          list.append(note);
+        }
       }
+      if (group.open) populateSetRows();
       group.append(list);
 
       const foot = document.createElement("div");
@@ -617,8 +821,20 @@
       remove.textContent = "Remove";
       remove.setAttribute("aria-label", `Remove ${entry.name || "this Hexlace"} from your collection`);
       remove.addEventListener("click", () => {
-        saveCollected(loadCollected().filter(other => other.readId !== entry.readId));
+        const previousEntries = loadCollected();
+        const wasOpen = friendOpenState.get(entry.readId);
+        window.showUndo?.(`${entry.name || "Hexlace"} removed.`, () => {
+          saveCollected(previousEntries);
+          friendCollectionChanged();
+          if (wasOpen !== undefined) friendOpenState.set(entry.readId, wasOpen);
+          collectedRenderSignature = "";
+          renderCollected();
+          feedback("Friend restored.");
+        });
+        saveCollected(previousEntries.filter(other => other.readId !== entry.readId));
+        friendCollectionChanged();
         friendOpenState.delete(entry.readId);
+        collectedRenderSignature = "";
         renderCollected();
         feedback("Removed.");
       });
@@ -653,10 +869,13 @@
 
   async function addCollected(readId, provisionalName) {
     const entries = loadCollected();
+    let added = false;
     if (!entries.some(entry => entry.readId === readId)) {
       entries.push({ readId, name: provisionalName || "", sets: [], ping: null, pending: true });
       saveCollected(entries);
+      added = true;
     }
+    if (added) friendCollectionChanged();
     renderCollected();
     // Preserve an offline scan for a later refresh instead of surfacing a
     // network failure as an unhandled rejection.
@@ -684,6 +903,11 @@
     params.delete("claim");
     const query = params.toString();
     history.replaceState({}, "", `${location.pathname}${query ? "?" + query : ""}${location.hash}`);
+
+    if (readId.length !== 8 || [...readId].some(character => !KEY_ALPHABET.includes(character))) {
+      feedback("That Hexlace link is invalid.");
+      return;
+    }
 
     friendOpenState.clear();
     const identity = loadIdentity();
@@ -725,9 +949,9 @@
     area.style.left = "-999px";
     document.body.append(area);
     area.select();
-    document.execCommand("copy");
+    const copied = document.execCommand("copy");
     area.remove();
-    feedback(message);
+    feedback(copied ? message : "Couldn't copy automatically. Press and hold the visible link to copy it.");
   }
 
   async function writeTag(url) {
@@ -751,6 +975,19 @@
   // --- Wiring ---------------------------------------------------------------
 
   elements.enable.addEventListener("click", () => openEditor("enable", "What name should friends see?", ""));
+  elements.bringOver.addEventListener("click", () => {
+    elements.connectEditor.hidden = false;
+    elements.connectInput.focus();
+  });
+  elements.connectCancel.addEventListener("click", () => {
+    elements.connectEditor.hidden = true;
+    elements.connectInput.value = "";
+    elements.bringOver.focus();
+  });
+  elements.connectRedeem.addEventListener("click", () => redeemTransfer(elements.connectInput.value));
+  elements.connectInput.addEventListener("keydown", event => {
+    if (event.key === "Enter") redeemTransfer(elements.connectInput.value);
+  });
   elements.rename.addEventListener("click", () => openEditor("rename", "Update the name friends see:", loadIdentity()?.name || ""));
   elements.nameSave.addEventListener("click", saveName);
   elements.nameCancel.addEventListener("click", () => {
@@ -760,6 +997,11 @@
   elements.shareLink.addEventListener("click", () => {
     const identity = loadIdentity();
     if (identity) shareOrCopy(shareUrl(identity.readId), `${identity.name}'s Shambhala sets`);
+  });
+  elements.replace?.addEventListener("click", () => publish({ force: true }));
+  elements.connectApp.addEventListener("click", createConnectCode);
+  elements.connectCopy.addEventListener("click", () => {
+    if (connectCode) copyText(connectCode, "Connection code copied.");
   });
   elements.giveaway.addEventListener("click", createGiveaway);
   elements.giveawayShare.addEventListener("click", () => { if (giveawayLink) shareOrCopy(giveawayLink, "A Hexlace for you"); });
@@ -775,9 +1017,18 @@
 
   window.addEventListener("setlist-changed", markDirtyAndPublishSoon);
   window.addEventListener("ping-changed", () => markDirtyAndPublishSoon(0));
+  window.addEventListener("hexlace-friends-changed", () => markDirtyAndPublishSoon(0));
+  window.addEventListener("undo-state-changed", event => {
+    if (!event.detail?.active && loadIdentity()?.dirty) markDirtyAndPublishSoon(0);
+  });
   window.prepareHexlaceHandoff = async () => {
     let identity = loadIdentity();
     if (!identity) return true;
+    if (navigator.onLine === false) {
+      const prepared = !identity.pendingClaim && Boolean(handoffCookie());
+      if (!prepared) feedback("Connect to the internet before installing so your Hexlace can transfer.");
+      return prepared;
+    }
     if (identity.pendingClaim) await flushPendingClaim({ fallbackToNew: Boolean(identity.claimScannedAt) });
     identity = loadIdentity();
     if (!identity) return true;
@@ -793,17 +1044,16 @@
     renderMine();
   });
   window.setInterval(() => {
-    syncMine();
     refreshCollected(false);
     renderMine();
   }, REFRESH_INTERVAL_MS);
+  window.setInterval(syncMine, OWNER_REFRESH_INTERVAL_MS);
   window.setInterval(renderCollected, 30000);
 
   renderMine();
   renderCollected();
   handleIncomingLink();
   flushPendingClaim();
-  if (isStandalone()) redeemHandoff();
-  else prepareHandoff();
+  syncMine();
   window.setTimeout(() => refreshCollected(false), 2500);
 })();

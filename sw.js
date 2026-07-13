@@ -1,47 +1,66 @@
-const CACHE_NAME = "stage-schedule-v46";
+const CACHE_NAME = "stage-schedule-v48";
+const CACHE_PREFIX = "stage-schedule-v";
 const NETWORK_TIMEOUT_MS = 3500;
-const ASSETS = [
+const OPTIONAL_CACHE_TIMEOUT_MS = 5000;
+const CORE_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=46",
-  "./camp-location.js?v=46",
-  "./schedule-data.js?v=46",
-  "./search-normalize.js?v=46",
-  "./preview-time.js?v=46",
-  "./app.js?v=46",
-  "./planner.js?v=46",
-  "./qrcode.js?v=46",
-  "./hexlace-api.js?v=46",
-  "./hexlaces.js?v=46",
-  "./install.js?v=46",
-  "./wordmark.svg?v=46",
-  "./fonts/InterVariable.woff2?v=46",
-  "./fonts/InterVariable-Italic.woff2?v=46",
-  "./stage-names/amp.png?v=46",
-  "./stage-names/fractal-forest.png?v=46",
-  "./stage-names/grove.png?v=46",
-  "./stage-names/living-room.png?v=46",
-  "./stage-names/pagoda.png?v=46",
-  "./stage-names/secret-garden.png?v=46",
-  "./stage-names/village.png?v=46",
-  "./manifest.webmanifest",
-  "./favicon.ico?v=46",
-  "./favicon-32.png?v=46",
-  "./favicon-16.png?v=46",
-  "./apple-touch-icon.png?v=46",
-  "./icon-192.png?v=46",
-  "./icon-512.png?v=46"
+  "./styles.css?v=48",
+  "./camp-location.js?v=48",
+  "./schedule-data.js?v=48",
+  "./schedule-metadata.js?v=48",
+  "./search-normalize.js?v=48",
+  "./preview-time.js?v=48",
+  "./app.js?v=48",
+  "./undo.js?v=48",
+  "./planner.js?v=48",
+  "./qrcode.js?v=48",
+  "./hexlace-api.js?v=48",
+  "./hexlace-giveaway.js?v=48",
+  "./hexlaces.js?v=48",
+  "./install.js?v=48",
+  "./fonts/InterVariable.woff2?v=48",
+  "./fonts/InterVariable-Italic.woff2?v=48"
 ];
 
+// These enhance the shell but are not needed to navigate a saved schedule.
+// Cache them opportunistically so one transient image failure cannot prevent
+// the whole offline app from installing.
+const OPTIONAL_ASSETS = [
+  "./wordmark.svg?v=48",
+  "./stage-names/amp.png?v=48",
+  "./stage-names/fractal-forest.png?v=48",
+  "./stage-names/grove.png?v=48",
+  "./stage-names/living-room.png?v=48",
+  "./stage-names/pagoda.png?v=48",
+  "./stage-names/secret-garden.png?v=48",
+  "./stage-names/village.png?v=48",
+  "./manifest.webmanifest",
+  "./favicon.ico?v=48",
+  "./favicon-32.png?v=48",
+  "./favicon-16.png?v=48",
+  "./apple-touch-icon.png?v=48",
+  "./icon-192.png?v=48",
+  "./icon-512.png?v=48"
+];
+const ASSETS = [...CORE_ASSETS, ...OPTIONAL_ASSETS];
+
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
-  self.skipWaiting();
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(CORE_ASSETS);
+    await Promise.all(OPTIONAL_ASSETS.map(asset => Promise.race([
+      cache.add(asset).catch(() => null),
+      new Promise(resolve => setTimeout(resolve, OPTIONAL_CACHE_TIMEOUT_MS))
+    ])));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
-      keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+      keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).map(key => caches.delete(key))
     ))
   );
   self.clients.claim();
@@ -51,7 +70,7 @@ self.addEventListener("activate", event => {
 // the app a background window, refresh the schedule so the cache is already
 // fresh next time it opens - even if it opens offline. Only the small text/data
 // files are refreshed; the icons are skipped to spare festival bandwidth.
-const REFRESH_ASSETS = ASSETS.filter(asset => !/\.(png|ico|svg|woff2)(\?|$)/.test(asset));
+const REFRESH_ASSETS = ["./schedule-data.js?v=48", "./schedule-metadata.js?v=48"];
 
 async function refreshSchedule() {
   const cache = await caches.open(CACHE_NAME);
@@ -78,7 +97,9 @@ self.addEventListener("fetch", event => {
 async function respond(event) {
   const request = event.request;
   const network = fetch(request).then(response => {
-    if (response && response.ok && new URL(request.url).origin === self.location.origin) {
+    const url = new URL(request.url);
+    const isAppDocument = request.mode === "navigate" || /\/(?:index\.html)?$/.test(url.pathname);
+    if (response && response.ok && url.origin === self.location.origin && !isAppDocument) {
       const copy = response.clone();
       event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.put(request, copy)));
     }

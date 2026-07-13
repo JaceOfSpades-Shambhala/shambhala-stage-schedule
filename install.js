@@ -6,7 +6,13 @@
   const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
   if (isStandalone) return;
 
-  const isIOS = /iphone|ipad|ipod/i.test(window.navigator.userAgent) && !window.MSStream;
+  const isIPadDesktopMode = window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1;
+  const isIOS = (/iphone|ipad|ipod/i.test(window.navigator.userAgent) || isIPadDesktopMode) && !window.MSStream;
+  const isFirefoxAndroid = /android/i.test(window.navigator.userAgent) && /firefox/i.test(window.navigator.userAgent);
+  const defaultHint = hint?.textContent || "";
+  const manualInstallHint = isFirefoxAndroid
+    ? "In Firefox: open the browser menu, tap Install, then add the app to your Home Screen."
+    : defaultHint;
   let deferredPrompt = null;
 
   window.addEventListener("beforeinstallprompt", event => {
@@ -18,8 +24,15 @@
   button.addEventListener("click", async () => {
     // Refresh the 24-hour iOS handoff ticket immediately before installation.
     // Other platforms simply resolve false and continue with their prompt.
-    const handoffReady = typeof window.prepareHexlaceHandoff !== "function" || await window.prepareHexlaceHandoff();
-    if (isIOS && !handoffReady) return;
+    const handoffReady = !isIOS || typeof window.prepareHexlaceHandoff !== "function" || await window.prepareHexlaceHandoff();
+    if (isIOS && !handoffReady) {
+      if (hint) {
+        hint.textContent = "Connect to the internet once before installing so your Hexlace and saved sets can transfer.";
+        hint.hidden = false;
+      }
+      return;
+    }
+    if (hint) hint.textContent = manualInstallHint;
     if (deferredPrompt) {
       const promptEvent = deferredPrompt;
       deferredPrompt = null;
@@ -28,7 +41,7 @@
       if (choice.outcome === "accepted") button.hidden = true;
       return;
     }
-    if (isIOS && hint) hint.hidden = !hint.hidden;
+    if ((isIOS || isFirefoxAndroid) && hint) hint.hidden = !hint.hidden;
   });
 
   window.addEventListener("appinstalled", () => {
@@ -37,5 +50,5 @@
     deferredPrompt = null;
   });
 
-  if (isIOS) button.hidden = false;
+  if (isIOS || isFirefoxAndroid) button.hidden = false;
 })();

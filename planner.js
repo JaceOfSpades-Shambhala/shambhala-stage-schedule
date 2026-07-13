@@ -14,6 +14,8 @@
   const STORAGE_KEY = "shambhala-2026-my-set-list";
   const PING_KEY = "shambhala-2026-ping";
   const IDENTITY_KEY = "shambhala-2026-hexlace-identity";
+  const MIN_OVERLAP_MINUTES = 15;
+  const LIVE_GROUP_WINDOW_MINUTES = 20;
   const PING_LOCATIONS = {
     camp: { label: "Camp", status: "At camp" },
     river: { label: "River", status: "At the river" },
@@ -108,8 +110,8 @@
 
   function getFestivalNow() {
     const preview = new URLSearchParams(window.location.search).get("preview");
-    const previewMatch = preview && preview.match(/^(2026-07-\d{2})T(\d{2}):(\d{2})$/);
-    if (previewMatch) return { date: previewMatch[1], minutes: Number(previewMatch[2]) * 60 + Number(previewMatch[3]) };
+    const previewTime = window.parseSchedulePreview(preview);
+    if (previewTime) return previewTime;
     const parts = new Intl.DateTimeFormat("en-CA", { timeZone: FESTIVAL_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
     const values = Object.fromEntries(parts.filter(part => part.type !== "literal").map(part => [part.type, part.value]));
     return { date: `${values.year}-${values.month}-${values.day}`, minutes: (Number(values.hour) % 24) * 60 + Number(values.minute) };
@@ -231,10 +233,7 @@
     return ping?.type === "set" && setId(ping) === setId(item);
   }
 
-  function pingEndKey(match) {
-    const nextOnDay = buildStageTimeline(match.stageId).find(entry => entry.day === match.day && entry.key > match.key);
-    return nextOnDay?.key || match.key + ASSUMED_SET_MINUTES;
-  }
+  function pingEndKey(match) { return setEndKey(match); }
 
   function setSetPing(item) {
     const match = timelineMatch(item);
@@ -255,13 +254,21 @@
     savePing({ type: location, startKey, endKey: startKey + minutes }, `${config.label} ping set for ${minutes === 60 ? "1 hour" : `${minutes} minutes`}.`);
   }
 
-  // The published schedule has no end times, so a set is assumed to run until
-  // the next listed set on its own stage, capped at ASSUMED_SET_MINUTES.
+  // Most sets run until the next listed set on their stage, capped at 90
+  // minutes. The printed PDF's bars supply explicit endpoints for final sets.
   const ASSUMED_SET_MINUTES = 90;
+  function inferredFinalEndKey(match) {
+    const time = window.SCHEDULE_FINAL_END_TIMES?.[match.day]?.[match.stageId];
+    if (!time) return match.key + ASSUMED_SET_MINUTES;
+    const minutes = parseSetTime(time);
+    const startMinutes = parseSetTime(match.time);
+    const baseSerial = dateToSerial(match.date);
+    return (baseSerial + (minutes <= startMinutes ? 1 : 0)) * 1440 + minutes;
+  }
   function setEndKey(match) {
-    const nextOnStage = buildStageTimeline(match.stageId).find(entry => entry.key > match.key);
+    const nextOnStage = buildStageTimeline(match.stageId).find(entry => entry.day === match.day && entry.key > match.key);
     const cap = match.key + ASSUMED_SET_MINUTES;
-    return nextOnStage ? Math.min(nextOnStage.key, cap) : cap;
+    return nextOnStage ? Math.min(nextOnStage.key, cap) : inferredFinalEndKey(match);
   }
 
   function savedTimeline() {
@@ -282,7 +289,7 @@
     entries.forEach((a, index) => {
       entries.slice(index + 1).forEach(b => {
         if (a.item.day !== b.item.day) return;
-        if (overlapMinutes(a, b) > 0) {
+        if (overlapMinutes(a, b) >= MIN_OVERLAP_MINUTES) {
           note(a.item, b);
           note(b.item, a);
         }
@@ -310,8 +317,19 @@
   }
 
   function removeSet(item) {
-    const clearsPing = pingMatchesSet(loadPing(), item);
-    saveSets(loadSets().filter(saved => setId(saved) !== setId(item)));
+    const previousSets = loadSets();
+    const previousPing = loadPing();
+    const clearsPing = pingMatchesSet(previousPing, item);
+    window.showUndo?.(`${item.artist} removed.`, () => {
+      saveSets(previousSets);
+      if (previousPing) savePing(previousPing, "Set restored.");
+      else {
+        renderPlanner();
+        enhanceScheduleRows();
+        setFeedback("Set restored.");
+      }
+    });
+    saveSets(previousSets.filter(saved => setId(saved) !== setId(item)));
     if (clearsPing) {
       savePing(null, "Ping ended because that set was removed.");
       enhanceScheduleRows();
@@ -410,12 +428,12 @@
     const conflicts = overlaps.get(setId(lead.item)) || [];
     const nearby = conflicts.filter(entry => {
       const startsAfterLead = entry.match.key - lead.match.key;
-      if (startsAfterLead < 0 || startsAfterLead > 30) return false;
+      if (startsAfterLead < 0 || startsAfterLead > LIVE_GROUP_WINDOW_MINUTES) return false;
       return mode === "now"
         ? entry.match.key <= nowKey && nowKey < entry.end
         : entry.match.key > nowKey;
     });
-    const later = conflicts.filter(entry => entry.match.key - lead.match.key > 30);
+    const later = conflicts.filter(entry => entry.match.key - lead.match.key > LIVE_GROUP_WINDOW_MINUTES);
     const groupSize = 1 + nearby.length;
     const hasOverlap = conflicts.length > 0;
     const action = hasOverlap ? {
@@ -425,7 +443,7 @@
 
     if (groupSize > 1) {
       const timing = mode === "now"
-        ? `· ${later.length ? `+${later.length} later` : "playing within 30 min"}`
+        ? `· ${later.length ? `+${later.length} later` : `playing within ${LIVE_GROUP_WINDOW_MINUTES} min`}`
         : `· ${lead.item.time} · ${formatStartsIn(lead.match.key - nowKey).replace(/^Starts /, "")}`;
       return liveEntry(`${groupSize} sets ${mode === "now" ? "now" : "up next"}`, timing, action);
     }
@@ -770,9 +788,9 @@
     textarea.style.left = "-999px";
     document.body.append(textarea);
     textarea.select();
-    document.execCommand("copy");
+    const copied = document.execCommand("copy");
     textarea.remove();
-    setFeedback("Copied set list");
+    setFeedback(copied ? "Copied set list" : "Couldn't copy automatically. Select and copy the set list manually.");
   }
 
   async function sharePlanner() {
@@ -796,24 +814,36 @@
     pingPickerOpen = !pingPickerOpen;
     pendingLocation = "";
     renderPlannerPing();
+    window.requestAnimationFrame(() => {
+      if (pingPickerOpen) elements.pingLocationOptions.querySelector("button")?.focus();
+      else elements.pingLocation.focus();
+    });
   });
   elements.pingLocationOptions.addEventListener("click", event => {
     const button = event.target.closest("[data-ping-location]");
     if (!button) return;
     pendingLocation = button.dataset.pingLocation || "";
     renderPlannerPing();
+    window.requestAnimationFrame(() => elements.pingDurationOptions.querySelector("button")?.focus());
   });
   elements.pingDurationOptions.addEventListener("click", event => {
     const button = event.target.closest("[data-ping-minutes]");
     if (!button || !pendingLocation) return;
     setLocationPing(pendingLocation, Number(button.dataset.pingMinutes));
+    window.requestAnimationFrame(() => elements.pingLocation.focus());
   });
   elements.pingEnd.addEventListener("click", () => {
+    const previousPing = loadPing();
+    if (!previousPing) return;
+    window.showUndo?.("Ping ended.", () => savePing(previousPing, "Ping restored."));
     pingPickerOpen = false;
     pendingLocation = "";
     savePing(null, "Ping ended.");
+    window.requestAnimationFrame(() => elements.pingLocation.focus());
   });
   elements.clear.addEventListener("click", () => {
+    const setCount = loadSets().length;
+    if (!window.confirm(`Are you sure you want to clear all ${setCount} saved set${setCount === 1 ? "" : "s"}?`)) return;
     const hadSetPing = loadPing()?.type === "set";
     saveSets([]);
     if (hadSetPing) {

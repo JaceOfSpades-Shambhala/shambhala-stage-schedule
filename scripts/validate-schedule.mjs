@@ -17,9 +17,12 @@ const TIME_PATTERN = /^(1[0-2]|[1-9]):([0-5]\d)\s(AM|PM)$/;
 function loadSchedule() {
   const context = { window: {} };
   vm.runInNewContext(fs.readFileSync("schedule-data.js", "utf8"), context);
+  vm.runInNewContext(fs.readFileSync("schedule-metadata.js", "utf8"), context);
   assert.ok(context.window.SCHEDULE_VERSION, "SCHEDULE_VERSION is required.");
   assert.ok(context.window.SCHEDULE_DATA, "SCHEDULE_DATA is required.");
-  return context.window.SCHEDULE_DATA;
+  assert.ok(context.window.SCHEDULE_SOURCE, "SCHEDULE_SOURCE is required.");
+  assert.ok(context.window.SCHEDULE_FINAL_END_TIMES, "SCHEDULE_FINAL_END_TIMES is required.");
+  return context.window;
 }
 
 function parseMinutes(time) {
@@ -33,7 +36,8 @@ function parseMinutes(time) {
   return hour * 60 + minute;
 }
 
-function validateSchedule(data) {
+function validateSchedule({ SCHEDULE_DATA: data, SCHEDULE_FINAL_END_TIMES: finalEndTimes, SCHEDULE_SOURCE: source }) {
+  assert.match(source.kind, /official downloadable schedule/i, "Schedule provenance must identify the source.");
   const dayKeys = Object.keys(data);
   assert.deepEqual(dayKeys, DAYS, `Schedule days must be exactly: ${DAYS.join(", ")}.`);
 
@@ -76,8 +80,17 @@ function validateSchedule(data) {
         assert.ok(!globalSetKeys.has(globalKey), `Duplicate schedule row: ${globalKey}.`);
         globalSetKeys.add(globalKey);
       });
+
+      const finalEnd = finalEndTimes?.[day]?.[stageId];
+      assert.ok(finalEnd, `${day} ${stageId} needs an inferred final-set end time.`);
+      const finalStart = parseMinutes(sets.at(-1)[0]);
+      let finalEndMinutes = parseMinutes(finalEnd);
+      if (finalEndMinutes <= finalStart) finalEndMinutes += 24 * 60;
+      assert.ok(finalEndMinutes > finalStart && finalEndMinutes - finalStart <= 180, `${day} ${stageId} final-set end must be within 3 hours of its start.`);
     }
   }
+
+  assert.deepEqual(Array.from(data.Sunday.amp[0]), ["4:30 PM", "AFTERNOON SALOON W/ MARIN PATENAUDE"], "Sunday AMP afternoon set must stay at 4:30 PM.");
 }
 
 validateSchedule(loadSchedule());

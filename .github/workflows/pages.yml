@@ -30,11 +30,8 @@ jobs:
       - name: Validate Worker bundle and configuration
         run: npx --yes wrangler@4 deploy --dry-run
 
-  deploy:
+  test:
     needs: worker-validation
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,6 +42,31 @@ jobs:
           node-version: 22
       - name: Test
         run: npm test
+
+  worker-deploy:
+    name: Deploy verified Hexlace Worker
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: hexlace-worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Deploy Worker with release revision
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 deploy --var BUILD_SHA:${{ github.sha }}
+
+  deploy:
+    needs: [test, worker-deploy]
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
@@ -60,9 +82,13 @@ jobs:
     needs: deploy
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Verify Pages release marker
         run: |
-          curl --fail --retry 3 --retry-delay 5 --silent --show-error "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index.html?release=${GITHUB_SHA}" | grep -E '<!-- v[0-9]+ -->'
-      - name: Smoke-test Hexlace API
+          expected_marker=$(grep -oE '<!-- v[0-9]+ -->' index.html)
+          test -n "$expected_marker"
+          curl --fail --retry 3 --retry-delay 5 --silent --show-error "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index.html?release=${GITHUB_SHA}" | grep -Fx "$expected_marker"
+      - name: Smoke-test deployed Hexlace Worker revision
         run: |
-          curl --fail --retry 3 --retry-delay 5 --silent --show-error https://shambhala-setlists.hexadecibel.workers.dev/ | grep -Fx 'Shambhala set-list sharing API.'
+          curl --fail --retry 3 --retry-delay 5 --silent --show-error https://shambhala-setlists.hexadecibel.workers.dev/health | jq -e --arg sha "$GITHUB_SHA" '.ok == true and .build == $sha'

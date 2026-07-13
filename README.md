@@ -1,6 +1,6 @@
 # Shambhala 2026 NFC Stage Schedule
 
-A static, phone-friendly, offline-first schedule site for seven Shambhala stage necklaces. Each NFC tag opens its matching stage from a short URL hash. The core schedule site has no build step, accounts, or analytics; the optional **Hexlaces** live set-list sharing feature is backed by a single tiny Cloudflare Worker + KV store (source in `worker/`).
+A static, phone-friendly, offline-first schedule site for seven Shambhala stage necklaces. Each NFC tag opens its matching stage from a short URL hash. The core schedule site has no build step, accounts, or analytics; the optional **Hexlaces** live set-list sharing feature is backed by a Cloudflare Worker, Durable Objects, and KV public snapshots (source in `worker/`).
 
 Live site:
 
@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v46 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v48 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
@@ -25,8 +25,9 @@ Hexlaces (live set-list sharing):
 - Every sharer gets a permanent read-only link (`?f=<id>`) carried on their NFC tag and shown as an always-visible QR; opening it collects their live list into a "Friend's sets collected" panel that auto-refreshes (open/foreground/every 5 min) and stays readable offline
 - Editable display name; publishing is automatic and debounced, queued while offline
 - Passive pings: one tap on a saved set invites friends to meet there, while a nested location picker offers 30/60/90-minute availability at camp, the river, or vendors; pings expire automatically and never send notifications
-- Giveaway tags with claim tokens: opening one quietly records the local scan time, works offline, and lets the earliest scan own the Hexlace once signal returns (contention closes 24 hours after the first claim)
-- On iOS 17.2+, a claimed Hexlace and its saved sets follow into a newly installed Home Screen app through a 24-hour, one-time opaque handoff cookie
+- Giveaway tags with claim tokens: opening one quietly records the local scan time, works offline, and lets the earliest scan own the Hexlace once signal returns (contention closes seven days after the first claim)
+- On iOS 17.2+, a claimed Hexlace, saved sets, and collected-friend ids follow into a newly installed Home Screen app through a retry-safe 24-hour handoff; a compact connection code inside My Hexlace is the fallback when iOS does not copy the automatic cookie
+- Safari and the installed app retain the same ownership secret and periodically pull authenticated owner state, so online edits synchronize without revoking either context; collected-friend ids remain private and their public lists are fetched normally
 - Android can write tags in-app (Web NFC); iOS writes tags once with the NFC Tools app
 
 Infrastructure:
@@ -35,6 +36,16 @@ Infrastructure:
 - "Update available — tap to refresh" banner for both schedule edits and app releases (checked every 5 min via ETag revalidation)
 - Periodic Background Sync on installed Android PWAs refreshes the schedule while the app is closed
 - Add to Home Screen button, pendant-based app icons, Open Graph preview metadata
+
+## Browser support
+
+The primary mobile targets are Safari/Home Screen on iPhone and iPad, plus
+Chrome and Firefox on Android. Ordinary schedule, QR, collection, offline, and
+sharing features use standards-based APIs with feature detection. Web NFC tag
+writing appears only where `NDEFReader` is available (normally Chrome on
+Android). Safari is the supported iOS ownership-handoff path; alternate iOS
+browsers can offer Add to Home Screen, but their install-time cookie transfer
+must be checked on a real device before being treated as equivalent.
 
 ## Stable NFC URLs
 
@@ -56,7 +67,8 @@ Personal Hexlace tags use `?f=<readId>` (plus `&claim=<token>` on unclaimed give
 
 - `index.html` — page structure and the authoritative `<!-- vNN -->` release marker
 - `styles.css` — mobile-first styling (note the global `[hidden]` rule; keep it)
-- `schedule-data.js` — schedule data (`window.SCHEDULE_DATA`) and the `SCHEDULE_VERSION` stamp that drives the update banner
+- `schedule-data.js` — transcribed schedule start times (`window.SCHEDULE_DATA`)
+- `schedule-metadata.js` — source provenance, the update-banner `SCHEDULE_VERSION`, PDF-derived final-set end times, and documented schedule corrections
 - `scripts/validate-schedule.mjs` — schedule safety check for day/stage IDs, time format, duplicate rows, empty stage arrays, and overnight rollover order
 - `app.js` — tabs, search, Now Playing, preview mode, update checks, service-worker registration
 - `planner.js` — My Set List planner, overlap detection, day grouping
@@ -110,7 +122,7 @@ Do not put `preview=...` in NFC tag URLs.
 
 ## Data model
 
-`schedule-data.js` stores all schedule data in `window.SCHEDULE_DATA`:
+`schedule-data.js` stores all schedule start times in `window.SCHEDULE_DATA`; `schedule-metadata.js` records the source and the inferred final-set endpoints in `window.SCHEDULE_SOURCE` and `window.SCHEDULE_FINAL_END_TIMES`:
 
 ```js
 { "Friday": { "amp": [["11:00 PM", "PEEKABOO"]] } }
@@ -118,7 +130,7 @@ Do not put `preview=...` in NFC tag URLs.
 
 Stage IDs: `amp`, `fractal-forest`, `grove`, `living-room`, `pagoda`, `secret-garden`, `village`. Days: `Thursday`–`Sunday`, mapped in `app.js` to calendar dates 2026-07-23 through 2026-07-26; post-midnight sets stay in the previous evening's list and roll over internally.
 
-My Set List and Hexlace identity/collection live in browser localStorage (no accounts). Published Hexlace lists live in Cloudflare KV with a 60-day TTL; the full API surface is documented in HANDOFF.md.
+My Set List and Hexlace identity/collection live in browser localStorage (no accounts). Durable Objects serialize ownership and mutations; public Hexlace snapshots live in Cloudflare KV with a 60-day TTL so friend/ping reads remain fast and unchanged. Existing KV-only Hexlaces migrate into their coordinator on their first mutation. The full API surface is documented in HANDOFF.md.
 
 ## Testing
 
@@ -126,11 +138,13 @@ My Set List and Hexlace identity/collection live in browser localStorage (no acc
 npm test
 ```
 
-This runs the date-mapping tests and validates `schedule-data.js`. Use `npm run validate:schedule` when you only want the schedule data check.
+This runs the complete test suite, enforces one exact release version across deploy assets/docs, and validates the schedule data, metadata, inferred final endpoints, and Sunday AMP correction. Use `npm run validate:schedule` when you only want the schedule checks.
 
 See [TESTING.md](TESTING.md) for the browser/device release checklist, including offline, accessibility, storage-recovery, NFC, QR, install, and sharing flows.
 
 ## Publishing and releases
+
+Current releases are gated by GitHub Actions: tests pass, the Worker deploys with the commit SHA, Pages deploys, and both live revisions are checked. The manual Worker command below is a recovery path only.
 
 GitHub Pages publishes `main` automatically (allow a minute or two, and note the 10-minute HTTP cache). **Schedule-only edits during the festival do not bump versions** — see [UPDATING.md](UPDATING.md). Code releases bump the `?v=NN` scheme across `index.html` / `sw.js` / `app.js` / `manifest.webmanifest` — exact checklist and commands in [HANDOFF.md](HANDOFF.md). The Worker deploys separately via `wrangler deploy` from the repo root; after any push, health-check the API as described in HANDOFF.md.
 

@@ -2,7 +2,7 @@
 
 Run `npm test` first. It covers schedule dates, payload validation, claim/handoff
 sequences, transliteration, preview validation, request timeouts, service-worker
-HTTP-error fallback, release asset versions, and filter semantics.
+HTTP-error fallback, exact release asset/documentation versions, and filter semantics.
 
 The following need a real browser or device, so they remain a short release
 checklist rather than fragile simulated tests.
@@ -36,9 +36,27 @@ checklist rather than fragile simulated tests.
    giveaway tag. On iOS, verify share/copy and the installed-app handoff flow.
 4. Open a shared QR/link in a second phone or browser and verify the owner's
    list is readable but cannot be edited without its local write key.
+5. Remove one saved set, one ping, and one collected friend. Verify Undo restores
+   each one and that a shared Hexlace does not publish the transient deletion.
+6. On iOS/iPadOS, test Safari and one alternate browser. Confirm the install
+   instructions work, and confirm an already-prepared handoff can install
+   offline while a new owner handoff clearly asks for internet access.
+7. After automatic handoff, edit the setlist and collected friends once in
+   Safari and once in the Home Screen app. Confirm both contexts retain access
+   and pull the same name, sets, ping, and friend collection while online.
+8. With an installed app that has no Hexlace identity, create **Connect installed
+   app** code in Safari, enter it through **Bring over my Hexlace**, and confirm
+   that the code copies ownership without disabling edits in Safari.
+9. Scan one giveaway first on phone A while it is offline, then scan and publish
+   from phone B while it is online. Reconnect phone A within seven days and
+   confirm A becomes the owner and can publish without a revision-conflict loop.
 
 ## Deployment
 
 GitHub Actions now reports three visible checks: `Validate Worker deployment`,
 `Deploy GitHub Pages`, and `Verify live release and Hexlace API`. Treat the
-release as incomplete if any check is red.
+release as incomplete if any check is red. Before every commit/push, run
+`npm test`; its release-integrity test must report a single exact version that
+matches the `index.html` marker, service-worker cache, assets, README, and handoff.
+Before a Worker release, also run `wrangler deploy --dry-run` and confirm the
+`HEXLACES`, `RATE_LIMITS`, and `LISTS` bindings are all listed.

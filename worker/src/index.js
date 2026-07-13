@@ -1,4 +1,5 @@
-// Shambhala set-list sharing API — a tiny KV-backed store so a person can
+// Shambhala set-list sharing API — Durable Objects coordinate ownership and
+// mutations while KV serves read-optimized public snapshots so a person can
 // publish their set list under a permanent, unguessable read id (carried on an
 // NFC tag or QR) that friends' phones pull live. A separate secret write key,
 // held only on the owner's device, is required to update a list — so tapping
@@ -15,8 +16,14 @@
 //                                write key THEY generated and the local time
 //                                they first scanned it. The earliest scan wins,
 //                                even if another phone reached the server first.
-//   POST /lists/:readId/handoff -> create a 24-hour, single-use PWA transfer
-//   POST /handoffs/redeem       -> exchange that opaque token for ownership
+//   POST /lists/:readId/handoff -> create a 24-hour PWA transfer
+//   POST /lists/:readId/connect-code -> create a human-entered PWA transfer
+//   GET  /lists/:readId/owner -> authenticated state for cross-context sync
+//   POST /handoffs/redeem       -> idempotently exchange it for ownership
+
+import { CLAIM_CONTENTION_WINDOW_MS, HexlaceCoordinator, RateLimitCoordinator } from "./durable-objects.js";
+
+export { HexlaceCoordinator, RateLimitCoordinator };
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -27,6 +34,7 @@ const CORS = {
 
 const TTL_SECONDS = 60 * 24 * 60 * 60; // lists expire 60 days after their last write
 const MAX_SETS = 100;
+const MAX_FRIENDS = 100;
 const MAX_BYTES = 20000;
 const MAX_NAME = 60;
 const MAX_ARTIST_LENGTH = 120;
@@ -47,14 +55,18 @@ const RATE_LIMITS = {
   updateIp: { limit: 450, windowSeconds: 300 },
   updateList: { limit: 180, windowSeconds: 300 }
 };
-// After the first successful claim, an earlier-scan takeover is honoured only
-// this long. It covers the real offline race (camp-mate taps before the owner
-// gets signal) without leaving the write key stealable forever by anyone who
-// once saw the tag's claim token.
-const CLAIM_CONTENTION_WINDOW_MS = 24 * 60 * 60 * 1000;
+// The imported seven-day contention window covers an intended recipient who
+// remains offline for the festival while still bounding bearer-token claims.
 const HANDOFF_TTL_SECONDS = 24 * 60 * 60;
 // Base58-ish alphabet: no 0/O/1/l/I, so ids are safe to read aloud or retype.
 const ID_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
+
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
 
 function randomId(length) {
   const bytes = crypto.getRandomValues(new Uint8Array(length));
@@ -65,6 +77,22 @@ function randomId(length) {
 
 function isReadId(value) {
   return typeof value === "string" && value.length === READ_ID_LENGTH && [...value].every(character => ID_ALPHABET.includes(character));
+}
+
+function cleanHandoffToken(value) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (trimmed.includes(".")) return trimmed;
+  const compact = [...trimmed].filter(character => ID_ALPHABET.includes(character)).join("");
+  if (compact.length === READ_ID_LENGTH + 8) {
+    return `${compact.slice(0, READ_ID_LENGTH)}.${compact.slice(READ_ID_LENGTH)}`;
+  }
+  return compact === trimmed && compact.length >= 24 && compact.length <= 128 ? compact : "";
+}
+
+function displayHandoffCode(token) {
+  const compact = token.replace(".", "");
+  return compact.match(/.{1,4}/g)?.join("-") || compact;
 }
 
 async function handoffKey(token) {
@@ -84,8 +112,50 @@ function clientBucket(request) {
   return ip.replace(/[^a-zA-Z0-9:._-]/g, "").slice(0, 80) || "unknown";
 }
 
+function nowMs(env) {
+  return Number.isSafeInteger(env?.NOW_MS) ? env.NOW_MS : Date.now();
+}
+
+function namedStub(namespace, name) {
+  if (typeof namespace.getByName === "function") return namespace.getByName(name);
+  return namespace.get(namespace.idFromName(name));
+}
+
+function hasHexlaceCoordinator(env) {
+  return Boolean(env?.HEXLACES && (typeof env.HEXLACES.getByName === "function" || (typeof env.HEXLACES.idFromName === "function" && typeof env.HEXLACES.get === "function")));
+}
+
+async function callHexlaceCoordinator(env, readId, path, body = {}) {
+  const stub = namedStub(env.HEXLACES, readId);
+  return stub.fetch(new Request(`https://hexlace.internal${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, readId })
+  }));
+}
+
+async function relayInternal(response, transform = value => value) {
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    return json({ error: "Internal server error." }, 500);
+  }
+  return json(transform(data), response.status);
+}
+
 async function checkRateLimit(env, key, limit, windowSeconds) {
-  const slot = Math.floor(Date.now() / 1000 / windowSeconds);
+  const now = nowMs(env);
+  const slot = Math.floor(now / 1000 / windowSeconds);
+  if (env?.RATE_LIMITS) {
+    const response = await namedStub(env.RATE_LIMITS, key).fetch(new Request("https://rate-limit.internal/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slot, limit, expiresAt: now + windowSeconds * 2 * 1000 })
+    }));
+    if (!response.ok) throw new Error("Rate-limit coordinator failed.");
+    return Boolean((await response.json()).ok);
+  }
   const bucket = `rate:${key}:${slot}`;
   const current = Number(await env.LISTS.get(bucket)) || 0;
   if (current >= limit) return false;
@@ -157,21 +227,82 @@ function cleanPayload(body) {
   if (!Array.isArray(body.sets)) throw "sets must be an array.";
   if (body.sets.length > MAX_SETS) throw `Too many sets (max ${MAX_SETS}).`;
   const sets = body.sets.map(cleanSet);
-  return { name, sets, ping: cleanPing(body.ping, sets) };
+  let friends;
+  if (Object.prototype.hasOwnProperty.call(body, "friends")) {
+    if (!Array.isArray(body.friends)) throw "friends must be an array.";
+    if (body.friends.length > MAX_FRIENDS) throw `Too many friends (max ${MAX_FRIENDS}).`;
+    friends = [...new Set(body.friends.map(value => typeof value === "string" ? value.trim() : ""))];
+    if (friends.some(value => !isReadId(value))) throw "Each friend needs a valid Hexlace id.";
+  }
+  return { name, sets, ping: cleanPing(body.ping, sets), friends };
 }
 
-function serialize(payload) {
-  const blob = JSON.stringify({ ...payload, updated: Date.now() });
+function serialize(payload, revision = 1, env) {
+  const blob = JSON.stringify({ ...payload, updated: nowMs(env), revision });
   if (new TextEncoder().encode(blob).byteLength > MAX_BYTES) throw "List is too large.";
   return blob;
 }
 
 async function readJson(request) {
+  const declaredLength = Number(request.headers.get("Content-Length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BYTES) throw new HttpError(413, "Request body is too large.");
   try {
-    return await request.json();
-  } catch {
-    throw "Invalid JSON.";
+    const reader = request.body?.getReader();
+    if (!reader) throw new Error("Missing body");
+    const chunks = [];
+    let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_BYTES) {
+        await reader.cancel();
+        throw new HttpError(413, "Request body is too large.");
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(400, "Invalid JSON.");
   }
+}
+
+function currentMinuteKey(env) {
+  if (Number.isSafeInteger(env?.NOW_MINUTE_KEY)) return env.NOW_MINUTE_KEY;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Vancouver",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.filter(part => part.type !== "literal").map(part => [part.type, Number(part.value)]));
+  const serial = Math.floor(Date.UTC(values.year, values.month - 1, values.day) / 86400000);
+  return serial * 1440 + (values.hour % 24) * 60 + values.minute;
+}
+
+function freshPing(ping, env) {
+  return ping && Number.isSafeInteger(ping.endKey) && ping.endKey > currentMinuteKey(env) ? ping : null;
+}
+
+function publicList(stored, env) {
+  const list = JSON.parse(stored);
+  return {
+    name: list.name,
+    sets: list.sets,
+    ping: freshPing(list.ping, env),
+    updated: list.updated,
+    revision: list.revision
+  };
 }
 
 function parseClaimRecord(value) {
@@ -183,9 +314,9 @@ function parseClaimRecord(value) {
   return { token: value };
 }
 
-function cleanScannedAt(value) {
+function cleanScannedAt(value, env) {
   const scannedAt = Number(value);
-  return Number.isFinite(scannedAt) && scannedAt > 0 ? scannedAt : Date.now();
+  return Number.isFinite(scannedAt) && scannedAt > 0 ? scannedAt : nowMs(env);
 }
 
 export default {
@@ -198,17 +329,40 @@ export default {
       return new Response("Shambhala set-list sharing API.", { headers: CORS });
     }
 
+    if (request.method === "GET" && parts.length === 1 && parts[0] === "health") {
+      return json({ ok: true, build: typeof env.BUILD_SHA === "string" ? env.BUILD_SHA : "unknown" });
+    }
+
     try {
       // POST /handoffs/redeem — the installed PWA consumes the cookie copied
-      // by iOS and receives the existing owner identity. The KV record holds
-      // only a hash of the opaque token and is removed before credentials are
-      // returned, making normal redemption single-use.
+      // by iOS and receives the existing owner identity. New tickets are held
+      // by the per-Hexlace coordinator and may be retried with the same stable
+      // redemption id if the first response is lost. The KV path below remains
+      // only for already-issued legacy tickets.
       if (request.method === "POST" && parts.length === 2 && parts[0] === "handoffs" && parts[1] === "redeem") {
         const limited = await enforceRateLimit(request, env, "claim");
         if (limited) return limited;
         const body = await readJson(request);
-        const token = body && typeof body.token === "string" ? body.token.trim() : "";
-        if (token.length < 24 || token.length > 128) return json({ error: "Invalid or expired handoff." }, 410);
+        const token = cleanHandoffToken(body?.token || body?.code);
+        if (token.length < 17 || token.length > 128) return json({ error: "Invalid or expired handoff." }, 410);
+        const tokenReadId = token.includes(".") ? token.slice(0, token.indexOf(".")) : "";
+        if (hasHexlaceCoordinator(env) && isReadId(tokenReadId)) {
+          const redemptionId = body && typeof body.redemptionId === "string" ? body.redemptionId.trim() : "";
+          const response = await callHexlaceCoordinator(env, tokenReadId, "/redeem", { token, redemptionId });
+          return relayInternal(response, data => {
+            if (!data?.list) return data;
+            const list = publicList(JSON.stringify(data.list), env);
+            return {
+              readId: data.readId,
+              writeKey: data.writeKey,
+              name: list.name || "",
+              sets: Array.isArray(list.sets) ? list.sets : [],
+              ping: list.ping || null,
+              friends: Array.isArray(data.list.friends) ? data.list.friends : [],
+              revision: Number.isSafeInteger(list.revision) ? list.revision : 1
+            };
+          });
+        }
         const key = await handoffKey(token);
         const readId = await env.LISTS.get(key);
         if (!isReadId(readId)) return json({ error: "Invalid or expired handoff." }, 410);
@@ -218,8 +372,9 @@ export default {
           env.LISTS.get(`list:${readId}`)
         ]);
         if (!writeKey || !stored) return json({ error: "Invalid or expired handoff." }, 410);
-        const list = JSON.parse(stored);
-        return json({ readId, writeKey, name: list.name || "", sets: Array.isArray(list.sets) ? list.sets : [], ping: list.ping || null });
+        const list = publicList(stored, env);
+        const privateList = JSON.parse(stored);
+        return json({ readId, writeKey, name: list.name || "", sets: Array.isArray(list.sets) ? list.sets : [], ping: list.ping || null, friends: Array.isArray(privateList.friends) ? privateList.friends : [], revision: Number.isSafeInteger(list.revision) ? list.revision : 1 });
       }
 
       if (parts[0] !== "lists") return json({ error: "Not found." }, 404);
@@ -229,7 +384,25 @@ export default {
         const limited = await enforceRateLimit(request, env, "create");
         if (limited) return limited;
         const body = await readJson(request);
-        const blob = serialize(cleanPayload(body));
+        const blob = serialize(cleanPayload(body), 1, env);
+        if (hasHexlaceCoordinator(env)) {
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const readId = randomId(READ_ID_LENGTH);
+            const claimToken = body.claimable === true ? randomId(12) : null;
+            const writeKey = body.claimable === true ? null : randomId(24);
+            const response = await callHexlaceCoordinator(env, readId, "/initialize", {
+              list: JSON.parse(blob),
+              claimToken,
+              writeKey
+            });
+            if (response.status === 409) continue;
+            if (response.status !== 201) return relayInternal(response);
+            return body.claimable === true
+              ? json({ readId, claimToken, revision: 1 }, 201)
+              : json({ readId, writeKey, revision: 1 }, 201);
+          }
+          return json({ error: "Couldn't create a unique list. Please try again." }, 503);
+        }
         let readId = null;
         for (let attempt = 0; attempt < 5; attempt++) {
           const candidate = randomId(READ_ID_LENGTH);
@@ -245,11 +418,11 @@ export default {
         if (body.claimable === true) {
           const claimToken = randomId(12);
           await env.LISTS.put(`claim:${readId}`, JSON.stringify({ token: claimToken }), { expirationTtl: TTL_SECONDS });
-          return json({ readId, claimToken }, 201);
+          return json({ readId, claimToken, revision: 1 }, 201);
         }
         const writeKey = randomId(24);
         await env.LISTS.put(`auth:${readId}`, writeKey, { expirationTtl: TTL_SECONDS });
-        return json({ readId, writeKey }, 201);
+        return json({ readId, writeKey, revision: 1 }, 201);
       }
 
       // POST /lists/:readId/claim — the recipient records the write key they
@@ -260,25 +433,33 @@ export default {
         if (limited) return limited;
         const readId = parts[1];
         if (!isReadId(readId)) return json({ error: "Not found." }, 404);
+        const body = await readJson(request);
+        if (hasHexlaceCoordinator(env)) {
+          const response = await callHexlaceCoordinator(env, readId, "/claim", {
+            claimToken: body && typeof body.claimToken === "string" ? body.claimToken : "",
+            writeKey: body && typeof body.writeKey === "string" ? body.writeKey : "",
+            scannedAt: cleanScannedAt(body && body.scannedAt, env)
+          });
+          return relayInternal(response);
+        }
         const claim = parseClaimRecord(await env.LISTS.get(`claim:${readId}`));
         if (!claim) return json({ error: "Not claimable." }, 409);
-        const body = await readJson(request);
         if (((body && body.claimToken) || "") !== claim.token) return json({ error: "Invalid claim token." }, 403);
         const writeKey = body && typeof body.writeKey === "string" ? body.writeKey : "";
         if (writeKey.length < MIN_KEY_LENGTH) return json({ error: "A valid write key is required." }, 400);
-        const scannedAt = cleanScannedAt(body && body.scannedAt);
+        const scannedAt = cleanScannedAt(body && body.scannedAt, env);
         const previousScannedAt = Number.isFinite(Number(claim.scannedAt)) ? Number(claim.scannedAt) : Infinity;
         // firstClaimedAt never advances on takeovers, so the whole contention
         // period is bounded to the window after the very first claim.
         const firstClaimedAt = Number.isFinite(Number(claim.claimedAt)) ? Number(claim.claimedAt) : null;
-        const contentionOpen = firstClaimedAt === null || Date.now() - firstClaimedAt < CLAIM_CONTENTION_WINDOW_MS;
+        const contentionOpen = firstClaimedAt === null || nowMs(env) - firstClaimedAt < CLAIM_CONTENTION_WINDOW_MS;
         const accepted = !claim.ownerSet || (contentionOpen && scannedAt <= previousScannedAt);
         if (accepted) {
           await env.LISTS.put(`auth:${readId}`, writeKey, { expirationTtl: TTL_SECONDS });
           await env.LISTS.put(`claim:${readId}`, JSON.stringify({
             token: claim.token,
             scannedAt,
-            claimedAt: firstClaimedAt ?? Date.now(),
+            claimedAt: firstClaimedAt ?? nowMs(env),
             ownerSet: true
           }), { expirationTtl: TTL_SECONDS });
         }
@@ -287,12 +468,21 @@ export default {
 
       // POST /lists/:readId/handoff — Safari proves ownership and receives a
       // random 24-hour token suitable for a first-party transfer cookie. The
-      // raw write key is never stored in that cookie or the handoff KV record.
+      // raw write key is never stored in that cookie.
       if (request.method === "POST" && parts.length === 3 && parts[2] === "handoff") {
         const limited = await enforceRateLimit(request, env, "updateIp");
         if (limited) return limited;
         const readId = parts[1];
         if (!isReadId(readId)) return json({ error: "Not found." }, 404);
+        if (hasHexlaceCoordinator(env)) {
+          const token = `${readId}.${randomId(48)}`;
+          const response = await callHexlaceCoordinator(env, readId, "/handoff", {
+            writeKey: request.headers.get("X-Write-Key") || "",
+            token
+          });
+          if (response.status !== 201) return relayInternal(response);
+          return json({ token, expiresIn: HANDOFF_TTL_SECONDS }, 201);
+        }
         const expected = await env.LISTS.get(`auth:${readId}`);
         if (!expected) return json({ error: "Not found." }, 404);
         if ((request.headers.get("X-Write-Key") || "") !== expected) return json({ error: "Invalid write key." }, 403);
@@ -302,12 +492,69 @@ export default {
       }
 
       // GET /lists/:readId — read a shared list.
+      // A compact fallback when iOS does not copy the automatic handoff cookie
+      // into the newly installed Home Screen app.
+      if (request.method === "POST" && parts.length === 3 && parts[2] === "connect-code") {
+        const limited = await enforceRateLimit(request, env, "updateIp");
+        if (limited) return limited;
+        const readId = parts[1];
+        if (!isReadId(readId)) return json({ error: "Not found." }, 404);
+        const token = `${readId}.${randomId(8)}`;
+        if (hasHexlaceCoordinator(env)) {
+          const response = await callHexlaceCoordinator(env, readId, "/handoff", {
+            writeKey: request.headers.get("X-Write-Key") || "",
+            token
+          });
+          if (response.status !== 201) return relayInternal(response);
+        } else {
+          const expected = await env.LISTS.get(`auth:${readId}`);
+          if (!expected) return json({ error: "Not found." }, 404);
+          if ((request.headers.get("X-Write-Key") || "") !== expected) return json({ error: "Invalid write key." }, 403);
+          await env.LISTS.put(await handoffKey(token), readId, { expirationTtl: HANDOFF_TTL_SECONDS });
+        }
+        return json({ code: displayHandoffCode(token), expiresIn: HANDOFF_TTL_SECONDS }, 201);
+      }
+
+      // Private owner state keeps Safari and its installed app synchronized.
+      // Collected friend ids are deliberately excluded from the public route.
+      if (request.method === "GET" && parts.length === 3 && parts[2] === "owner") {
+        const readId = parts[1];
+        if (!isReadId(readId)) return json({ error: "Not found." }, 404);
+        if (hasHexlaceCoordinator(env)) {
+          const response = await callHexlaceCoordinator(env, readId, "/owner", {
+            writeKey: request.headers.get("X-Write-Key") || ""
+          });
+          return relayInternal(response, data => {
+            if (!data?.list) return data;
+            return {
+              ...publicList(JSON.stringify(data.list), env),
+              friends: Array.isArray(data.list.friends) ? data.list.friends : []
+            };
+          });
+        }
+        const [expected, stored] = await Promise.all([
+          env.LISTS.get(`auth:${readId}`),
+          env.LISTS.get(`list:${readId}`)
+        ]);
+        if (!expected || !stored) return json({ error: "Not found." }, 404);
+        if ((request.headers.get("X-Write-Key") || "") !== expected) return json({ error: "Invalid write key." }, 403);
+        const list = JSON.parse(stored);
+        return json({ ...publicList(stored, env), friends: Array.isArray(list.friends) ? list.friends : [] });
+      }
+
       if (request.method === "GET" && parts.length === 2) {
         const readId = parts[1];
         if (!isReadId(readId)) return json({ error: "Not found." }, 404);
         const stored = await env.LISTS.get(`list:${readId}`);
+        if (!stored && hasHexlaceCoordinator(env)) {
+          const response = await callHexlaceCoordinator(env, readId, "/read");
+          if (response.status === 200) {
+            const data = await response.json();
+            return json(publicList(JSON.stringify(data.list), env));
+          }
+        }
         if (!stored) return json({ error: "Not found." }, 404);
-        return new Response(stored, { headers: { "Content-Type": "application/json", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store", ...CORS } });
+        return json(publicList(stored, env));
       }
 
       // PUT /lists/:readId — update a list; requires the secret write key.
@@ -316,18 +563,56 @@ export default {
         if (limitedByIp) return limitedByIp;
         const readId = parts[1];
         if (!isReadId(readId)) return json({ error: "Not found." }, 404);
+        if (hasHexlaceCoordinator(env)) {
+          const limitedByList = await enforceRateLimit(request, env, "updateList", readId);
+          if (limitedByList) return limitedByList;
+          const body = await readJson(request);
+          const suppliedRevision = Number(body?.revision);
+          const hasRevision = Object.prototype.hasOwnProperty.call(body || {}, "revision");
+          if (hasRevision && (!Number.isSafeInteger(suppliedRevision) || suppliedRevision < 1)) {
+            return json({ error: "Invalid list revision." }, 400);
+          }
+          const list = JSON.parse(serialize(cleanPayload(body), 1, env));
+          const response = await callHexlaceCoordinator(env, readId, "/update", {
+            writeKey: request.headers.get("X-Write-Key") || "",
+            list,
+            hasRevision,
+            revision: suppliedRevision,
+            force: body.force === true
+          });
+          return relayInternal(response);
+        }
         const expected = await env.LISTS.get(`auth:${readId}`);
         if (!expected) return json({ error: "Not found." }, 404);
         if ((request.headers.get("X-Write-Key") || "") !== expected) return json({ error: "Invalid write key." }, 403);
         const limitedByList = await enforceRateLimit(request, env, "updateList", readId);
         if (limitedByList) return limitedByList;
-        const blob = serialize(cleanPayload(await readJson(request)));
+        const body = await readJson(request);
+        const stored = await env.LISTS.get(`list:${readId}`);
+        if (!stored) return json({ error: "Not found." }, 404);
+        const current = JSON.parse(stored);
+        const currentRevision = Number.isSafeInteger(current.revision) && current.revision > 0 ? current.revision : 1;
+        const suppliedRevision = Number(body?.revision);
+        const hasRevision = Object.prototype.hasOwnProperty.call(body || {}, "revision");
+        if (hasRevision && (!Number.isSafeInteger(suppliedRevision) || suppliedRevision < 1)) {
+          return json({ error: "Invalid list revision." }, 400);
+        }
+        if (hasRevision && suppliedRevision !== currentRevision && body.force !== true) {
+          return json({ error: "This Hexlace changed in another app.", currentRevision }, 409);
+        }
+        const revision = currentRevision + 1;
+        const payload = cleanPayload(body);
+        if (payload.friends === undefined) payload.friends = Array.isArray(current.friends) ? current.friends : [];
+        const blob = serialize(payload, revision, env);
         await env.LISTS.put(`list:${readId}`, blob, { expirationTtl: TTL_SECONDS });
         await env.LISTS.put(`auth:${readId}`, expected, { expirationTtl: TTL_SECONDS });
-        return json({ ok: true, updated: JSON.parse(blob).updated });
+        return json({ ok: true, updated: JSON.parse(blob).updated, revision });
       }
-    } catch (message) {
-      return json({ error: String(message) }, 400);
+    } catch (error) {
+      if (typeof error === "string") return json({ error }, 400);
+      if (error instanceof HttpError) return json({ error: error.message }, error.status);
+      console.error("Unexpected Worker error", error);
+      return json({ error: "Internal server error." }, 500);
     }
 
     return json({ error: "Not found." }, 404);

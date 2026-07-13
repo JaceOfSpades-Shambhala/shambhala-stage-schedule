@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import worker from "../worker/src/index.js";
+import worker, { HexlaceCoordinator, RateLimitCoordinator } from "../worker/src/index.js";
 
 class MemoryKv {
   constructor() {
@@ -27,6 +27,69 @@ class CollidingListKv extends MemoryKv {
     if (key.startsWith("list:")) return "occupied";
     return super.get(key);
   }
+}
+
+class FailingKv extends MemoryKv {
+  async get() { throw new Error("private backend detail"); }
+}
+
+class MemoryDoStorage {
+  constructor() {
+    this.values = new Map();
+    this.alarmAt = null;
+  }
+
+  async get(key) { return this.values.get(key); }
+  async put(key, value) { this.values.set(key, structuredClone(value)); }
+  async deleteAll() { this.values.clear(); }
+  async setAlarm(timestamp) { this.alarmAt = timestamp; }
+}
+
+class MemoryDoNamespace {
+  constructor(DoClass, env) {
+    this.DoClass = DoClass;
+    this.env = env;
+    this.instances = new Map();
+    this.fetchCount = 0;
+  }
+
+  idFromName(name) { return name; }
+  getByName(name) { return this.get(name); }
+
+  get(id) {
+    if (!this.instances.has(id)) {
+      const storage = new MemoryDoStorage();
+      const ctx = {
+        storage,
+        ready: Promise.resolve(),
+        blockConcurrencyWhile(callback) {
+          this.ready = Promise.resolve().then(callback);
+          return this.ready;
+        }
+      };
+      const instance = new this.DoClass(ctx, this.env);
+      this.instances.set(id, { instance, ctx, queue: Promise.resolve() });
+    }
+    const entry = this.instances.get(id);
+    return {
+      fetch: request => {
+        this.fetchCount += 1;
+        const response = entry.queue.then(async () => {
+          await entry.ctx.ready;
+          return entry.instance.fetch(request);
+        });
+        entry.queue = response.then(() => undefined, () => undefined);
+        return response;
+      }
+    };
+  }
+}
+
+function makeDurableEnv(now = 1_800_000_000_000) {
+  const env = { LISTS: new MemoryKv(), NOW_MS: now };
+  env.HEXLACES = new MemoryDoNamespace(HexlaceCoordinator, env);
+  env.RATE_LIMITS = new MemoryDoNamespace(RateLimitCoordinator, env);
+  return env;
 }
 
 function makeRequest(path, options = {}) {
@@ -84,7 +147,7 @@ test("earlier local scan can claim after a later scan reached the server first",
   assert.equal(await env.LISTS.get(`auth:${readId}`), "earlier-write-key-123");
 });
 
-test("ownership locks once the 24h contention window closes", async () => {
+test("ownership locks once the seven-day contention window closes", async () => {
   const env = { LISTS: new MemoryKv() };
   const created = await worker.fetch(makeRequest("/lists", {
     method: "POST",
@@ -101,7 +164,7 @@ test("ownership locks once the 24h contention window closes", async () => {
   // Age the first claim past the contention window, then try an
   // earlier-scan takeover - it must be refused and the key untouched.
   const record = JSON.parse(await env.LISTS.get(`claim:${readId}`));
-  record.claimedAt = Date.now() - (24 * 60 * 60 * 1000 + 60000);
+  record.claimedAt = Date.now() - (7 * 24 * 60 * 60 * 1000 + 60000);
   await env.LISTS.put(`claim:${readId}`, JSON.stringify(record));
 
   const staleTakeover = await worker.fetch(makeRequest(`/lists/${readId}/claim`, {
@@ -111,6 +174,123 @@ test("ownership locks once the 24h contention window closes", async () => {
   }), env);
   assert.deepEqual(await staleTakeover.json(), { ok: true, accepted: false });
   assert.equal(await env.LISTS.get(`auth:${readId}`), "owner-write-key-1234");
+});
+
+test("Durable Objects serialize claims and preserve the earliest scan for seven days", async () => {
+  const env = makeDurableEnv();
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Unclaimed Hexlace", sets: [], claimable: true })
+  }), env);
+  assert.equal(created.status, 201);
+  const { readId, claimToken } = await created.json();
+
+  const later = worker.fetch(makeRequest(`/lists/${readId}/claim`, {
+    method: "POST",
+    body: JSON.stringify({ claimToken, writeKey: "later-write-key-123", scannedAt: 2000 })
+  }), env);
+  const earlier = worker.fetch(makeRequest(`/lists/${readId}/claim`, {
+    method: "POST",
+    headers: { "CF-Connecting-IP": "203.0.113.11" },
+    body: JSON.stringify({ claimToken, writeKey: "earlier-write-key-123", scannedAt: 1000 })
+  }), env);
+  assert.deepEqual((await Promise.all([later, earlier])).map(response => response.status), [200, 200]);
+  assert.equal(await env.LISTS.get(`auth:${readId}`), "earlier-write-key-123");
+
+  env.NOW_MS += 7 * 24 * 60 * 60 * 1000 + 1;
+  const expiredTakeover = await worker.fetch(makeRequest(`/lists/${readId}/claim`, {
+    method: "POST",
+    headers: { "CF-Connecting-IP": "203.0.113.12" },
+    body: JSON.stringify({ claimToken, writeKey: "expired-write-key-123", scannedAt: 500 })
+  }), env);
+  assert.deepEqual(await expiredTakeover.json(), { ok: true, accepted: false, revision: 1 });
+  assert.equal(await env.LISTS.get(`auth:${readId}`), "earlier-write-key-123");
+  assert.equal(env.LISTS.writes.some(write => write.key.startsWith("rate:")), false);
+});
+
+test("existing KV Hexlaces migrate lazily into their Durable Object on the first write", async () => {
+  const env = makeDurableEnv();
+  const readId = "23456789";
+  await env.LISTS.put(`list:${readId}`, JSON.stringify({ name: "Legacy", sets: [], ping: null, updated: 1, revision: 1 }));
+  await env.LISTS.put(`auth:${readId}`, "legacy-write-key-1234");
+
+  const updated = await worker.fetch(makeRequest(`/lists/${readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": "legacy-write-key-1234" },
+    body: JSON.stringify({ name: "Migrated", sets: [], revision: 1 })
+  }), env);
+  assert.equal(updated.status, 200);
+  assert.equal((await updated.json()).revision, 2);
+  assert.equal(JSON.parse(await env.LISTS.get(`list:${readId}`)).name, "Migrated");
+  assert.ok(env.HEXLACES.instances.get(readId).ctx.storage.values.get("record"));
+});
+
+test("Durable Object revision checks allow exactly one concurrent owner update", async () => {
+  const env = makeDurableEnv();
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Original", sets: [] })
+  }), env);
+  const { readId, writeKey } = await created.json();
+  const responses = await Promise.all(["First", "Second"].map((name, index) =>
+    worker.fetch(makeRequest(`/lists/${readId}`, {
+      method: "PUT",
+      headers: { "X-Write-Key": writeKey, "CF-Connecting-IP": `203.0.113.${50 + index}` },
+      body: JSON.stringify({ name, sets: [], revision: 1 })
+    }), env)
+  ));
+  assert.deepEqual(responses.map(response => response.status).sort(), [200, 409]);
+  const saved = JSON.parse(await env.LISTS.get(`list:${readId}`));
+  assert.equal(saved.revision, 2);
+  assert.ok(["First", "Second"].includes(saved.name));
+});
+
+test("an earlier offline claimant receives the current revision after a temporary owner published", async () => {
+  const env = makeDurableEnv();
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Unclaimed Hexlace", sets: [], claimable: true })
+  }), env);
+  const { readId, claimToken } = await created.json();
+  const laterKey = "temporary-owner-key-123";
+  await worker.fetch(makeRequest(`/lists/${readId}/claim`, {
+    method: "POST",
+    body: JSON.stringify({ claimToken, writeKey: laterKey, scannedAt: 2000 })
+  }), env);
+  const temporaryHandoff = await worker.fetch(makeRequest(`/lists/${readId}/handoff`, {
+    method: "POST",
+    headers: { "X-Write-Key": laterKey }
+  }), env);
+  const { token: temporaryToken } = await temporaryHandoff.json();
+  const temporaryUpdate = await worker.fetch(makeRequest(`/lists/${readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": laterKey },
+    body: JSON.stringify({ name: "Temporary owner", sets: [], revision: 1 })
+  }), env);
+  assert.equal((await temporaryUpdate.json()).revision, 2);
+
+  const earlierKey = "earliest-owner-key-1234";
+  const takeover = await worker.fetch(makeRequest(`/lists/${readId}/claim`, {
+    method: "POST",
+    headers: { "CF-Connecting-IP": "203.0.113.41" },
+    body: JSON.stringify({ claimToken, writeKey: earlierKey, scannedAt: 1000 })
+  }), env);
+  assert.deepEqual(await takeover.json(), { ok: true, accepted: true, revision: 2 });
+
+  const invalidatedHandoff = await worker.fetch(makeRequest("/handoffs/redeem", {
+    method: "POST",
+    headers: { "CF-Connecting-IP": "203.0.113.42" },
+    body: JSON.stringify({ token: temporaryToken, redemptionId: "temporary-owner-redeem" })
+  }), env);
+  assert.equal(invalidatedHandoff.status, 410);
+
+  const rightfulUpdate = await worker.fetch(makeRequest(`/lists/${readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": earlierKey, "CF-Connecting-IP": "203.0.113.41" },
+    body: JSON.stringify({ name: "Earliest scanner", sets: [], revision: 2 })
+  }), env);
+  assert.equal(rightfulUpdate.status, 200);
+  assert.equal((await rightfulUpdate.json()).revision, 3);
 });
 
 test("list payloads are normalized and successful updates renew the write key TTL", async () => {
@@ -137,8 +317,80 @@ test("list payloads are normalized and successful updates renew the write key TT
   assert.deepEqual((await read.json()).sets, [{ day: "Friday", stageId: "amp", time: "11:00 PM", artist: "PEEKABOO" }]);
 });
 
-test("fixed-location and saved-set pings are normalized while malformed pings are rejected", async () => {
+test("request bodies are rejected before more than 20KB is buffered", async () => {
   const env = { LISTS: new MemoryKv() };
+  const response = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "x".repeat(21000), sets: [] })
+  }), env);
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: "Request body is too large." });
+  assert.equal(env.LISTS.writes.length, 1, "Only the rate-limit bookkeeping write is allowed.");
+});
+
+test("expired remote pings are hidden without an extra KV cleanup write", async () => {
+  const env = { LISTS: new MemoryKv() };
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Tester", sets: [], ping: { type: "camp", startKey: 1, endKey: 31 } })
+  }), env);
+  const { readId } = await created.json();
+  const writesBeforeRead = env.LISTS.writes.length;
+  const read = await worker.fetch(makeRequest(`/lists/${readId}`), env);
+  assert.equal((await read.json()).ping, null);
+  assert.equal(env.LISTS.writes.length, writesBeforeRead);
+});
+
+test("unexpected backend errors return a generic 500", async context => {
+  context.mock.method(console, "error", () => {});
+  const response = await worker.fetch(makeRequest("/lists/23456789"), { LISTS: new FailingKv() });
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), { error: "Internal server error." });
+});
+
+test("health endpoint reports the Worker build revision without exposing credentials", async () => {
+  const response = await worker.fetch(makeRequest("/health"), { LISTS: new MemoryKv(), BUILD_SHA: "abc123" });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, build: "abc123" });
+});
+
+test("owner writes require the current revision unless the owner explicitly replaces it", async () => {
+  const env = { LISTS: new MemoryKv() };
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Tester", sets: [] })
+  }), env);
+  const { readId, writeKey, revision } = await created.json();
+  assert.equal(revision, 1);
+
+  const first = await worker.fetch(makeRequest(`/lists/${readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": writeKey },
+    body: JSON.stringify({ name: "First device", sets: [], revision })
+  }), env);
+  assert.deepEqual(await first.json(), { ok: true, updated: JSON.parse(await env.LISTS.get(`list:${readId}`)).updated, revision: 2 });
+
+  const stale = await worker.fetch(makeRequest(`/lists/${readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": writeKey },
+    body: JSON.stringify({ name: "Second device", sets: [], revision: 1 })
+  }), env);
+  assert.equal(stale.status, 409);
+  assert.deepEqual(await stale.json(), { error: "This Hexlace changed in another app.", currentRevision: 2 });
+
+  const replace = await worker.fetch(makeRequest(`/lists/${readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": writeKey },
+    body: JSON.stringify({ name: "Second device", sets: [], revision: 1, force: true })
+  }), env);
+  assert.equal(replace.status, 200);
+  assert.equal((await replace.json()).revision, 3);
+  const saved = await worker.fetch(makeRequest(`/lists/${readId}`), env);
+  assert.equal((await saved.json()).name, "Second device");
+});
+
+test("fixed-location and saved-set pings are normalized while malformed pings are rejected", async () => {
+  const env = { LISTS: new MemoryKv(), NOW_MINUTE_KEY: 29748000 };
   const set = { day: "Friday", stageId: "pagoda", time: "2:00 PM", artist: "TEST ARTIST" };
   const startKey = 29748000;
   const created = await worker.fetch(makeRequest("/lists", {
@@ -243,7 +495,7 @@ test("24-hour handoff tokens transfer ownership once without storing the raw wri
     body: JSON.stringify({ token })
   }), env);
   assert.equal(redeemed.status, 200);
-  assert.deepEqual(await redeemed.json(), { readId, writeKey, name: "Tester", sets, ping: null });
+  assert.deepEqual(await redeemed.json(), { readId, writeKey, name: "Tester", sets, ping: null, friends: [], revision: 1 });
 
   const replayed = await worker.fetch(makeRequest("/handoffs/redeem", {
     method: "POST",
@@ -251,4 +503,100 @@ test("24-hour handoff tokens transfer ownership once without storing the raw wri
     body: JSON.stringify({ token })
   }), env);
   assert.equal(replayed.status, 410);
+});
+
+test("Durable Object handoff redemption is retry-safe after a dropped response", async () => {
+  const env = makeDurableEnv();
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Tester", sets: [] })
+  }), env);
+  const { readId, writeKey } = await created.json();
+  const handoff = await worker.fetch(makeRequest(`/lists/${readId}/handoff`, {
+    method: "POST",
+    headers: { "X-Write-Key": writeKey }
+  }), env);
+  assert.equal(handoff.status, 201);
+  const { token } = await handoff.json();
+  assert.ok(token.startsWith(`${readId}.`));
+  assert.equal(env.LISTS.writes.some(write => write.key.startsWith("handoff:")), false);
+
+  const redemptionId = "redemption-attempt-123456";
+  const first = await worker.fetch(makeRequest("/handoffs/redeem", {
+    method: "POST",
+    body: JSON.stringify({ token, redemptionId })
+  }), env);
+  assert.equal(first.status, 200);
+  const firstBody = await first.json();
+
+  const retry = await worker.fetch(makeRequest("/handoffs/redeem", {
+    method: "POST",
+    body: JSON.stringify({ token, redemptionId })
+  }), env);
+  assert.equal(retry.status, 200);
+  assert.deepEqual(await retry.json(), firstBody);
+
+  const differentConsumer = await worker.fetch(makeRequest("/handoffs/redeem", {
+    method: "POST",
+    headers: { "CF-Connecting-IP": "203.0.113.31" },
+    body: JSON.stringify({ token, redemptionId: "different-attempt-123456" })
+  }), env);
+  assert.equal(differentConsumer.status, 410);
+});
+
+test("connection codes copy ownership and privately sync friend ids across browser and app", async () => {
+  const env = makeDurableEnv();
+  const friendId = "abcd2345";
+  const sets = [{ day: "Friday", stageId: "amp", time: "11:00 PM", artist: "PEEKABOO" }];
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Tester", sets, friends: [friendId] })
+  }), env);
+  assert.equal(created.status, 201, await created.clone().text());
+  const { readId, writeKey } = await created.json();
+
+  const codeResponse = await worker.fetch(makeRequest(`/lists/${readId}/connect-code`, {
+    method: "POST",
+    headers: { "X-Write-Key": writeKey }
+  }), env);
+  assert.equal(codeResponse.status, 201);
+  const { code, expiresIn } = await codeResponse.json();
+  assert.match(code, /^[23456789A-HJ-NP-Za-km-z]{4}(?:-[23456789A-HJ-NP-Za-km-z]{4}){3}$/);
+  assert.equal(expiresIn, 24 * 60 * 60);
+
+  const redeemed = await worker.fetch(makeRequest("/handoffs/redeem", {
+    method: "POST",
+    body: JSON.stringify({ code, redemptionId: "installed-app-redemption" })
+  }), env);
+  assert.equal(redeemed.status, 200);
+  assert.deepEqual(await redeemed.json(), { readId, writeKey, name: "Tester", sets, ping: null, friends: [friendId], revision: 1 });
+
+  const publicRead = await worker.fetch(makeRequest(`/lists/${readId}`), env);
+  const publicBody = await publicRead.json();
+  assert.equal(Object.hasOwn(publicBody, "friends"), false);
+
+  const appUpdate = await worker.fetch(makeRequest(`/lists/${readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": writeKey },
+    body: JSON.stringify({ name: "Tester", sets: [], ping: null, friends: [friendId], revision: 1 })
+  }), env);
+  assert.equal(appUpdate.status, 200);
+
+  const browserPull = await worker.fetch(makeRequest(`/lists/${readId}/owner`, {
+    headers: { "X-Write-Key": writeKey }
+  }), env);
+  assert.equal(browserPull.status, 200);
+  assert.deepEqual(await browserPull.json(), {
+    name: "Tester",
+    sets: [],
+    ping: null,
+    updated: env.NOW_MS,
+    revision: 2,
+    friends: [friendId]
+  });
+
+  const wrongOwner = await worker.fetch(makeRequest(`/lists/${readId}/owner`, {
+    headers: { "X-Write-Key": "wrong-write-key-1234" }
+  }), env);
+  assert.equal(wrongOwner.status, 403);
 });

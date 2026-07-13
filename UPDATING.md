@@ -2,9 +2,9 @@
 
 Set times change on-site. Here's how to push a fix so it reaches everyone's phones.
 
-## The one file you edit
+## The two schedule files
 
-All set times live in **`schedule-data.js`**. You change a time (or artist, or add/remove a set), bump the version stamp, and commit. GitHub Pages redeploys in about a minute.
+All start times live in **`schedule-data.js`**. Source notes, final-set endpoints, and the version stamp live in **`schedule-metadata.js`**. Change the relevant data and always bump the metadata version; GitHub Pages redeploys in about a minute.
 
 ### 1. Edit the set
 
@@ -19,7 +19,7 @@ Find the stage and set inside `window.SCHEDULE_DATA`. Each entry is `["TIME", "A
 
 ### 2. Bump the version stamp — this is what triggers the refresh
 
-At the top of `schedule-data.js`:
+At the top of `schedule-metadata.js`:
 
 ```js
 window.SCHEDULE_VERSION = "July 24, 11:15 PM - Rusko pushed to midnight";
@@ -34,7 +34,7 @@ Do **not** change the `?v=NN` numbers in `index.html` / `sw.js` for a normal in-
 From the repo:
 
 ```bash
-git add schedule-data.js
+git add schedule-data.js schedule-metadata.js
 git commit -m "schedule: Rusko moved to midnight"
 git push
 ```
