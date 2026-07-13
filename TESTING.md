@@ -50,6 +50,14 @@ checklist rather than fragile simulated tests.
 9. Scan one giveaway first on phone A while it is offline, then scan and publish
    from phone B while it is online. Reconnect phone A within seven days and
    confirm A becomes the owner and can publish without a revision-conflict loop.
+10. With two owned Hexlaces online, enter **Trade Hexlaces** on both phones and
+    tap each physical tag to the other phone. Confirm that neither a one-sided
+    tap nor one confirmation changes ownership; after both confirm, verify each
+    phone publishes its saved sets to the tag it received. Repeat with one phone
+    offline and confirm the trade option is not shown.
+11. Release an owned Hexlace, verify the releasing phone keeps its saved sets,
+    then scan the unchanged physical tag on an unowned phone and confirm it can
+    be named and claimed.
 
 ## Deployment
 

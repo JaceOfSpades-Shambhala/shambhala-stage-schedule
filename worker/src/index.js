@@ -18,6 +18,8 @@
 //                                even if another phone reached the server first.
 //   POST /lists/:readId/handoff -> create a 24-hour PWA transfer
 //   POST /lists/:readId/connect-code -> create a human-entered PWA transfer
+//   POST /lists/:readId/release -> clear ownership and make the tag claimable
+//   POST/GET /lists/:readId/trade -> reciprocal physical-tag trade handshake
 //   GET  /lists/:readId/owner -> authenticated state for cross-context sync
 //   POST /handoffs/redeem       -> idempotently exchange it for ownership
 
@@ -466,6 +468,83 @@ export default {
         return json({ ok: true, accepted });
       }
 
+      // Releasing is deliberately online-only and irreversible. The claim
+      // token becomes discoverable from the plain public tag URL so the
+      // existing physical NFC tag can be claimed without being rewritten.
+      if (request.method === "POST" && parts.length === 3 && parts[2] === "release") {
+        const limited = await enforceRateLimit(request, env, "updateIp");
+        if (limited) return limited;
+        const readId = parts[1];
+        if (!isReadId(readId)) return json({ error: "Not found." }, 404);
+        const writeKey = request.headers.get("X-Write-Key") || "";
+        const claimToken = randomId(12);
+        if (hasHexlaceCoordinator(env)) {
+          const response = await callHexlaceCoordinator(env, readId, "/release", { writeKey, claimToken });
+          return relayInternal(response);
+        }
+        const expected = await env.LISTS.get(`auth:${readId}`);
+        const stored = await env.LISTS.get(`list:${readId}`);
+        if (!expected || !stored) return json({ error: "Not found." }, 404);
+        if (writeKey !== expected) return json({ error: "Invalid write key." }, 403);
+        const current = JSON.parse(stored);
+        const revision = (Number.isSafeInteger(current.revision) ? current.revision : 1) + 1;
+        const released = serialize({ name: "Unclaimed Hexlace", sets: [], ping: null, friends: [] }, revision, env);
+        await Promise.all([
+          env.LISTS.put(`list:${readId}`, released, { expirationTtl: TTL_SECONDS }),
+          env.LISTS.put(`claim:${readId}`, JSON.stringify({ token: claimToken, released: true }), { expirationTtl: TTL_SECONDS }),
+          env.LISTS.delete(`auth:${readId}`)
+        ]);
+        return json({ ok: true, revision });
+      }
+
+      // A trade is a reciprocal NFC handshake. Both owners must enter trade
+      // mode, tap the other physical tag, and confirm the matched pair.
+      if (parts.length >= 3 && parts[2] === "trade") {
+        const readId = parts[1];
+        if (!isReadId(readId)) return json({ error: "Not found." }, 404);
+        if (!hasHexlaceCoordinator(env)) return json({ error: "Trading is temporarily unavailable." }, 503);
+        const writeKey = request.headers.get("X-Write-Key") || "";
+        if (request.method === "POST" && parts.length === 3) {
+          const limited = await enforceRateLimit(request, env, "updateIp");
+          if (limited) return limited;
+          const body = await readJson(request);
+          const targetReadId = body && typeof body.targetReadId === "string" ? body.targetReadId : "";
+          if (!isReadId(targetReadId) || targetReadId === readId) return json({ error: "Invalid trade target." }, 400);
+          const targetStored = await env.LISTS.get(`list:${targetReadId}`);
+          if (!targetStored) return json({ error: "That Hexlace is not available." }, 404);
+          const response = await callHexlaceCoordinator(env, readId, "/trade", { writeKey, targetReadId });
+          return relayInternal(response, data => ({ ...data, targetName: publicList(targetStored, env).name || "your friend" }));
+        }
+        if (request.method === "GET" && parts.length === 3) {
+          const response = await callHexlaceCoordinator(env, readId, "/trade/read", { writeKey });
+          return relayInternal(response);
+        }
+        if (request.method === "POST" && parts.length === 4 && parts[3] === "confirm") {
+          const limited = await enforceRateLimit(request, env, "updateIp");
+          if (limited) return limited;
+          const response = await callHexlaceCoordinator(env, readId, "/trade/confirm", { writeKey });
+          if (!response.ok) return relayInternal(response);
+          const confirmed = await response.json();
+          const targetReadId = confirmed?.targetReadId;
+          if (!isReadId(targetReadId)) return json({ error: "Trade could not be completed." }, 409);
+          const coordinatorReadId = [readId, targetReadId].sort()[0];
+          const settledResponse = await callHexlaceCoordinator(env, coordinatorReadId, "/trade/settle");
+          if (settledResponse.status === 202) return json({ completed: false });
+          const settled = await settledResponse.json().catch(() => ({}));
+          if (!settledResponse.ok || !settled.completed) return json(settled, settledResponse.status);
+          const callerIsCoordinator = readId === settled.coordinatorReadId;
+          return json({
+            completed: true,
+            readId: callerIsCoordinator ? settled.targetReadId : settled.coordinatorReadId,
+            revision: callerIsCoordinator ? settled.targetRevision : settled.selfRevision
+          });
+        }
+        if (request.method === "POST" && parts.length === 4 && parts[3] === "cancel") {
+          const response = await callHexlaceCoordinator(env, readId, "/trade/cancel", { writeKey });
+          return relayInternal(response);
+        }
+      }
+
       // POST /lists/:readId/handoff — Safari proves ownership and receives a
       // random 24-hour token suitable for a first-party transfer cookie. The
       // raw write key is never stored in that cookie.
@@ -550,11 +629,13 @@ export default {
           const response = await callHexlaceCoordinator(env, readId, "/read");
           if (response.status === 200) {
             const data = await response.json();
-            return json(publicList(JSON.stringify(data.list), env));
+            return json({ ...publicList(JSON.stringify(data.list), env), ...(data.claimToken ? { claimToken: data.claimToken } : {}) });
           }
         }
         if (!stored) return json({ error: "Not found." }, 404);
-        return json(publicList(stored, env));
+        const claim = parseClaimRecord(await env.LISTS.get(`claim:${readId}`));
+        const publicClaim = claim?.released === true && !claim.ownerSet && !(await env.LISTS.get(`auth:${readId}`)) ? claim.token : null;
+        return json({ ...publicList(stored, env), ...(publicClaim ? { claimToken: publicClaim } : {}) });
       }
 
       // PUT /lists/:readId — update a list; requires the secret write key.

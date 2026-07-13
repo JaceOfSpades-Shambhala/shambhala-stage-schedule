@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v51 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v52 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
@@ -26,6 +26,7 @@ Hexlaces (live set-list sharing):
 - Editable display name; publishing is automatic and debounced, queued while offline
 - Passive pings: one tap on a saved set invites friends to meet there, while a nested location picker offers 30/60/90-minute availability at camp, the river, or vendors; pings expire automatically and never send notifications
 - Giveaway tags with claim tokens: opening one quietly records the local scan time, works offline, and lets the earliest scan own the Hexlace once signal returns (contention closes seven days after the first claim)
+- My Hexlace can be released for the next scanner without erasing the owner's saved sets; physical tag trades are online-only and require both owners to enter trade mode, tap each other's tags, and confirm the reciprocal match
 - On iOS 17.2+, a claimed Hexlace, saved sets, and collected-friend ids follow into a newly installed Home Screen app through a retry-safe 24-hour handoff; a compact connection code inside My Hexlace is the fallback when iOS does not copy the automatic cookie
 - Safari and the installed app retain the same ownership secret and periodically pull authenticated owner state, so online edits synchronize without revoking either context; collected-friend ids remain private and their public lists are fetched normally
 - Android can write tags in-app (Web NFC); iOS writes tags once with the NFC Tools app
@@ -72,7 +73,7 @@ Personal Hexlace tags use `?f=<readId>` (plus `&claim=<token>` on unclaimed give
 - `scripts/validate-schedule.mjs` — schedule safety check for day/stage IDs, time format, duplicate rows, empty stage arrays, and overnight rollover order
 - `app.js` — tabs, search, Now Playing, preview mode, update checks, service-worker registration
 - `planner.js` — My Set List planner, overlap detection, day grouping
-- `hexlaces.js` — live sharing: identity, publishing, collecting, claims
+- `hexlaces.js` — live sharing: identity, publishing, collecting, claims, releases, and reciprocal physical-tag trades
 - `qrcode.js` — vendored qrcode-generator 1.4.4 (pinned)
 - `install.js` — Add to Home Screen behavior
 - `sw.js` — service worker (offline cache, network timeout, periodic background sync)

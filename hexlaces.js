@@ -14,7 +14,9 @@
   const PING_KEY = "shambhala-2026-ping";
   const HANDOFF_COOKIE = "shambhala-2026-hexlace-handoff";
   const HANDOFF_REDEMPTION_KEY = "shambhala-2026-hexlace-handoff-redemption";
+  const TRADE_MODE_KEY = "shambhala-2026-hexlace-trade-mode";
   const HANDOFF_MAX_AGE_SECONDS = 24 * 60 * 60;
+  const TRADE_MAX_AGE_MS = 15 * 60 * 1000;
   const API_TIMEOUT_MS = 12000;
   const STAGES = [
     { id: "amp", label: "AMP" },
@@ -51,6 +53,11 @@
     connectCancel: document.querySelector("#hexlace-connect-cancel"),
     mine: document.querySelector("#hexlace-mine"),
     myName: document.querySelector("#hexlace-name"),
+    state: document.querySelector("#hexlace-state"),
+    stateLabel: document.querySelector("#hexlace-state-label"),
+    notice: document.querySelector("#hexlace-notice"),
+    noticeText: document.querySelector("#hexlace-notice-text"),
+    noticeAction: document.querySelector("#hexlace-notice-action"),
     status: document.querySelector("#hexlace-status"),
     rename: document.querySelector("#hexlace-rename"),
     shareLink: document.querySelector("#hexlace-share-link"),
@@ -68,6 +75,18 @@
     giveawayUrl: document.querySelector("#hexlace-giveaway-url"),
     giveawayShare: document.querySelector("#hexlace-giveaway-share"),
     giveawayNfc: document.querySelector("#hexlace-giveaway-nfc"),
+    releaseOpen: document.querySelector("#hexlace-release-open"),
+    releaseDialog: document.querySelector("#hexlace-release-dialog"),
+    releaseConfirm: document.querySelector("#hexlace-release-confirm"),
+    swapOpen: document.querySelector("#hexlace-swap-open"),
+    swapDialog: document.querySelector("#hexlace-swap-dialog"),
+    swapCreate: document.querySelector("#hexlace-swap-create"),
+    swapAccept: document.querySelector("#hexlace-swap-accept"),
+    swapCreateButton: document.querySelector("#hexlace-swap-create-button"),
+    swapStatus: document.querySelector("#hexlace-swap-status"),
+    swapCancel: document.querySelector("#hexlace-swap-cancel"),
+    swapAcceptButton: document.querySelector("#hexlace-swap-accept-button"),
+    swapAcceptCopy: document.querySelector("#hexlace-swap-accept-copy"),
     editor: document.querySelector("#hexlace-editor"),
     editorPrompt: document.querySelector("#hexlace-editor-prompt"),
     nameInput: document.querySelector("#hexlace-name-input"),
@@ -88,6 +107,7 @@
   let handoffPreparedThisPage = false;
   let pullingOwner = false;
   let connectCode = "";
+  let tradePollTimer = 0;
   let collectedRenderSignature = "";
 
   // Unambiguous alphabet (no 0/O/1/l/I), matching the Worker's id style.
@@ -427,6 +447,19 @@
 
   // --- My Hexlace: publishing ---------------------------------------------
 
+  function setMyState(state, label, notice = "", action = "") {
+    if (elements.state) elements.state.dataset.state = state;
+    if (elements.stateLabel) elements.stateLabel.textContent = label;
+    if (!elements.notice) return;
+    elements.notice.hidden = !notice;
+    elements.notice.dataset.tone = state === "error" ? "error" : "warning";
+    if (elements.noticeText) elements.noticeText.textContent = notice;
+    if (elements.noticeAction) {
+      elements.noticeAction.hidden = !action;
+      elements.noticeAction.textContent = action;
+    }
+  }
+
   function renderMine() {
     const identity = loadIdentity();
     const visibleIdentity = isVisibleIdentity(identity);
@@ -436,14 +469,28 @@
     elements.editor.hidden = !editorMode;
     elements.bringOver.hidden = !isStandalone() || Boolean(visibleIdentity);
     elements.connectApp.hidden = isStandalone() || !visibleIdentity;
-    if (!visibleIdentity) return;
+    if (elements.swapOpen) elements.swapOpen.hidden = navigator.onLine === false;
+    if (!visibleIdentity) {
+      setMyState("empty", "Not set up");
+      return;
+    }
     elements.myName.textContent = identity.name || "(no name yet)";
-    if (identity.pendingClaim) elements.status.textContent = "Changes waiting for signal to publish.";
-    else if (identity.invalid) elements.status.textContent = "This sharing link stopped working. Tap your name to try re-publishing.";
-    else if (identity.conflict) elements.status.textContent = "Your Hexlace changed in another app. Choose which copy to keep before publishing.";
-    else if (identity.dirty) elements.status.textContent = "Changes waiting for signal to publish.";
-    else if (identity.lastPublished) elements.status.textContent = `Live - published ${timeAgo(identity.lastPublished)}.`;
-    else elements.status.textContent = "Live.";
+    if (identity.pendingClaim) {
+      elements.status.textContent = "This Hexlace becomes yours when you next have signal.";
+      setMyState("pending", "Almost yours", elements.status.textContent);
+    } else if (identity.invalid) {
+      elements.status.textContent = "Your sharing link stopped updating for friends.";
+      setMyState("error", "Needs attention", elements.status.textContent, "Try publishing again");
+    } else if (identity.conflict) {
+      elements.status.textContent = "This Hexlace changed on another device.";
+      setMyState("pending", "Needs a choice", elements.status.textContent, "Keep this phone's version");
+    } else if (navigator.onLine === false || identity.dirty) {
+      elements.status.textContent = "You're offline — changes are queued and publish when you have signal.";
+      setMyState("offline", "Offline", elements.status.textContent);
+    } else {
+      elements.status.textContent = identity.lastPublished ? `Live - published ${timeAgo(identity.lastPublished)}.` : "Live.";
+      setMyState("live", "Live");
+    }
     if (elements.replace) elements.replace.hidden = !identity.conflict;
     const url = shareUrl(identity.readId);
     if (elements.shareUrl) {
@@ -652,6 +699,16 @@
         headers: { "X-Write-Key": identity.writeKey }
       });
       if (!result.ok) {
+        if (result.status === 409 && result.body?.transferredTo) {
+          const moved = applySwapTransfer(result.body.transferredTo, result.body.revision);
+          if (moved) {
+            try { localStorage.removeItem(TRADE_MODE_KEY); } catch {}
+            stopTradePolling();
+            feedback("Hexlaces traded. Publishing your saved sets to your new tag.");
+            window.setTimeout(() => publish({ force: true }), 0);
+          }
+          return moved;
+        }
         if (result.status === 403 || result.status === 404) {
           identity.invalid = true;
           saveIdentity(identity);
@@ -678,6 +735,223 @@
       return false;
     } finally {
       pullingOwner = false;
+    }
+  }
+
+  // --- Ownership controls -------------------------------------------------
+
+  function showDialog(dialog) {
+    if (!dialog) return;
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  }
+
+  async function releaseHexlace() {
+    const identity = loadIdentity();
+    if (!identity || identity.pendingClaim) return;
+    elements.releaseConfirm.disabled = true;
+    try {
+      const result = await api(`/lists/${identity.readId}/release`, {
+        method: "POST",
+        headers: { "X-Write-Key": identity.writeKey }
+      });
+      if (!result.ok) {
+        feedback(result.status === 409 ? "Resolve this Hexlace on your other device first." : "Couldn't release this Hexlace — check your signal and try again.");
+        return;
+      }
+      try { localStorage.removeItem(IDENTITY_KEY); } catch {}
+      editorMode = "";
+      elements.releaseDialog?.close();
+      renderMine();
+      feedback("Hexlace released. The next person who scans the tag can claim it.");
+    } catch {
+      feedback("Couldn't release this Hexlace — you need an internet connection.");
+    } finally {
+      elements.releaseConfirm.disabled = false;
+    }
+  }
+
+  function loadTradeMode() {
+    try {
+      const value = JSON.parse(localStorage.getItem(TRADE_MODE_KEY) || "null");
+      if (!value || !Number.isFinite(value.startedAt) || Date.now() - value.startedAt > TRADE_MAX_AGE_MS) {
+        localStorage.removeItem(TRADE_MODE_KEY);
+        return null;
+      }
+      return value;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveTradeMode(value) {
+    return storeJson(TRADE_MODE_KEY, value);
+  }
+
+  function stopTradePolling() {
+    window.clearTimeout(tradePollTimer);
+    tradePollTimer = 0;
+  }
+
+  function renderTradeDialog(mode = loadTradeMode()) {
+    const online = navigator.onLine !== false;
+    if (elements.swapOpen) elements.swapOpen.hidden = !online;
+    if (!mode) return;
+    elements.swapCreate.hidden = Boolean(mode.matched);
+    elements.swapAccept.hidden = !mode.matched;
+    elements.swapAcceptButton.disabled = !online || Boolean(mode.confirmed);
+    if (!online) {
+      elements.swapStatus.textContent = "Trade paused — reconnect to continue.";
+    } else if (mode.targetReadId) {
+      elements.swapStatus.textContent = mode.confirmed
+        ? "You confirmed. Waiting for your friend to confirm on their phone."
+        : "Your tap is recorded. Waiting for your friend to tap your Hexlace.";
+    } else {
+      elements.swapStatus.textContent = "Trade mode is on. Now tap your friend's Hexlace to this phone.";
+    }
+  }
+
+  function startTradeMode() {
+    if (navigator.onLine === false || !loadIdentity()) return;
+    const mode = { startedAt: Date.now(), targetReadId: "", matched: false, confirmed: false };
+    saveTradeMode(mode);
+    renderTradeDialog(mode);
+    showDialog(elements.swapDialog);
+  }
+
+  async function recordTradeTap(targetReadId) {
+    const identity = loadIdentity();
+    const mode = loadTradeMode();
+    if (!identity || !mode || navigator.onLine === false || targetReadId === identity.readId) return false;
+    try {
+      const result = await api(`/lists/${identity.readId}/trade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Write-Key": identity.writeKey },
+        body: JSON.stringify({ targetReadId })
+      });
+      if (!result.ok) {
+        feedback("Couldn't record that trade tap — check your signal and try again.");
+        return true;
+      }
+      mode.targetReadId = targetReadId;
+      mode.targetName = result.body?.targetName || "your friend";
+      mode.matched = result.body?.matched === true;
+      saveTradeMode(mode);
+      renderTradeDialog(mode);
+      showDialog(elements.swapDialog);
+      if (mode.matched) feedback(`Matched with ${mode.targetName}. Both people must confirm.`);
+      else feedback("Tap recorded. Waiting for your friend to tap your Hexlace.");
+      pollTradeStatus(1500);
+      return true;
+    } catch {
+      feedback("Couldn't record that trade tap — check your signal and try again.");
+      return true;
+    }
+  }
+
+  function applySwapTransfer(newReadId, revision) {
+    const identity = loadIdentity();
+    if (!identity || !newReadId || newReadId === identity.readId) return false;
+    const previousReadId = identity.readId;
+    const entries = loadCollected().filter(entry => entry.readId !== newReadId);
+    if (!entries.some(entry => entry.readId === previousReadId)) {
+      entries.push({ readId: previousReadId, name: "Swapped Hexlace", sets: [], ping: null, pending: true });
+    }
+    saveCollected(entries);
+    identity.readId = newReadId;
+    identity.revision = Number.isSafeInteger(revision) && revision > 0 ? revision : 1;
+    identity.dirty = true;
+    identity.invalid = false;
+    identity.conflict = false;
+    delete identity.conflictRevision;
+    if (!saveIdentity(identity)) return false;
+    collectedRenderSignature = "";
+    friendOpenState.clear();
+    renderCollected();
+    window.dispatchEvent(new CustomEvent("hexlace-friends-changed"));
+    renderMine();
+    return true;
+  }
+
+  async function confirmTrade() {
+    const identity = loadIdentity();
+    const mode = loadTradeMode();
+    if (!identity || !mode?.matched || navigator.onLine === false) return;
+    elements.swapAcceptButton.disabled = true;
+    try {
+      const result = await api(`/lists/${identity.readId}/trade/confirm`, {
+        method: "POST",
+        headers: { "X-Write-Key": identity.writeKey }
+      });
+      if (!result.ok) {
+        feedback(result.status === 409 ? "The other phone is no longer matched for this trade." : "Couldn't confirm the trade — check your signal.");
+        return;
+      }
+      if (result.body?.completed && result.body?.readId) {
+        if (!applySwapTransfer(result.body.readId, result.body.revision)) {
+          feedback("The trade completed, but this phone couldn't save it. Keep this page open and try again.");
+          return;
+        }
+        localStorage.removeItem(TRADE_MODE_KEY);
+        stopTradePolling();
+        elements.swapDialog?.close();
+        feedback("Hexlaces traded. Publishing your saved sets to your new tag.");
+        await publish({ force: true });
+        refreshCollected(true);
+        return;
+      }
+      mode.confirmed = true;
+      saveTradeMode(mode);
+      renderTradeDialog(mode);
+      feedback("Confirmed. Waiting for your friend to confirm.");
+      pollTradeStatus(1000);
+    } catch {
+      feedback("Couldn't confirm the trade — check your signal and try again.");
+    } finally {
+      elements.swapAcceptButton.disabled = navigator.onLine === false || Boolean(loadTradeMode()?.confirmed);
+    }
+  }
+
+  async function pollTradeStatus(delay = 0) {
+    stopTradePolling();
+    tradePollTimer = window.setTimeout(async () => {
+      const identity = loadIdentity();
+      const mode = loadTradeMode();
+      if (!identity || !mode || navigator.onLine === false) return;
+      try {
+        const result = await api(`/lists/${identity.readId}/trade`, {
+          cache: "no-store",
+          headers: { "X-Write-Key": identity.writeKey }
+        });
+        if (result.status === 409 && result.body?.transferredTo) {
+          if (applySwapTransfer(result.body.transferredTo, result.body.revision)) {
+            localStorage.removeItem(TRADE_MODE_KEY);
+            elements.swapDialog?.close();
+            feedback("Hexlaces traded. Publishing your saved sets to your new tag.");
+            await publish({ force: true });
+            refreshCollected(true);
+          }
+          return;
+        }
+        if (result.ok && result.body) {
+          mode.matched = result.body.matched === true;
+          mode.confirmed = result.body.confirmed === true;
+          mode.targetName = result.body.targetName || mode.targetName;
+          saveTradeMode(mode);
+          renderTradeDialog(mode);
+        }
+      } catch {}
+      if (loadTradeMode()) pollTradeStatus(2000);
+    }, delay);
+  }
+
+  async function cancelTrade() {
+    const identity = loadIdentity();
+    const mode = loadTradeMode();
+    stopTradePolling();
+    localStorage.removeItem(TRADE_MODE_KEY);
+    if (identity && mode?.targetReadId && navigator.onLine !== false) {
+      api(`/lists/${identity.readId}/trade/cancel`, { method: "POST", headers: { "X-Write-Key": identity.writeKey } }).catch(() => {});
     }
   }
 
@@ -911,6 +1185,10 @@
 
     friendOpenState.clear();
     const identity = loadIdentity();
+    if (identity && loadTradeMode() && navigator.onLine !== false && readId !== identity.readId) {
+      await recordTradeTap(readId);
+      return;
+    }
     if (identity && identity.readId === readId) {
       renderCollected();
       feedback("That's your own Hexlace.");
@@ -918,9 +1196,16 @@
     }
     // A claim link only takes effect on a phone with no identity of its own -
     // your Hexlace can never be replaced by tapping someone else's tag.
-    if (claimToken && !identity) {
+    let effectiveClaimToken = claimToken;
+    if (!effectiveClaimToken && !identity && navigator.onLine !== false) {
       try {
-        if (await claimHexlace(readId, claimToken)) {
+        const released = await api(`/lists/${readId}`, { cache: "no-store" });
+        if (released.ok && typeof released.body?.claimToken === "string") effectiveClaimToken = released.body.claimToken;
+      } catch {}
+    }
+    if (effectiveClaimToken && !identity) {
+      try {
+        if (await claimHexlace(readId, effectiveClaimToken)) {
           renderCollected();
           return;
         }
@@ -999,12 +1284,23 @@
     if (identity) shareOrCopy(shareUrl(identity.readId), `${identity.name}'s Shambhala sets`);
   });
   elements.replace?.addEventListener("click", () => publish({ force: true }));
+  elements.noticeAction?.addEventListener("click", () => {
+    const identity = loadIdentity();
+    if (identity?.conflict) publish({ force: true });
+    else publish();
+  });
   elements.connectApp.addEventListener("click", createConnectCode);
   elements.connectCopy.addEventListener("click", () => {
     if (connectCode) copyText(connectCode, "Connection code copied.");
   });
   elements.giveaway.addEventListener("click", createGiveaway);
   elements.giveawayShare.addEventListener("click", () => { if (giveawayLink) shareOrCopy(giveawayLink, "A Hexlace for you"); });
+  elements.releaseOpen?.addEventListener("click", () => showDialog(elements.releaseDialog));
+  elements.releaseConfirm?.addEventListener("click", releaseHexlace);
+  elements.swapOpen?.addEventListener("click", startTradeMode);
+  elements.swapCreateButton?.addEventListener("click", startTradeMode);
+  elements.swapAcceptButton?.addEventListener("click", confirmTrade);
+  elements.swapCancel?.addEventListener("click", cancelTrade);
   if ("NDEFReader" in window) {
     elements.nfc.hidden = false;
     elements.giveawayNfc.hidden = false;
@@ -1036,7 +1332,8 @@
     if (!prepared) feedback("Connect to the internet before installing so your Hexlace can transfer.");
     return prepared;
   };
-  window.addEventListener("online", () => { syncMine(); refreshCollected(false); });
+  window.addEventListener("online", () => { syncMine(); refreshCollected(false); renderMine(); renderTradeDialog(); if (loadTradeMode()) pollTradeStatus(); });
+  window.addEventListener("offline", () => { renderMine(); renderTradeDialog(); });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
     syncMine();
@@ -1053,6 +1350,7 @@
   renderMine();
   renderCollected();
   handleIncomingLink();
+  if (loadTradeMode()) pollTradeStatus();
   flushPendingClaim();
   syncMine();
   window.setTimeout(() => refreshCollected(false), 2500);

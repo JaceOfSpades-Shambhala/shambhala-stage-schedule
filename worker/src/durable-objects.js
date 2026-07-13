@@ -1,6 +1,7 @@
 const TTL_SECONDS = 60 * 24 * 60 * 60;
 const HANDOFF_TTL_SECONDS = 24 * 60 * 60;
 const CLAIM_CONTENTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const TRADE_TTL_MS = 15 * 60 * 1000;
 
 function nowMs(env) {
   return Number.isSafeInteger(env?.NOW_MS) ? env.NOW_MS : Date.now();
@@ -25,6 +26,11 @@ function parseClaimRecord(value) {
 async function tokenHash(token) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function namedStub(namespace, name) {
+  if (typeof namespace.getByName === "function") return namespace.getByName(name);
+  return namespace.get(namespace.idFromName(name));
 }
 
 function validList(value) {
@@ -91,6 +97,12 @@ export class HexlaceCoordinator {
     if (!readId) return json({ error: "Missing Hexlace id." }, 400);
 
     await this.ensureRecord(readId);
+    if (this.record) {
+      this.record.handoffs ||= {};
+      this.record.redirects ||= {};
+      this.record.appliedTrades ||= {};
+      if (!Object.prototype.hasOwnProperty.call(this.record, "trade")) this.record.trade = null;
+    }
     this.sweepExpiredHandoffs();
 
     if (url.pathname === "/initialize" && request.method === "POST") return this.initialize(readId, body);
@@ -99,8 +111,16 @@ export class HexlaceCoordinator {
     if (url.pathname === "/update" && request.method === "POST") return this.update(body);
     if (url.pathname === "/handoff" && request.method === "POST") return this.createHandoff(body);
     if (url.pathname === "/redeem" && request.method === "POST") return this.redeemHandoff(body);
+    if (url.pathname === "/release" && request.method === "POST") return this.release(body);
+    if (url.pathname === "/trade" && request.method === "POST") return this.startTrade(body);
+    if (url.pathname === "/trade/read" && request.method === "POST") return this.readTrade(body);
+    if (url.pathname === "/trade/match" && request.method === "POST") return this.matchTrade(body);
+    if (url.pathname === "/trade/confirm" && request.method === "POST") return this.confirmTrade(body);
+    if (url.pathname === "/trade/settle" && request.method === "POST") return this.settleTrade(body);
+    if (url.pathname === "/trade/apply" && request.method === "POST") return this.applyTrade(body);
+    if (url.pathname === "/trade/cancel" && request.method === "POST") return this.cancelTrade(body);
     if (url.pathname === "/owner" && request.method === "POST") return this.readOwner(body);
-    if (url.pathname === "/read" && request.method === "POST") return json({ list: this.record.list });
+    if (url.pathname === "/read" && request.method === "POST") return this.readPublic();
     return json({ error: "Not found." }, 404);
   }
 
@@ -131,6 +151,9 @@ export class HexlaceCoordinator {
       auth: auth || null,
       claim: parseClaimRecord(claimValue),
       handoffs: {},
+      trade: null,
+      redirects: {},
+      appliedTrades: {},
       expiresAt: now + TTL_SECONDS * 1000,
       snapshotDirty: false
     };
@@ -148,6 +171,9 @@ export class HexlaceCoordinator {
       auth: typeof body.writeKey === "string" ? body.writeKey : null,
       claim: typeof body.claimToken === "string" ? { token: body.claimToken } : null,
       handoffs: {},
+      trade: null,
+      redirects: {},
+      appliedTrades: {},
       expiresAt: now + TTL_SECONDS * 1000,
       snapshotDirty: false
     };
@@ -184,6 +210,154 @@ export class HexlaceCoordinator {
     return json({ ok: true, accepted, revision });
   }
 
+  readPublic() {
+    const releasedClaim = !this.record.auth && this.record.claim?.released === true && !this.record.claim.ownerSet
+      ? this.record.claim.token
+      : null;
+    return json({ list: this.record.list, claimToken: releasedClaim });
+  }
+
+  async release(body) {
+    if (!this.record.auth) return json({ error: "Not found." }, 404);
+    if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
+    if (typeof body.claimToken !== "string" || body.claimToken.length < 12) return json({ error: "Invalid claim token." }, 400);
+    const revision = (Number.isSafeInteger(this.record.list.revision) ? this.record.list.revision : 1) + 1;
+    this.record.list = { name: "Unclaimed Hexlace", sets: [], ping: null, friends: [], updated: nowMs(this.env), revision };
+    this.record.auth = null;
+    this.record.claim = { token: body.claimToken, released: true };
+    this.record.handoffs = {};
+    this.record.trade = null;
+    await this.commit();
+    return json({ ok: true, revision });
+  }
+
+  tradeActive() {
+    return Boolean(this.record.trade && this.record.trade.expiresAt > nowMs(this.env));
+  }
+
+  async authRedirect(writeKey) {
+    if (writeKey === this.record.auth) return null;
+    if (typeof writeKey !== "string" || !writeKey) return false;
+    const redirect = this.record.redirects?.[await tokenHash(writeKey)];
+    return redirect || false;
+  }
+
+  async startTrade(body) {
+    if (!this.record.auth) return json({ error: "Not found." }, 404);
+    if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
+    if (typeof body.targetReadId !== "string" || body.targetReadId.length !== 8 || body.targetReadId === this.record.readId) {
+      return json({ error: "Invalid trade target." }, 400);
+    }
+    this.record.trade = {
+      targetReadId: body.targetReadId,
+      startedAt: nowMs(this.env),
+      expiresAt: nowMs(this.env) + TRADE_TTL_MS,
+      matched: false,
+      confirmed: false
+    };
+    await this.saveRecord();
+    const response = await namedStub(this.env.HEXLACES, body.targetReadId).fetch(new Request("https://hexlace.internal/trade/match", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ readId: body.targetReadId, requesterReadId: this.record.readId })
+    }));
+    const match = await response.json().catch(() => ({}));
+    if (response.ok && match.matched) {
+      this.record.trade.matched = true;
+      await this.saveRecord();
+    }
+    return json({ matched: this.record.trade.matched, targetName: match.name || "" });
+  }
+
+  async matchTrade(body) {
+    if (!this.tradeActive() || this.record.trade.targetReadId !== body.requesterReadId) return json({ matched: false });
+    this.record.trade.matched = true;
+    await this.saveRecord();
+    return json({ matched: true, name: this.record.list.name || "" });
+  }
+
+  async readTrade(body) {
+    const redirect = await this.authRedirect(body.writeKey);
+    if (redirect) return json({ transferredTo: redirect.readId, revision: redirect.revision }, 409);
+    if (redirect === false) return json({ error: "Invalid write key." }, 403);
+    if (!this.tradeActive()) return json({ active: false });
+    return json({
+      active: true,
+      targetReadId: this.record.trade.targetReadId,
+      matched: this.record.trade.matched,
+      confirmed: this.record.trade.confirmed
+    });
+  }
+
+  async confirmTrade(body) {
+    if (!this.record.auth) return json({ error: "Not found." }, 404);
+    if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
+    if (!this.tradeActive() || !this.record.trade.matched) return json({ error: "Trade is not matched." }, 409);
+    this.record.trade.confirmed = true;
+    await this.saveRecord();
+    return json({ confirmed: true, targetReadId: this.record.trade.targetReadId });
+  }
+
+  async settleTrade() {
+    if (!this.record.auth || !this.tradeActive() || !this.record.trade.matched || !this.record.trade.confirmed) {
+      return json({ completed: false }, 202);
+    }
+    const targetReadId = this.record.trade.targetReadId;
+    const tradeId = [this.record.readId, targetReadId].sort().join(":");
+    if (this.record.readId !== tradeId.slice(0, tradeId.indexOf(":"))) return json({ error: "Wrong trade coordinator." }, 409);
+    const selfRevision = Number.isSafeInteger(this.record.list.revision) ? this.record.list.revision : 1;
+    const response = await namedStub(this.env.HEXLACES, targetReadId).fetch(new Request("https://hexlace.internal/trade/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        readId: targetReadId,
+        requesterReadId: this.record.readId,
+        requesterAuth: this.record.auth,
+        tradeId
+      })
+    }));
+    if (response.status === 202) return json({ completed: false }, 202);
+    const applied = await response.json().catch(() => ({}));
+    if (!response.ok || typeof applied.previousAuth !== "string") return json({ error: "Trade could not be completed." }, response.status || 409);
+    const previousAuth = this.record.auth;
+    this.record.auth = applied.previousAuth;
+    this.record.redirects ||= {};
+    this.record.redirects[await tokenHash(previousAuth)] = { readId: targetReadId, revision: applied.revision || 1 };
+    this.record.trade = null;
+    this.record.handoffs = {};
+    await this.commit();
+    return json({ completed: true, coordinatorReadId: this.record.readId, targetReadId, selfRevision, targetRevision: applied.revision || 1 });
+  }
+
+  async applyTrade(body) {
+    this.record.appliedTrades ||= {};
+    const prior = this.record.appliedTrades[body.tradeId];
+    if (prior) return json(prior);
+    if (!this.tradeActive() || !this.record.trade.matched || !this.record.trade.confirmed || this.record.trade.targetReadId !== body.requesterReadId) {
+      return json({ pending: true }, 202);
+    }
+    if (typeof body.requesterAuth !== "string" || body.requesterAuth.length < 16) return json({ error: "Invalid trade owner." }, 400);
+    const previousAuth = this.record.auth;
+    const revision = Number.isSafeInteger(this.record.list.revision) ? this.record.list.revision : 1;
+    this.record.auth = body.requesterAuth;
+    this.record.redirects ||= {};
+    this.record.redirects[await tokenHash(previousAuth)] = { readId: body.requesterReadId, revision };
+    const result = { previousAuth, revision };
+    this.record.appliedTrades[body.tradeId] = result;
+    this.record.trade = null;
+    this.record.handoffs = {};
+    await this.commit();
+    return json(result);
+  }
+
+  async cancelTrade(body) {
+    if (!this.record.auth) return json({ error: "Not found." }, 404);
+    if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
+    this.record.trade = null;
+    await this.saveRecord();
+    return json({ ok: true });
+  }
+
   async update(body) {
     if (!this.record.auth) return json({ error: "Not found." }, 404);
     if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
@@ -214,9 +388,11 @@ export class HexlaceCoordinator {
     return json({ ok: true }, 201);
   }
 
-  readOwner(body) {
+  async readOwner(body) {
     if (!this.record.auth) return json({ error: "Not found." }, 404);
-    if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
+    const redirect = await this.authRedirect(body.writeKey);
+    if (redirect) return json({ transferredTo: redirect.readId, revision: redirect.revision }, 409);
+    if (redirect === false) return json({ error: "Invalid write key." }, 403);
     return json({ list: this.record.list });
   }
 
