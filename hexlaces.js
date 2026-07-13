@@ -65,6 +65,7 @@
     qr: document.querySelector("#hexlace-qr"),
     shareUrl: document.querySelector("#hexlace-share-url"),
     nfc: document.querySelector("#hexlace-nfc"),
+    connectSection: document.querySelector("#hexlace-connect-section"),
     connectApp: document.querySelector("#hexlace-connect-app"),
     connectCode: document.querySelector("#hexlace-connect-code"),
     connectCodeValue: document.querySelector("#hexlace-connect-code-value"),
@@ -468,7 +469,14 @@
     elements.mine.hidden = !visibleIdentity || editorMode === "claim";
     elements.editor.hidden = !editorMode;
     elements.bringOver.hidden = !isStandalone() || Boolean(visibleIdentity);
-    elements.connectApp.hidden = isStandalone() || !visibleIdentity;
+    const canConnectApp = !isStandalone() && Boolean(visibleIdentity) && navigator.onLine !== false;
+    elements.connectSection.hidden = !canConnectApp;
+    elements.connectApp.hidden = !canConnectApp;
+    if (!canConnectApp) {
+      elements.connectSection.open = false;
+      elements.connectCode.hidden = true;
+      connectCode = "";
+    }
     if (elements.swapOpen) elements.swapOpen.hidden = navigator.onLine === false;
     if (!visibleIdentity) {
       setMyState("empty", "Not set up");

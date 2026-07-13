@@ -1,13 +1,13 @@
 @font-face {
   font-family: "Inter";
-  src: url("fonts/InterVariable.woff2?v=52") format("woff2");
+  src: url("fonts/InterVariable.woff2?v=53") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Inter";
-  src: url("fonts/InterVariable-Italic.woff2?v=52") format("woff2");
+  src: url("fonts/InterVariable-Italic.woff2?v=53") format("woff2");
   font-weight: 100 900;
   font-style: italic;
   font-display: swap;
@@ -49,6 +49,7 @@ a:hover { color: #ffb5d9; }
 .camp-credit { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; column-gap: .28rem; row-gap: .16rem; margin: -.35rem 0 0; color: var(--muted); font-size: .84rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .camp-credit a { color: #fff; text-underline-offset: .2rem; }
 .camp-credit a:hover { color: #ffb5d9; }
+.offline-ready { margin: .34rem 0 0; color: var(--muted); font-size: .76rem; }
 h1, h2, p { margin-top: 0; }
 h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6rem); line-height: .93; letter-spacing: -.052em; }
 .install-button { display: inline-flex; align-items: center; gap: .35rem; margin-top: .65rem; padding: .69rem 1.38rem; border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 999px; color: var(--ink); background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: 0 8px 26px color-mix(in srgb, var(--accent) 30%, transparent); cursor: pointer; font-size: .86rem; font-weight: 800; letter-spacing: .02em; transition: transform .15s ease, border-color .15s ease, background .15s ease; }

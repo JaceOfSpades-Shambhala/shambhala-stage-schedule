@@ -338,7 +338,7 @@
     const art = document.createElement("img");
     art.id = "stage-mark";
     art.className = "stage-mark";
-    art.src = `stage-names/${appState.stage}.png?v=52`;
+    art.src = `stage-names/${appState.stage}.png?v=53`;
     art.alt = stageLabel;
     art.width = 150;
     art.height = 64;
@@ -365,6 +365,7 @@
     if (term) {
       const matches = getGlobalMatches(term);
       elements.scheduleDayRule.hidden = true;
+      elements.scheduleNote.hidden = false;
       elements.scheduleNote.textContent = `${matches.length} matching set${matches.length === 1 ? "" : "s"} across all listed stages and days.`;
       elements.noResults.textContent = "No matching artist was found across the listed stages and days.";
       elements.setList.classList.remove("timeline");
@@ -378,7 +379,8 @@
     const nowKey = nowToKey(status.now);
     const timeline = buildStageTimeline(appState.stage);
     elements.scheduleDayRule.hidden = false;
-    elements.scheduleNote.textContent = "Unofficial guide - set times can change.";
+    elements.scheduleNote.hidden = true;
+    elements.scheduleNote.textContent = "";
     // Safety net: the auto-jump on stage switch should make an empty stage/day
     // combo unreachable, but never render a silently empty card if one slips in.
     elements.noResults.textContent = `No sets listed for ${stageLabel} on ${appState.day}.`;
@@ -477,7 +479,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-metadata.js?v=52";
+  const SCHEDULE_ASSET = "schedule-metadata.js?v=53";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -560,7 +562,7 @@
     STAGES.forEach(stage => {
       if (stage.id === appState.stage) return;
       const img = new Image();
-      img.src = `stage-names/${stage.id}.png?v=52`;
+      img.src = `stage-names/${stage.id}.png?v=53`;
     });
   }, 1500);
   window.setInterval(renderLiveStatus, 30000);
@@ -579,6 +581,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=52").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=53").then(registerPeriodicSync).catch(() => {});
   });
 })();
