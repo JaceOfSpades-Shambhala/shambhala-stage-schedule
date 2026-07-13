@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v49 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v50 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 

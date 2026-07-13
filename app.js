@@ -16,7 +16,8 @@
     stageTabs: document.querySelector("#stage-tabs"),
     dayTabs: document.querySelector("#day-tabs"),
     stageMarkHeader: document.querySelector("#stage-mark-header"),
-    stageMarkDay: document.querySelector("#stage-mark-day"),
+    scheduleDayRule: document.querySelector("#schedule-day-rule"),
+    scheduleDay: document.querySelector("#schedule-day"),
     scheduleNote: document.querySelector("#schedule-note"),
     setList: document.querySelector("#set-list"),
     noResults: document.querySelector("#no-results"),
@@ -333,7 +334,7 @@
     const art = document.createElement("img");
     art.id = "stage-mark";
     art.className = "stage-mark";
-    art.src = `stage-names/${appState.stage}.png?v=49`;
+    art.src = `stage-names/${appState.stage}.png?v=50`;
     art.alt = stageLabel;
     art.addEventListener("error", () => {
       const fallback = document.createElement("h2");
@@ -351,10 +352,11 @@
     const term = appState.term.trim();
     document.body.className = `stage-${appState.stage}`;
     setStageMarkArt(stageLabel);
-    elements.stageMarkDay.textContent = appState.day.toUpperCase();
+    elements.scheduleDay.textContent = appState.day.toUpperCase();
     elements.setList.innerHTML = "";
     if (term) {
       const matches = getGlobalMatches(term);
+      elements.scheduleDayRule.hidden = true;
       elements.scheduleNote.textContent = `${matches.length} matching set${matches.length === 1 ? "" : "s"} across all listed stages and days.`;
       elements.noResults.textContent = "No matching artist was found across the listed stages and days.";
       elements.setList.classList.remove("timeline");
@@ -367,6 +369,7 @@
     const next = status.next || null;
     const nowKey = nowToKey(status.now);
     const timeline = buildStageTimeline(appState.stage);
+    elements.scheduleDayRule.hidden = false;
     elements.scheduleNote.textContent = "Unofficial guide - set times can change.";
     // Safety net: the auto-jump on stage switch should make an empty stage/day
     // combo unreachable, but never render a silently empty card if one slips in.
@@ -466,7 +469,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-metadata.js?v=49";
+  const SCHEDULE_ASSET = "schedule-metadata.js?v=50";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -558,6 +561,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=49").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=50").then(registerPeriodicSync).catch(() => {});
   });
 })();
