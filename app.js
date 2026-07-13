@@ -329,21 +329,29 @@
   }
 
   // The official stage-name art used in the live panel's mark header. Falls
-  // back to plain text if an image ever fails to load.
+  // back to plain text if an image ever fails to load. Re-renders run on every
+  // live-status tick, so leave the element alone unless the stage changed —
+  // rebuilding the <img> forces a reload/decode and makes the page jitter.
   function setStageMarkArt(stageLabel) {
+    const current = elements.stageMarkHeader.querySelector("#stage-mark");
+    if (current.dataset.stage === appState.stage) return;
     const art = document.createElement("img");
     art.id = "stage-mark";
     art.className = "stage-mark";
-    art.src = `stage-names/${appState.stage}.png?v=50`;
+    art.src = `stage-names/${appState.stage}.png?v=51`;
     art.alt = stageLabel;
+    art.width = 150;
+    art.height = 64;
+    art.dataset.stage = appState.stage;
     art.addEventListener("error", () => {
       const fallback = document.createElement("h2");
       fallback.id = "stage-mark";
       fallback.className = "stage-mark-fallback";
       fallback.textContent = stageLabel;
+      fallback.dataset.stage = art.dataset.stage;
       art.replaceWith(fallback);
     });
-    elements.stageMarkHeader.querySelector("#stage-mark").replaceWith(art);
+    current.replaceWith(art);
   }
 
   function renderSchedule() {
@@ -469,7 +477,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-metadata.js?v=50";
+  const SCHEDULE_ASSET = "schedule-metadata.js?v=51";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -545,6 +553,16 @@
   updateCampLocationLink();
   renderScheduleVersion();
   render();
+  // Warm the decoded-image cache for the other stage marks so the first tap on
+  // each stage pill after a cold start swaps the header art without a blank
+  // frame. The files are already SW-precached; this only pays the decode cost.
+  window.setTimeout(() => {
+    STAGES.forEach(stage => {
+      if (stage.id === appState.stage) return;
+      const img = new Image();
+      img.src = `stage-names/${stage.id}.png?v=51`;
+    });
+  }, 1500);
   window.setInterval(renderLiveStatus, 30000);
   window.setTimeout(checkForScheduleUpdate, 8000);
   window.setInterval(checkForScheduleUpdate, UPDATE_CHECK_INTERVAL_MS);
@@ -561,6 +579,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=50").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=51").then(registerPeriodicSync).catch(() => {});
   });
 })();
