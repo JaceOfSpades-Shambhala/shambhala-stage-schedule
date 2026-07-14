@@ -138,6 +138,7 @@ export class HexlaceCoordinator {
 
     await this.ensureRecord(readId);
     if (this.record) {
+      let upgradedLegacyRecord = false;
       this.record.handoffs ||= {};
       this.record.redirects ||= {};
       this.record.appliedTrades ||= {};
@@ -145,8 +146,15 @@ export class HexlaceCoordinator {
       this.record.profileKey ||= null;
       this.record.owl ||= null;
       this.record.tapToken ||= null;
-      if (!Object.prototype.hasOwnProperty.call(this.record, "isPhysical")) this.record.isPhysical = Boolean(this.record.claim);
+      // Durable Object records created before virtual Hex Owl profiles existed
+      // represented written NFC tags. A missing field must therefore stay
+      // physical even when the tag was assigned directly rather than claimed.
+      if (!Object.prototype.hasOwnProperty.call(this.record, "isPhysical")) {
+        this.record.isPhysical = true;
+        upgradedLegacyRecord = true;
+      }
       if (!Object.prototype.hasOwnProperty.call(this.record, "trade")) this.record.trade = null;
+      if (upgradedLegacyRecord) await this.ctx.storage.put("record", this.record);
     }
     this.sweepExpiredHandoffs();
 

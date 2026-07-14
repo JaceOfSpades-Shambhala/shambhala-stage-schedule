@@ -251,6 +251,41 @@ test("existing KV Hexlaces migrate lazily into their Durable Object on the first
   assert.ok(env.HEXLACES.instances.get(readId).ctx.storage.values.get("record"));
 });
 
+test("pre-v55 Durable Object records without a claim remain physical Hexlaces", async () => {
+  const env = makeOwlEnv();
+  const readId = "3456789a";
+  const writeKey = "legacy-physical-write-key";
+  env.HEXLACES.getByName(readId);
+  const entry = env.HEXLACES.instances.get(readId);
+  await entry.ctx.ready;
+
+  const legacyRecord = {
+    readId,
+    list: { name: "Jaceofspades", sets: [], ping: null, updated: 1, revision: 1 },
+    auth: writeKey,
+    claim: null,
+    handoffs: {},
+    redirects: {},
+    appliedTrades: {},
+    profileId: null,
+    profileKey: null,
+    owl: null,
+    tapToken: null,
+    trade: null,
+    expiresAt: null,
+    snapshotDirty: false
+  };
+  entry.instance.record = structuredClone(legacyRecord);
+  await entry.ctx.storage.put("record", legacyRecord);
+
+  const owner = await worker.fetch(makeRequest(`/lists/${readId}/owner`, {
+    headers: { "X-Write-Key": writeKey }
+  }), env);
+  assert.equal(owner.status, 200, await owner.clone().text());
+  assert.equal((await owner.json()).isPhysical, true);
+  assert.equal(entry.ctx.storage.values.get("record").isPhysical, true);
+});
+
 test("an owner can release the existing physical tag for the next scanner", async () => {
   const env = makeDurableEnv();
   const created = await worker.fetch(makeRequest("/lists", {
