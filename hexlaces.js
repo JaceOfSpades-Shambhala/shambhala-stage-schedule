@@ -82,6 +82,7 @@
     connectCode: document.querySelector("#hexlace-connect-code"),
     connectCodeValue: document.querySelector("#hexlace-connect-code-value"),
     connectCopy: document.querySelector("#hexlace-connect-copy"),
+    manageSection: document.querySelector("#hexlace-manage-section"),
     giveaway: document.querySelector("#hexlace-giveaway"),
     giveawayResult: document.querySelector("#hexlace-giveaway-result"),
     giveawayQr: document.querySelector("#hexlace-giveaway-qr"),
@@ -113,6 +114,7 @@
   let editorMode = "";
   let publishTimer = 0;
   let giveawayLink = "";
+  let giveawayTapLink = "";
   let renderedQrUrl = "";
   let claiming = false;
   let preparingHandoff = false;
@@ -306,6 +308,27 @@
     return `${location.origin}${location.pathname.replace(/index\.html$/, "")}?f=${readId}`;
   }
 
+  function tapUrl(readId, tapToken) {
+    const url = new URL(shareUrl(readId));
+    if (tapToken) url.searchParams.set("tap", tapToken);
+    return url.href;
+  }
+
+  function owlRequestCredentials() {
+    return window.Hexadex?.requestCredentials?.() || {};
+  }
+
+  function applyOwlMetadata(identity, body) {
+    if (!identity || !body || typeof body !== "object") return identity;
+    window.Hexadex?.saveFromResponse?.(body);
+    if (body.profileId) identity.profileId = body.profileId;
+    if (body.profileKey) identity.profileKey = body.profileKey;
+    if (window.Hexadex?.validOwl?.(body.owl)) identity.owl = body.owl;
+    if (typeof body.isPhysical === "boolean") identity.isPhysical = body.isPhysical;
+    if (body.tapToken) identity.tapToken = body.tapToken;
+    return identity;
+  }
+
   function feedback(message) {
     if (!elements.feedback) return;
     elements.feedback.textContent = message;
@@ -377,14 +400,15 @@
     const dirty = JSON.stringify(mergedSets) !== JSON.stringify(remoteSets)
       || JSON.stringify(mergedPing) !== JSON.stringify(body.ping || null)
       || JSON.stringify(mergedFriendIds) !== JSON.stringify(remoteFriendIds);
-    const saved = saveIdentity({
+    const transferred = applyOwlMetadata({
       readId: body.readId,
       writeKey: body.writeKey,
       name: body.name || "",
       revision: Number.isSafeInteger(body.revision) ? body.revision : 1,
       lastPublished: Date.now(),
       dirty
-    });
+    }, body);
+    const saved = saveIdentity(transferred);
     if (!saved) return false;
     window.dispatchEvent(new CustomEvent("setlist-restored"));
     window.dispatchEvent(new CustomEvent("ping-restored"));
@@ -479,6 +503,8 @@
   function renderMine() {
     const identity = loadIdentity();
     const visibleIdentity = isVisibleIdentity(identity);
+    if (identity && !window.Hexadex?.loadProfile?.()) window.Hexadex?.saveFromResponse?.(identity);
+    window.Hexadex?.renderOwn?.(identity?.name || "");
     syncMyPanelOpen();
     elements.setup.hidden = Boolean(visibleIdentity) || editorMode === "enable" || editorMode === "claim";
     elements.mine.hidden = !visibleIdentity || editorMode === "claim";
@@ -492,7 +518,13 @@
       elements.connectCode.hidden = true;
       connectCode = "";
     }
-    if (elements.swapOpen) elements.swapOpen.hidden = navigator.onLine === false;
+    const physical = Boolean(identity && identity.isPhysical !== false);
+    if (elements.swapOpen) elements.swapOpen.hidden = navigator.onLine === false || !physical;
+    if (elements.releaseOpen) elements.releaseOpen.hidden = !physical;
+    if (elements.manageSection) {
+      elements.manageSection.hidden = !physical;
+      if (!physical) elements.manageSection.open = false;
+    }
     if (!visibleIdentity) {
       setMyState("empty", "Not set up");
       return;
@@ -538,13 +570,14 @@
   }
 
   async function createSharingIdentity(name) {
+    const credentials = owlRequestCredentials();
     const result = await api("/lists", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, sets: mySets(), ping: myPing(), friends: friendIds() })
+      body: JSON.stringify({ name, sets: mySets(), ping: myPing(), friends: friendIds(), physical: false, ...credentials })
     });
     if (!result.ok || !result.body?.readId) return false;
-    const identity = { readId: result.body.readId, writeKey: result.body.writeKey, name, revision: Number.isSafeInteger(result.body.revision) ? result.body.revision : 1, lastPublished: Date.now() };
+    const identity = applyOwlMetadata({ readId: result.body.readId, writeKey: result.body.writeKey, name, revision: Number.isSafeInteger(result.body.revision) ? result.body.revision : 1, lastPublished: Date.now(), isPhysical: false }, result.body);
     saveIdentity(identity);
     await prepareHandoff(identity);
     return true;
@@ -560,9 +593,10 @@
       const result = await api(`/lists/${identity.readId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "X-Write-Key": identity.writeKey },
-        body: JSON.stringify({ name: identity.name, sets: mySets(), ping: myPing(), friends: friendIds(), revision: identity.revision, force: options.force === true })
+        body: JSON.stringify({ name: identity.name, sets: mySets(), ping: myPing(), friends: friendIds(), revision: identity.revision, force: options.force === true, ...owlRequestCredentials() })
       });
       if (result.ok) {
+        applyOwlMetadata(identity, result.body);
         identity.dirty = false;
         identity.invalid = false;
         identity.conflict = false;
@@ -653,6 +687,7 @@
       const result = await window.requestHexlaceGiveaway(api);
       if (!result.ok || !result.body?.readId) { feedback("Couldn't create one - check your signal."); return; }
       giveawayLink = `${shareUrl(result.body.readId)}&claim=${result.body.claimToken}`;
+      giveawayTapLink = `${tapUrl(result.body.readId, result.body.tapToken)}&claim=${result.body.claimToken}`;
       elements.giveawayUrl.textContent = giveawayLink;
       renderQr(elements.giveawayQr, giveawayLink);
       elements.giveawayResult.hidden = false;
@@ -666,7 +701,20 @@
   function claimHexlace(readId, claimToken) {
     // Adopt the tag right away with a locally generated key so naming and
     // list-building work offline; the claim is sent (and retried) on signal.
-    saveIdentity({ readId, writeKey: randomKey(24), name: "", revision: 1, pendingClaim: claimToken, claimScannedAt: Date.now(), silentClaim: true, dirty: true });
+    const previous = loadIdentity();
+    const pending = applyOwlMetadata({
+      readId,
+      writeKey: randomKey(24),
+      name: previous?.name || "",
+      revision: 1,
+      pendingClaim: claimToken,
+      claimScannedAt: Date.now(),
+      silentClaim: !previous?.name,
+      dirty: true,
+      isPhysical: true,
+      ...(previous?.isPhysical === false ? { claimFallback: previous } : {})
+    }, owlRequestCredentials());
+    saveIdentity(pending);
     flushPendingClaim();
     return true;
   }
@@ -679,18 +727,23 @@
       const result = await api(`/lists/${identity.readId}/claim`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ claimToken: identity.pendingClaim, writeKey: identity.writeKey, scannedAt: identity.claimScannedAt || Date.now() })
+        body: JSON.stringify({ claimToken: identity.pendingClaim, writeKey: identity.writeKey, scannedAt: identity.claimScannedAt || Date.now(), ...owlRequestCredentials() })
       });
       if (result.ok) {
         const claimed = loadIdentity();
         if (claimed && claimed.readId === identity.readId) {
-          delete claimed.pendingClaim;
-          if (Number.isSafeInteger(result.body?.revision) && result.body.revision > 0) claimed.revision = result.body.revision;
-          if (result.body?.accepted === false && claimed.silentClaim && !claimed.name) {
-            try { localStorage.removeItem(IDENTITY_KEY); } catch {}
+          if (result.body?.accepted === false) {
+            window.Hexadex?.saveFromResponse?.(result.body);
+            if (identity.claimFallback) saveIdentity(identity.claimFallback);
+            else try { localStorage.removeItem(IDENTITY_KEY); } catch {}
+            if (!identity.silentClaim) addCollected(identity.readId, "");
             renderMine();
             return false;
           }
+          delete claimed.pendingClaim;
+          delete claimed.claimFallback;
+          applyOwlMetadata(claimed, result.body);
+          if (Number.isSafeInteger(result.body?.revision) && result.body.revision > 0) claimed.revision = result.body.revision;
           saveIdentity(claimed);
           await prepareHandoff(claimed);
           if (claimed.name) return publish(options);
@@ -700,7 +753,8 @@
       } else if (result.status === 409 || result.status === 403) {
         // Keep the user's sets and quietly drop an unstarted background claim.
         const lostId = identity.readId;
-        try { localStorage.removeItem(IDENTITY_KEY); } catch {}
+        if (identity.claimFallback) saveIdentity(identity.claimFallback);
+        else try { localStorage.removeItem(IDENTITY_KEY); } catch {}
         editorMode = "";
         if (!identity.silentClaim) addCollected(lostId, "");
         renderMine();
@@ -740,7 +794,12 @@
         return false;
       }
       const remoteRevision = Number(result.body?.revision);
-      if (!Number.isSafeInteger(remoteRevision) || remoteRevision <= (identity.revision || 1)) return true;
+      applyOwlMetadata(identity, result.body);
+      if (!Number.isSafeInteger(remoteRevision) || remoteRevision <= (identity.revision || 1)) {
+        saveIdentity(identity);
+        renderMine();
+        return true;
+      }
       if (!storeJson(SETS_KEY, Array.isArray(result.body.sets) ? result.body.sets : [])) return false;
       if (!storeJson(PING_KEY, result.body.ping || null)) return false;
       if (!restoreFriendIds(result.body.friends)) return false;
@@ -771,7 +830,7 @@
 
   async function releaseHexlace() {
     const identity = loadIdentity();
-    if (!identity || identity.pendingClaim) return;
+    if (!identity || identity.pendingClaim || identity.isPhysical === false) return;
     elements.releaseConfirm.disabled = true;
     try {
       const result = await api(`/lists/${identity.readId}/release`, {
@@ -835,14 +894,15 @@
   }
 
   function startTradeMode() {
-    if (navigator.onLine === false || !loadIdentity()) return;
+    const identity = loadIdentity();
+    if (navigator.onLine === false || !identity || identity.isPhysical === false) return;
     const mode = { startedAt: Date.now(), targetReadId: "", matched: false, confirmed: false };
     saveTradeMode(mode);
     renderTradeDialog(mode);
     showDialog(elements.swapDialog);
   }
 
-  async function recordTradeTap(targetReadId) {
+  async function recordTradeTap(targetReadId, targetTapToken) {
     const identity = loadIdentity();
     const mode = loadTradeMode();
     if (!identity || !mode || navigator.onLine === false || targetReadId === identity.readId) return false;
@@ -850,7 +910,7 @@
       const result = await api(`/lists/${identity.readId}/trade`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Write-Key": identity.writeKey },
-        body: JSON.stringify({ targetReadId })
+        body: JSON.stringify({ targetReadId, targetTapToken })
       });
       if (!result.ok) {
         feedback("Couldn't record that trade tap — check your signal and try again.");
@@ -872,7 +932,7 @@
     }
   }
 
-  function applySwapTransfer(newReadId, revision) {
+  function applySwapTransfer(newReadId, revision, metadata = null) {
     const identity = loadIdentity();
     if (!identity || !newReadId || newReadId === identity.readId) return false;
     const previousReadId = identity.readId;
@@ -887,6 +947,11 @@
     identity.invalid = false;
     identity.conflict = false;
     delete identity.conflictRevision;
+    if (metadata) applyOwlMetadata(identity, metadata);
+    else {
+      delete identity.owl;
+      window.Hexadex?.clearOwl?.();
+    }
     if (!saveIdentity(identity)) return false;
     collectedRenderSignature = "";
     friendOpenState.clear();
@@ -911,7 +976,7 @@
         return;
       }
       if (result.body?.completed && result.body?.readId) {
-        if (!applySwapTransfer(result.body.readId, result.body.revision)) {
+        if (!applySwapTransfer(result.body.readId, result.body.revision, result.body)) {
           feedback("The trade completed, but this phone couldn't save it. Keep this page open and try again.");
           return;
         }
@@ -985,6 +1050,11 @@
       return;
     }
     if (identity.pendingClaim) await flushPendingClaim({ fallbackToNew: Boolean(identity.claimScannedAt) });
+    else if (!window.Hexadex?.loadProfile?.() && mySets().length > 0 && navigator.onLine !== false) {
+      identity.dirty = true;
+      saveIdentity(identity);
+      await publish();
+    }
     else if (identity.dirty) await publish({ fallbackToNew: Boolean(identity.claimScannedAt) });
     else {
       await pullOwnerState(identity);
@@ -1299,8 +1369,10 @@
     const readId = (params.get("f") || "").trim();
     if (!readId) return;
     const claimToken = (params.get("claim") || "").trim();
+    const tapToken = (params.get("tap") || "").trim();
     params.delete("f");
     params.delete("claim");
+    params.delete("tap");
     const query = params.toString();
     history.replaceState({}, "", `${location.pathname}${query ? "?" + query : ""}${location.hash}`);
 
@@ -1311,8 +1383,8 @@
 
     friendOpenState.clear();
     const identity = loadIdentity();
-    if (identity && loadTradeMode() && navigator.onLine !== false && readId !== identity.readId) {
-      await recordTradeTap(readId);
+    if (identity && loadTradeMode() && tapToken && navigator.onLine !== false && readId !== identity.readId) {
+      await recordTradeTap(readId, tapToken);
       return;
     }
     if (identity && identity.readId === readId) {
@@ -1320,16 +1392,17 @@
       feedback("That's your own Hexlace.");
       return;
     }
-    // A claim link only takes effect on a phone with no identity of its own -
-    // your Hexlace can never be replaced by tapping someone else's tag.
+    // A claimed physical Hexlace is never replaced by tapping another one. A
+    // browser-only sharing identity may upgrade into its first physical tag.
+    const canClaim = !identity || identity.isPhysical === false;
     let effectiveClaimToken = claimToken;
-    if (!effectiveClaimToken && !identity && navigator.onLine !== false) {
+    if (!effectiveClaimToken && canClaim && navigator.onLine !== false) {
       try {
         const released = await api(`/lists/${readId}`, { cache: "no-store" });
         if (released.ok && typeof released.body?.claimToken === "string") effectiveClaimToken = released.body.claimToken;
       } catch {}
     }
-    if (effectiveClaimToken && !identity) {
+    if (effectiveClaimToken && canClaim) {
       try {
         if (await claimHexlace(readId, effectiveClaimToken)) {
           renderCollected();
@@ -1339,9 +1412,10 @@
     }
     friendOpenState.set(readId, true);
     const entry = await addCollected(readId, "");
-    if (entry && !entry.pending && !entry.missing) feedback(`Collected ${entry.name}'s Hexlace.`);
+    if (tapToken) window.Hexadex?.collect?.(readId, tapToken);
+    if (entry && !entry.pending && !entry.missing) feedback(`Collected ${entry.name}'s set list.`);
     else if (entry && entry.missing) feedback("That Hexlace has expired or was removed.");
-    else feedback("Hexlace saved - the list will load when you have signal.");
+    else feedback("Set list saved - it will load when you have signal.");
     elements.panel.scrollIntoView({ block: "nearest" });
   }
 
@@ -1370,8 +1444,38 @@
       feedback("Hold a tag against the back of your phone...");
       await new NDEFReader().write({ records: [{ recordType: "url", data: url }] });
       feedback("Tag written!");
+      return true;
     } catch {
       feedback("Couldn't write the tag.");
+      return false;
+    }
+  }
+
+  async function writeMyPhysicalHexlace() {
+    let identity = loadIdentity();
+    if (!identity) return;
+    if (!identity.tapToken && navigator.onLine !== false) {
+      await publish();
+      identity = loadIdentity();
+    }
+    if (!identity?.tapToken) { feedback("Publish once while online before writing this Hexlace."); return; }
+    if (!(await writeTag(tapUrl(identity.readId, identity.tapToken)))) return;
+    try {
+      const result = await api(`/lists/${identity.readId}/physical`, {
+        method: "POST",
+        headers: { "X-Write-Key": identity.writeKey }
+      });
+      if (!result.ok) {
+        feedback("The tag was written, but its physical status could not sync. Try writing it again while online.");
+        return;
+      }
+      applyOwlMetadata(identity, result.body);
+      identity.isPhysical = true;
+      saveIdentity(identity);
+      renderMine();
+      feedback("Physical Hexlace linked. Its Hex Owl can now be collected by a tap.");
+    } catch {
+      feedback("The tag was written, but its physical status will need another online write.");
     }
   }
 
@@ -1441,11 +1545,8 @@
   if ("NDEFReader" in window) {
     elements.nfc.hidden = false;
     elements.giveawayNfc.hidden = false;
-    elements.nfc.addEventListener("click", () => {
-      const identity = loadIdentity();
-      if (identity) writeTag(shareUrl(identity.readId));
-    });
-    elements.giveawayNfc.addEventListener("click", () => { if (giveawayLink) writeTag(giveawayLink); });
+    elements.nfc.addEventListener("click", writeMyPhysicalHexlace);
+    elements.giveawayNfc.addEventListener("click", () => { if (giveawayTapLink) writeTag(giveawayTapLink); });
   }
 
   window.addEventListener("setlist-changed", () => {
@@ -1487,6 +1588,10 @@
   }, REFRESH_INTERVAL_MS);
   window.setInterval(syncMine, OWNER_REFRESH_INTERVAL_MS);
   window.setInterval(renderCollected, 30000);
+
+  window.addEventListener("hexadex-feedback", event => {
+    if (event.detail?.message) feedback(event.detail.message);
+  });
 
   renderMine();
   renderCollected();

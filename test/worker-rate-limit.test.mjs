@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import worker, { HexlaceCoordinator, RateLimitCoordinator } from "../worker/src/index.js";
+import worker, { HexlaceCoordinator, HexOwlProfile, OwlNumberAllocator, RateLimitCoordinator } from "../worker/src/index.js";
 
 class MemoryKv {
   constructor() {
@@ -40,7 +40,24 @@ class MemoryDoStorage {
   }
 
   async get(key) { return this.values.get(key); }
-  async put(key, value) { this.values.set(key, structuredClone(value)); }
+  async put(key, value) {
+    if (key && typeof key === "object" && !Array.isArray(key)) {
+      for (const [entryKey, entryValue] of Object.entries(key)) this.values.set(entryKey, structuredClone(entryValue));
+      return;
+    }
+    this.values.set(key, structuredClone(value));
+  }
+  async delete(key) { this.values.delete(key); }
+  async list(options = {}) {
+    let entries = [...this.values.entries()].sort(([a], [b]) => a.localeCompare(b));
+    if (options.prefix) entries = entries.filter(([key]) => key.startsWith(options.prefix));
+    if (options.startAfter) entries = entries.filter(([key]) => key > options.startAfter);
+    if (options.start) entries = entries.filter(([key]) => key >= options.start);
+    if (options.end) entries = entries.filter(([key]) => key < options.end);
+    if (options.reverse) entries.reverse();
+    if (Number.isSafeInteger(options.limit)) entries = entries.slice(0, options.limit);
+    return new Map(entries.map(([key, value]) => [key, structuredClone(value)]));
+  }
   async deleteAll() { this.values.clear(); }
   async setAlarm(timestamp) { this.alarmAt = timestamp; }
 }
@@ -91,6 +108,15 @@ function makeDurableEnv(now = 1_800_000_000_000) {
   env.RATE_LIMITS = new MemoryDoNamespace(RateLimitCoordinator, env);
   return env;
 }
+
+function makeOwlEnv(now = 1_800_000_000_000) {
+  const env = makeDurableEnv(now);
+  env.HEX_OWL_PROFILES = new MemoryDoNamespace(HexOwlProfile, env);
+  env.OWL_NUMBERS = new MemoryDoNamespace(OwlNumberAllocator, env);
+  return env;
+}
+
+const QUALIFYING_SET = { day: "Friday", stageId: "village", time: "9:00 PM", artist: "Hex Owl Test" };
 
 function makeRequest(path, options = {}) {
   const headers = new Headers(options.headers || {});
@@ -326,10 +352,10 @@ test("simultaneous trade confirmations settle without cross-coordinator deadlock
     method: "POST", body: JSON.stringify({ name: "B", sets: [] })
   }), env).then(response => response.json());
   await worker.fetch(makeRequest(`/lists/${first.readId}/trade`, {
-    method: "POST", headers: { "X-Write-Key": first.writeKey }, body: JSON.stringify({ targetReadId: second.readId })
+    method: "POST", headers: { "X-Write-Key": first.writeKey }, body: JSON.stringify({ targetReadId: second.readId, targetTapToken: second.tapToken })
   }), env);
   await worker.fetch(makeRequest(`/lists/${second.readId}/trade`, {
-    method: "POST", headers: { "X-Write-Key": second.writeKey }, body: JSON.stringify({ targetReadId: first.readId })
+    method: "POST", headers: { "X-Write-Key": second.writeKey }, body: JSON.stringify({ targetReadId: first.readId, targetTapToken: first.tapToken })
   }), env);
 
   const [firstConfirm, secondConfirm] = await Promise.all([
@@ -723,4 +749,197 @@ test("connection codes copy ownership and privately sync friend ids across brows
     headers: { "X-Write-Key": "wrong-write-key-1234" }
   }), env);
   assert.equal(wrongOwner.status, 403);
+});
+
+test("a Hex Owl is assigned once only after a named profile saves a set", async () => {
+  const env = makeOwlEnv();
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Night Owl", sets: [], physical: false })
+  }), env);
+  assert.equal(created.status, 201, await created.clone().text());
+  const identity = await created.json();
+  assert.equal(identity.owl, undefined);
+  assert.equal(identity.isPhysical, false);
+
+  const qualified = await worker.fetch(makeRequest(`/lists/${identity.readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": identity.writeKey },
+    body: JSON.stringify({
+      name: "Night Owl",
+      sets: [QUALIFYING_SET],
+      revision: 1,
+      profileId: identity.profileId,
+      profileKey: identity.profileKey
+    })
+  }), env);
+  assert.equal(qualified.status, 200, await qualified.clone().text());
+  const qualifiedBody = await qualified.json();
+  assert.match(qualifiedBody.owl.seed, /^[0-9a-f]{32}$/);
+  assert.equal(qualifiedBody.owl.number, 1);
+
+  const renamed = await worker.fetch(makeRequest(`/lists/${identity.readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": identity.writeKey },
+    body: JSON.stringify({
+      name: "Renamed Owl",
+      sets: [QUALIFYING_SET],
+      revision: 2,
+      profileId: identity.profileId,
+      profileKey: identity.profileKey
+    })
+  }), env).then(response => response.json());
+  assert.deepEqual(renamed.owl, qualifiedBody.owl);
+
+  const publicBody = await worker.fetch(makeRequest(`/lists/${identity.readId}`), env).then(response => response.json());
+  assert.deepEqual(publicBody.owl, qualifiedBody.owl);
+  assert.equal(Object.hasOwn(publicBody, "profileId"), false);
+  assert.equal(Object.hasOwn(publicBody, "profileKey"), false);
+  assert.equal(Object.hasOwn(publicBody, "hexadex"), false);
+});
+
+test("concurrent qualification allocates one stable Owl number and seed", async () => {
+  const env = makeOwlEnv();
+  const identity = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Concurrent Owl", sets: [], physical: false })
+  }), env).then(response => response.json());
+  const update = index => worker.fetch(makeRequest(`/lists/${identity.readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": identity.writeKey, "CF-Connecting-IP": `203.0.113.${70 + index}` },
+    body: JSON.stringify({
+      name: "Concurrent Owl",
+      sets: [QUALIFYING_SET],
+      revision: 1,
+      profileId: identity.profileId,
+      profileKey: identity.profileKey
+    })
+  }), env);
+  const responses = await Promise.all([update(0), update(1)]);
+  assert.deepEqual(responses.map(response => response.status).sort(), [200, 409]);
+  const owner = await worker.fetch(makeRequest(`/lists/${identity.readId}/owner`, {
+    headers: { "X-Write-Key": identity.writeKey }
+  }), env).then(response => response.json());
+  assert.equal(owner.owl.number, 1);
+  const allocator = env.OWL_NUMBERS.instances.get("global").ctx.storage;
+  assert.equal(await allocator.get("counter"), 1);
+});
+
+test("release keeps the user's Owl and reclaiming the Hexlace restores that same Owl", async () => {
+  const env = makeOwlEnv();
+  const original = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Returning Owl", sets: [QUALIFYING_SET], physical: true })
+  }), env).then(response => response.json());
+  assert.ok(original.owl);
+
+  const released = await worker.fetch(makeRequest(`/lists/${original.readId}/release`, {
+    method: "POST",
+    headers: { "X-Write-Key": original.writeKey }
+  }), env);
+  assert.equal(released.status, 200, await released.clone().text());
+  const publicReleased = await worker.fetch(makeRequest(`/lists/${original.readId}`), env).then(response => response.json());
+  assert.equal(publicReleased.owl, undefined);
+  assert.ok(publicReleased.claimToken);
+
+  const reclaimed = await worker.fetch(makeRequest(`/lists/${original.readId}/claim`, {
+    method: "POST",
+    body: JSON.stringify({
+      claimToken: publicReleased.claimToken,
+      writeKey: "reclaimed-write-key-12345",
+      scannedAt: env.NOW_MS,
+      profileId: original.profileId,
+      profileKey: original.profileKey
+    })
+  }), env);
+  assert.equal(reclaimed.status, 200, await reclaimed.clone().text());
+  assert.deepEqual((await reclaimed.json()).owl, original.owl);
+  assert.equal(await env.OWL_NUMBERS.instances.get("global").ctx.storage.get("counter"), 1);
+});
+
+test("trading physical Hexlaces always trades their attached Hex Owls", async () => {
+  const env = makeOwlEnv();
+  const first = await worker.fetch(makeRequest("/lists", {
+    method: "POST", body: JSON.stringify({ name: "Alex", sets: [QUALIFYING_SET], physical: true })
+  }), env).then(response => response.json());
+  const second = await worker.fetch(makeRequest("/lists", {
+    method: "POST", body: JSON.stringify({ name: "Blair", sets: [QUALIFYING_SET], physical: true })
+  }), env).then(response => response.json());
+  assert.notEqual(first.owl.seed, second.owl.seed);
+
+  const sharedLinkIsNotATap = await worker.fetch(makeRequest(`/lists/${first.readId}/trade`, {
+    method: "POST", headers: { "X-Write-Key": first.writeKey }, body: JSON.stringify({ targetReadId: second.readId })
+  }), env);
+  assert.equal(sharedLinkIsNotATap.status, 403);
+
+  await worker.fetch(makeRequest(`/lists/${first.readId}/trade`, {
+    method: "POST", headers: { "X-Write-Key": first.writeKey }, body: JSON.stringify({ targetReadId: second.readId, targetTapToken: second.tapToken })
+  }), env);
+  await worker.fetch(makeRequest(`/lists/${second.readId}/trade`, {
+    method: "POST", headers: { "X-Write-Key": second.writeKey }, body: JSON.stringify({ targetReadId: first.readId, targetTapToken: first.tapToken })
+  }), env);
+  await worker.fetch(makeRequest(`/lists/${first.readId}/trade/confirm`, {
+    method: "POST", headers: { "X-Write-Key": first.writeKey }
+  }), env);
+  const finished = await worker.fetch(makeRequest(`/lists/${second.readId}/trade/confirm`, {
+    method: "POST", headers: { "X-Write-Key": second.writeKey }
+  }), env).then(response => response.json());
+  assert.equal(finished.completed, true);
+  assert.deepEqual(finished.owl, first.owl);
+
+  const firstOwner = await worker.fetch(makeRequest(`/lists/${second.readId}/owner`, {
+    headers: { "X-Write-Key": first.writeKey }
+  }), env).then(response => response.json());
+  const secondOwner = await worker.fetch(makeRequest(`/lists/${first.readId}/owner`, {
+    headers: { "X-Write-Key": second.writeKey }
+  }), env).then(response => response.json());
+  assert.deepEqual(firstOwner.owl, second.owl);
+  assert.deepEqual(secondOwner.owl, first.owl);
+  const firstPhysicalTag = await worker.fetch(makeRequest(`/lists/${first.readId}`), env).then(response => response.json());
+  const secondPhysicalTag = await worker.fetch(makeRequest(`/lists/${second.readId}`), env).then(response => response.json());
+  assert.deepEqual(firstPhysicalTag.owl, first.owl);
+  assert.deepEqual(secondPhysicalTag.owl, second.owl);
+});
+
+test("Hexadex collection requires a physical tap and preserves first-collected metadata", async () => {
+  const env = makeOwlEnv();
+  const collector = await worker.fetch(makeRequest("/lists", {
+    method: "POST", body: JSON.stringify({ name: "Collector", sets: [QUALIFYING_SET], physical: false })
+  }), env).then(response => response.json());
+  const source = await worker.fetch(makeRequest("/lists", {
+    method: "POST", body: JSON.stringify({ name: "Friend", sets: [QUALIFYING_SET], physical: true })
+  }), env).then(response => response.json());
+
+  const withoutTap = await worker.fetch(makeRequest(`/profiles/${collector.profileId}/hexadex`, {
+    method: "POST",
+    headers: { "X-Profile-Key": collector.profileKey },
+    body: JSON.stringify({ readId: source.readId })
+  }), env);
+  assert.equal(withoutTap.status, 400);
+
+  const firstCollectedAt = env.NOW_MS - 5000;
+  const collected = await worker.fetch(makeRequest(`/profiles/${collector.profileId}/hexadex`, {
+    method: "POST",
+    headers: { "X-Profile-Key": collector.profileKey },
+    body: JSON.stringify({ readId: source.readId, tapToken: source.tapToken, firstCollectedAt })
+  }), env).then(response => response.json());
+  assert.equal(collected.added, true);
+  assert.equal(collected.entry.firstCollectedAt, firstCollectedAt);
+  assert.equal(collected.entry.context, "Shambhala 2026");
+
+  env.NOW_MS += 60_000;
+  const duplicate = await worker.fetch(makeRequest(`/profiles/${collector.profileId}/hexadex`, {
+    method: "POST",
+    headers: { "X-Profile-Key": collector.profileKey },
+    body: JSON.stringify({ readId: source.readId, tapToken: source.tapToken, firstCollectedAt: env.NOW_MS })
+  }), env).then(response => response.json());
+  assert.equal(duplicate.added, false);
+  assert.equal(duplicate.entry.firstCollectedAt, firstCollectedAt);
+
+  const page = await worker.fetch(makeRequest(`/profiles/${collector.profileId}/hexadex?limit=24`, {
+    headers: { "X-Profile-Key": collector.profileKey }
+  }), env).then(response => response.json());
+  assert.equal(page.total, 1);
+  assert.equal(page.entries.length, 1);
+  assert.deepEqual(page.entries[0].owl, source.owl);
 });

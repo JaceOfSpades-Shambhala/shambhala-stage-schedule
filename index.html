@@ -7,21 +7,21 @@
   <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
   <title>Shambhala 2026 Stage Set Times</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=54">
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=54">
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=54">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=54">
-  <link rel="stylesheet" href="styles.css?v=54">
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=55">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=55">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=55">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=55">
+  <link rel="stylesheet" href="styles.css?v=55">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Camp Hexadecibel">
   <meta property="og:title" content="Shambhala 2026 Stage Set Times">
   <meta property="og:description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
-  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=54">
+  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=55">
   <meta property="og:url" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/">
   <meta name="twitter:card" content="summary">
 </head>
 <body>
-  <!-- v54 -->
+  <!-- v55 -->
   <a class="skip-link" href="#schedule">Skip to schedule</a>
   <div class="hx-vortex" aria-hidden="true">
     <div class="hx-vortex-glow"></div>
@@ -35,7 +35,7 @@
 
   <main class="shell">
     <header class="hero">
-      <h1 class="hero-mark"><img class="hero-wordmark" src="wordmark.svg?v=54" alt="Shambhala Music Festival 2026 set times" width="800" height="253"></h1>
+      <h1 class="hero-mark"><img class="hero-wordmark" src="wordmark.svg?v=55" alt="Shambhala Music Festival 2026 set times" width="800" height="253"></h1>
       <p class="camp-credit"><span>Made by Camp Hexadecibel</span><span aria-hidden="true"> - </span><a id="camp-location-link" href="https://www.google.com/maps/search/?api=1&query=Shambhala%20Music%20Festival%20Salmo%20BC" target="_blank" rel="noreferrer">Come visit us</a></p>
       <p class="offline-ready">Offline ready after first online load</p>
       <button id="install-button" class="install-button" type="button" hidden>Add to Home Screen</button>
@@ -44,7 +44,7 @@
 
     <section class="live-panel" aria-label="Live stage controls">
       <div id="stage-mark-header" class="stage-mark-header">
-        <img id="stage-mark" class="stage-mark" src="stage-names/amp.png?v=54" alt="AMP" width="150" height="64" data-stage="amp">
+        <img id="stage-mark" class="stage-mark" src="stage-names/amp.png?v=55" alt="AMP" width="150" height="64" data-stage="amp">
       </div>
       <section id="now-playing" class="now-playing" data-status="checking" aria-live="polite" aria-atomic="true">
         <div class="now-playing-topline">
@@ -145,6 +145,14 @@
         <span id="hexlace-state" class="hexlace-state" aria-live="polite"><span class="hexlace-state-dot" aria-hidden="true"></span><span id="hexlace-state-label">Not set up</span></span>
       </summary>
       <div class="hexlace-panel-body">
+        <article id="hex-owl-card" class="hex-owl-card" hidden>
+          <div id="hex-owl-image" class="hex-owl-card-art" aria-hidden="true"></div>
+          <div class="hex-owl-card-copy">
+            <span class="hex-owl-eyebrow">Your Hex Owl</span>
+            <strong id="hex-owl-number"></strong>
+            <small id="hex-owl-traits"></small>
+          </div>
+        </article>
         <div id="hexlace-notice" class="hexlace-notice" hidden>
           <strong id="hexlace-notice-text"></strong>
           <button id="hexlace-notice-action" class="planner-action" type="button" hidden></button>
@@ -187,7 +195,7 @@
               </div>
             </div>
           </details>
-          <details class="hexlace-section">
+          <details id="hexlace-manage-section" class="hexlace-section">
             <summary><span><strong>Manage Hexlace</strong><small>Swap with a friend or release this tag</small></span></summary>
             <div class="hexlace-section-body hexlace-manage-zone">
               <button id="hexlace-swap-open" class="hexlace-menu-action" type="button" hidden><strong>Trade Hexlaces with a friend</strong><span>Both start trade mode, then tap each other's physical Hexlace</span></button>
@@ -224,7 +232,7 @@
     <dialog id="hexlace-release-dialog" class="hexlace-dialog">
       <form method="dialog" class="hexlace-dialog-card">
         <h2>Release this Hexlace?</h2>
-        <p>Your name and shared list come off this tag so someone else can claim it. Your saved sets stay on this phone. This needs internet and can't be undone.</p>
+        <p>Your name, shared list, and Hex Owl come off this physical tag so someone else can claim it. Your saved sets and Hex Owl stay with your profile, ready if you reclaim a Hexlace. This needs internet and can't be undone.</p>
         <button id="hexlace-release-confirm" class="planner-action is-danger" type="button">Release Hexlace</button>
         <button class="planner-action" value="cancel">Cancel</button>
       </form>
@@ -245,7 +253,7 @@
         </div>
         <div id="hexlace-swap-accept" hidden>
           <h2>Confirm this trade?</h2>
-          <p id="hexlace-swap-accept-copy">Both phones matched the same two Hexlaces. Your saved sets stay on your phone and move to the tag you receive.</p>
+          <p id="hexlace-swap-accept-copy">Both phones matched the same two Hexlaces. Your saved sets stay on your phone. Each Hex Owl always travels with its physical Hexlace, so you receive your friend's Owl with their tag.</p>
           <button id="hexlace-swap-accept-button" class="planner-action" type="button">Confirm trade</button>
         </div>
         <button id="hexlace-swap-cancel" class="planner-action" value="cancel">Cancel trade</button>
@@ -275,6 +283,7 @@
           <span class="control-label">Friends' sets collected</span>
           <span id="hexlace-count" class="planner-count">No friends' sets collected yet</span>
         </span>
+        <button id="hexadex-open" class="hexadex-open" type="button" hidden>Hexadex <span id="hexadex-count">0</span></button>
       </div>
       <div class="hexlace-panel-body">
         <div id="hexlace-compare-tools" class="hexlace-compare-tools" hidden>
@@ -290,6 +299,31 @@
     </section>
     <p id="hexlace-feedback" class="planner-feedback hexlace-feedback" role="status" aria-live="polite"></p>
 
+    <dialog id="hexadex-dialog" class="hexlace-dialog hexadex-dialog">
+      <form method="dialog" class="hexlace-dialog-card hexadex-dialog-card">
+        <div class="hexadex-dialog-heading">
+          <div>
+            <h2>Your Hexadex</h2>
+            <p>Hex Owls collected from physical Hexlace taps.</p>
+          </div>
+          <button class="hexadex-close" value="close" aria-label="Close Hexadex">&#10005;</button>
+        </div>
+        <p id="hexadex-status" class="hexadex-status" role="status" aria-live="polite"></p>
+        <div id="hexadex-grid" class="hexadex-grid"></div>
+        <p id="hexadex-empty" class="planner-empty">No Hex Owls collected yet. Tap a friend's physical Hexlace to meet one.</p>
+      </form>
+    </dialog>
+
+    <dialog id="hexadex-reveal-dialog" class="hexlace-dialog hexadex-reveal-dialog">
+      <form method="dialog" class="hexlace-dialog-card hexadex-reveal-card">
+        <span class="hex-owl-eyebrow">New Hex Owl collected</span>
+        <div id="hexadex-reveal-image" class="hexadex-reveal-art" aria-hidden="true"></div>
+        <h2 id="hexadex-reveal-name"></h2>
+        <strong id="hexadex-reveal-number"></strong>
+        <button class="planner-action" value="close">Add to Hexadex</button>
+      </form>
+    </dialog>
+
     <footer>
       <p>A fan project for Shambhala 2026. "Now playing" uses your device clock in Salmo, BC time.</p>
       <p>Hexlace and setlist sharing uses your display name, saved sets, and optional pings. <strong>It does not collect precise location.</strong></p>
@@ -304,19 +338,21 @@
     <button id="undo-button" type="button">Undo</button>
   </div>
 
-  <script src="camp-location.js?v=54"></script>
-  <script src="schedule-data.js?v=54"></script>
-  <script src="schedule-metadata.js?v=54"></script>
-  <script src="search-normalize.js?v=54"></script>
-  <script src="preview-time.js?v=54"></script>
-  <script src="app.js?v=54"></script>
-  <script src="undo.js?v=54"></script>
-  <script src="planner.js?v=54"></script>
-  <script src="qrcode.js?v=54"></script>
-  <script src="hexlace-api.js?v=54"></script>
-  <script src="hexlace-giveaway.js?v=54"></script>
-  <script src="hexlace-compare.js?v=54"></script>
-  <script src="hexlaces.js?v=54"></script>
-  <script src="install.js?v=54"></script>
+  <script src="camp-location.js?v=55"></script>
+  <script src="schedule-data.js?v=55"></script>
+  <script src="schedule-metadata.js?v=55"></script>
+  <script src="search-normalize.js?v=55"></script>
+  <script src="preview-time.js?v=55"></script>
+  <script src="app.js?v=55"></script>
+  <script src="undo.js?v=55"></script>
+  <script src="planner.js?v=55"></script>
+  <script src="qrcode.js?v=55"></script>
+  <script src="hexlace-api.js?v=55"></script>
+  <script src="hexlace-giveaway.js?v=55"></script>
+  <script src="hexlace-compare.js?v=55"></script>
+  <script src="hex-owl.js?v=55"></script>
+  <script src="hexadex.js?v=55"></script>
+  <script src="hexlaces.js?v=55"></script>
+  <script src="install.js?v=55"></script>
 </body>
 </html>

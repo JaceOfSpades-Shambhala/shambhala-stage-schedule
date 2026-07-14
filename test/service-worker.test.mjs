@@ -95,17 +95,20 @@ test("a successful network response remains preferred", async () => {
 });
 
 test("a failed optional precache asset does not block the offline shell install", async () => {
-  const added = await runInstall({ rejectedOptionalAsset: "./stage-names/amp.png?v=54" });
+  const added = await runInstall({ rejectedOptionalAsset: "./stage-names/amp.png?v=55" });
   assert.ok(added.includes("./index.html"));
-  assert.ok(added.includes("./hexlaces.js?v=54"));
-  assert.ok(added.includes("./hexlace-compare.js?v=54"));
-  assert.equal(added.includes("./stage-names/amp.png?v=54"), false);
-  assert.ok(added.includes("./stage-names/fractal-forest.png?v=54"));
+  assert.ok(added.includes("./hexlaces.js?v=55"));
+  assert.ok(added.includes("./hexlace-compare.js?v=55"));
+  assert.ok(added.includes("./hex-owl.js?v=55"));
+  assert.ok(added.includes("./hex-owl-base.svg?v=55"));
+  assert.ok(added.includes("./hexadex.js?v=55"));
+  assert.equal(added.includes("./stage-names/amp.png?v=55"), false);
+  assert.ok(added.includes("./stage-names/fractal-forest.png?v=55"));
 });
 
 test("background refresh is schedule-only and cache cleanup is app-scoped", async () => {
   const source = await readFile(new URL("../sw.js", import.meta.url), "utf8");
-  assert.match(source, /REFRESH_ASSETS = \["\.\/schedule-data\.js\?v=54", "\.\/schedule-metadata\.js\?v=54"\]/);
+  assert.match(source, /REFRESH_ASSETS = \["\.\/schedule-data\.js\?v=55", "\.\/schedule-metadata\.js\?v=55"\]/);
   assert.match(source, /key\.startsWith\(CACHE_PREFIX\)/);
   assert.match(source, /OPTIONAL_CACHE_TIMEOUT_MS/);
   assert.match(source, /request\.mode === "navigate"/);

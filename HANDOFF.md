@@ -1,6 +1,6 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v54**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v55**.
 
 ## What this is
 
@@ -47,7 +47,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (v54 at the time of writing). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (v55 at the time of writing). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
@@ -56,9 +56,9 @@ Every site release bumps ONE version number everywhere (v54 at the time of writi
 
 The sed incantation used for bumps (adjust numbers):
 ```bash
-sed -i 's/?v=53/?v=54/g; s/<!-- v53 -->/<!-- v54 -->/' index.html
-sed -i 's/?v=53/?v=54/g' app.js styles.css manifest.webmanifest
-sed -i 's/stage-schedule-v53/stage-schedule-v54/; s/?v=53/?v=54/g' sw.js
+sed -i 's/?v=54/?v=55/g; s/<!-- v54 -->/<!-- v55 -->/' index.html
+sed -i 's/?v=54/?v=55/g' app.js styles.css manifest.webmanifest
+sed -i 's/stage-schedule-v54/stage-schedule-v55/; s/?v=54/?v=55/g' sw.js
 ```
 
 **Schedule-only edits during the festival do NOT bump `?v=`** — edit `schedule-data.js` and/or `schedule-metadata.js`, change the metadata `SCHEDULE_VERSION` string, and commit. Full instructions are in [UPDATING.md](UPDATING.md). Open PWAs poll every 5 min and show a "tap to refresh" banner for both schedule and app updates.
@@ -73,21 +73,23 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 - Planner day groups remain collapsed by default; preview mode does not expand them.
 - **Seed a set list:** localStorage key `shambhala-2026-my-set-list` = array of `{day, stageId, time, artist}`.
 - **Seed a ping:** localStorage key `shambhala-2026-ping` = `{type:"camp"|"river"|"vendors", startKey, endKey}` or `{type:"set", day, stageId, time, artist, startKey, endKey}`. Keys are Salmo-local timeline minutes (`date serial * 1440 + minutes`).
-- **Identity/collection:** `shambhala-2026-hexlace-identity` (`{readId, writeKey, name, pendingClaim?, claimScannedAt?, silentClaim?, dirty?, lastPublished?}`) and `shambhala-2026-hexlaces-collected` (array).
+- **Identity/collection:** `shambhala-2026-hexlace-identity` (`{readId, writeKey, name, profileId?, profileKey?, owl?, tapToken?, isPhysical?, pendingClaim?, claimScannedAt?, silentClaim?, dirty?, lastPublished?}`), `shambhala-hex-owl-profile` (private profile credentials plus current Owl), `shambhala-hexadex-cache` / `shambhala-hexadex-pending`, and `shambhala-2026-hexlaces-collected` (array).
 - The client hits the **production** API — fine (test lists auto-expire in 60 days), or run `wrangler dev` for a local worker.
 
 ## API surface (worker/src/index.js)
 
-- `POST /lists` `{name, sets, ping}` → `{readId, writeKey}`; with `claimable:true` → `{readId, claimToken}` (no write key stored — unwritable until claimed)
-- `GET /lists/:readId` → `{name, sets, ping, updated}`; expired pings are returned as `null` without a KV cleanup write
-- `PUT /lists/:readId` + header `X-Write-Key` → update (name changes ride along)
+- `POST /lists` `{name, sets, ping, physical:false, profileId?, profileKey?}` → private identity/profile metadata and an Owl once the name + saved-set eligibility rule is met; with `claimable:true` → `{readId, claimToken, tapToken}` (no write key stored — unwritable until claimed)
+- `GET /lists/:readId` → `{name, sets, ping, updated, owl?}`; expired pings are returned as `null` without a KV cleanup write. Profile credentials and Hexadex data are never public.
+- `PUT /lists/:readId` + header `X-Write-Key` → update and lazy profile/Owl migration (name changes ride along)
 - `POST /lists/:readId/claim` `{claimToken, writeKey, scannedAt}` → registers the CLAIMER's locally-generated key when this is the earliest recorded scan; returns `{ok:true, accepted:false}` for later scans without changing ownership. A per-Hexlace Durable Object serializes claims and honours earlier-scan takeovers for **seven days after the first successful claim**; after that, ownership locks permanently.
-- `POST /lists/:readId/release` with `X-Write-Key` → clears the public name/list and current owner, then exposes a new claim token only through that released tag's public read response. The same physical `?f=` tag is claimable by the next scanner; local saved sets are untouched.
-- `POST /lists/:readId/trade` `{targetReadId}` with `X-Write-Key` → records one owner's physical-tag tap for 15 minutes. A trade is matched only by reciprocal owner intent. `GET /lists/:readId/trade` polls state, `POST .../trade/confirm` requires both owners to confirm before write keys swap, and `POST .../trade/cancel` abandons that side. The client hides trading while offline.
+- `POST /lists/:readId/release` with `X-Write-Key` → atomically detaches the Owl to the private profile, clears the public name/list/current tag Owl, and exposes a new claim token only through that released tag's public read response. Local saved sets and the profile Owl are untouched.
+- `POST /lists/:readId/physical` with `X-Write-Key` → marks a browser share identity as a permanent physical record only after Web NFC successfully wrote its tap-specific URL.
+- `POST /lists/:readId/trade` `{targetReadId, targetTapToken}` with `X-Write-Key` → records one owner's validated physical-tag tap for 15 minutes. A trade is matched only by reciprocal owner intent. `GET /lists/:readId/trade` polls state, `POST .../trade/confirm` requires both owners to confirm before ownership/profile credentials swap, and `POST .../trade/cancel` abandons that side. Each Owl remains on its physical Hexlace throughout; trading is never an Owl-optional action.
+- `GET/POST /profiles/:profileId/hexadex` + `X-Profile-Key` → paged private collection and tap-token-validated add. Entries deduplicate by global Owl number, preserve first-collected time, and store only broad `Shambhala <year>` context—not precise location.
 - `POST /lists/:readId/handoff` + header `X-Write-Key` → creates an opaque transfer ticket with a 24-hour TTL; `POST /handoffs/redeem` accepts a stable `redemptionId` and returns the existing identity, saved sets, and ping. Retrying the same ticket/redemption ID after a dropped response returns the same identity, while a different redemption ID is rejected.
 - `POST /lists/:readId/connect-code` + header `X-Write-Key` → creates a copy/paste-friendly 24-hour fallback code. It uses the same retry-safe redemption path and copies ownership; it does not rotate the write key or revoke the browser.
 - `GET /lists/:readId/owner` + header `X-Write-Key` → returns private owner state for browser/PWA synchronization, including collected-friend ids. Ordinary public `GET /lists/:readId` responses never expose those ids.
-- Caps: 100 sets, 20KB, name ≤ 60 chars. TTL 60 days from last write. CORS `*`.
+- Caps: 100 sets, 20KB, name ≤ 60 chars. Browser-only list records and KV snapshots use a rolling 60-day TTL; physical Hexlace and private profile Durable Objects are retained for multi-year continuity. CORS `*`.
 - Write-like endpoints have Durable Object-backed atomic rate limits sized for shared festival NAT: create and claim each allow 120 requests per 5 minutes per client IP; updates allow 450 requests per 5 minutes per client IP plus 180 successful updates per 5 minutes per list (per-list, so NAT-independent). Reads are not rate-limited.
 - Durable Objects are authoritative for creation, ownership, revision compare-and-write, updates, handoffs, and rate limits. KV remains the public read snapshot used by friend and ping polling. Existing KV-only records migrate lazily on the first coordinated mutation, without a bulk migration or visible user step.
 
@@ -100,11 +102,15 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 5. **CRLF warnings on commit are noise** (OneDrive/Windows working copy, LF in repo). When diffing local vs live, strip `\r`.
 6. **iOS storage split:** the browser and installed PWA have separate localStorage. `hexlaces.js` uses a 24-hour cookie handoff to copy the owner identity, saved sets, ping, and collected-friend ids into a newly installed app. If iOS does not copy the cookie, My Hexlace can issue a 24-hour connection code for manual entry in the Home Screen app. Neither path revokes the browser. Both contexts pull authenticated owner state every two minutes while active/online; friend ids are private and cached friend details are fetched from their public Hexlaces. Creating or redeeming a transfer needs internet. Safari is the primary supported handoff path; third-party iOS browsers still require real-device checks.
 7. **Stray "hexadecibel" worker** (a static duplicate of the site) may still exist on the Cloudflare account — safe to delete; NEVER delete `shambhala-setlists`.
+8. **One-time physical URL rewrite:** legacy physical Hexlaces contain only `?f=<readId>`. They still share set lists, release, and retain ownership, but tap-only Hexadex collection and trade validation require rewriting once with the new `&tap=<token>` URL from **Write my tag**. Do not put tap tokens in ordinary QR/share links.
 
 ## Design decisions worth knowing
 
 - A set's working end is the next set on the same stage, capped at 90 minutes in the planner. Final-set endpoints are inferred from the printed PDF bars and recorded in `schedule-metadata.js`. General conflicts require at least 15 minutes of overlap; the compact "Now / Up next" grouping uses the intentional 20-minute start window.
 - Claiming is intentionally invisible to the end user: opening a claim URL with no existing identity stores a silent local reservation. The Worker keeps the claim token metadata and lets the earliest local `scannedAt` own the Hexlace, so an accidental later tap cannot steal a tag just because it had signal first. Earlier-scan takeovers close seven days after the first claim, locking ownership.
+- Terminology is strict: **Hexlace** means the physical NFC tag; **Hex Owl** means the generated identity image. The v1 renderer is frozen by seed/version and reuses the exact traced path from the supplied Shambhala Owl reference in `hex-owl-base.svg`. Brow treatments recolour complete chevrons extracted directly from that exact path; facial-disc marks and small festival accessories stay in reserved empty-space zones. Ordinary portal rings use one colour, rare Owls receive sparse sparkles, and multi-colour Pagoda/Aurora/Moon portals are legendary-only. Future art changes must add a renderer version instead of altering v1.
+- Hexadex entry-point options considered were (1) the Friends header, (2) the My Hexlace summary, and (3) beside Now Playing. The Friends header was chosen because collecting is friend-centric, it stays visually quiet until used, and it avoids crowding the live schedule or ownership controls.
+- Global Owl numbers are allocated once per profile by a dedicated low-frequency Durable Object; the random 128-bit seed is generated server-side and stored with renderer version and season. A display-name change never affects the seed. Release retains the Owl in the profile, reclaim restores it, and only trading for another physical Hexlace changes the Owl a user currently owns.
 - Publishing debounces 4s after each planner change; queued offline (`dirty` flag) and flushed on online/foreground/5-min tick. Workers Paid is enabled for write headroom; the Worker still rate-limits writes to protect against retry loops and abuse.
 - Pings are passive and notification-free. Camp, river, and vendors pings last 30/60/90 minutes; set pings reference a saved set, change copy as its start approaches, and expire at the next same-day set on that stage (or the PDF-derived final endpoint). Only one ping is stored per person. Expired location and set pings may remain in the TTL-bound KV record until its next owner update, but API reads now redact them, so friends do not see stale pings and no cleanup write is required.
 - All remote strings render via `textContent` — keep it that way (XSS surface is friend names/artists from the API).
@@ -120,6 +126,6 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 
 ## Version history (condensed)
 
-Latest: v54 adds a minimal client-side plan comparison flow for choosing a collected friend and viewing exact mutually saved sets one festival day at a time, including offline cached data and last-update context. v53 hides the installed-app connection section whenever it cannot offer an action, removes the ordinary schedule disclaimer, moves the offline-ready note beside the camp credit, and simplifies the footer privacy copy. v52 redesigned My Hexlace around progressive disclosure, added irreversible release-to-next-scanner, and added an online-only physical trade handshake that requires reciprocal tag taps and confirmation from both owners.
+Latest: v55 adds deterministic numbered Hex Owls, private multi-year Hexadex collection, tap-specific physical URLs, release/reclaim continuity, and mandatory Owl-with-Hexlace trade semantics. v54 added the minimal one-day-at-a-time plan comparison flow. v53 hid unavailable installed-app connection UI and simplified footer copy. v52 redesigned My Hexlace and added release plus reciprocal confirmed physical trades.
 
 v15–16 pre-existing site → v17 SW network-timeout + schedule version stamp + update banner → v18 up-next-from-my-sets, Share button, View Transitions → v19 overlap flagging → v20 planner declutter (live now/next block, collapsible days, 20-min tolerance) → v21 Today-marker fix → v22 periodic background sync + UPDATING.md → v23 Hexlaces (worker + client) → v24 Hexlace panel declutter + `[hidden]` fix → v25 app-release detection in update banner → v26 audit fixes (crash-proof hash, offline-safe claims, 100-set cap, storage guards, ETag checks, worker hardening) → v28 morning-day consistency, collapsed inactive Hexlaces, date-mapping tests, schedule validation, and Worker-side write rate limits → v29 invisible Hexlace claim reservations with earliest-scan ownership → v30 disabled browser View Transitions after intermittent stuck snapshot overlays → v31 cleaner live-status copy and collapsed Hexlace/planner sections by default → v32 fixed Friend's sets panel and changed schedule markers into a time-progress rail → v33 masked timeline markers to remove rail artifacts → v34 switched to segmented timeline rails without marker rings.

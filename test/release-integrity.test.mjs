@@ -12,19 +12,22 @@ test("release assets and service-worker precache use one version and include bot
   ]);
   const releaseSources = [html, serviceWorker, css, manifest, app];
   const referencedVersions = new Set(releaseSources.flatMap(source => [...source.matchAll(/\?v=(\d+)/g)].map(match => match[1])));
-  assert.deepEqual([...referencedVersions], ["54"], "Every release asset query must use exactly v54.");
-  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "54", "The Pages release marker must be v54.");
-  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "54", "The service-worker cache must be v54.");
-  assert.match(readme, /authoritative deployed version[^\n]*\bv54\b/i);
-  assert.match(handoff, /current release \*\*v54\*\*/i);
-  assert.match(handoff, /release bumps ONE version number everywhere \(v54 at the time of writing\)/);
-  assert.match(serviceWorker, /InterVariable\.woff2\?v=54/);
-  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=54/);
-  assert.match(css, /InterVariable\.woff2\?v=54/);
-  assert.match(css, /InterVariable-Italic\.woff2\?v=54/);
-  assert.match(serviceWorker, /schedule-metadata\.js\?v=54/);
-  assert.match(serviceWorker, /undo\.js\?v=54/);
-  assert.match(serviceWorker, /hexlace-compare\.js\?v=54/);
+  assert.deepEqual([...referencedVersions], ["55"], "Every release asset query must use exactly v55.");
+  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "55", "The Pages release marker must be v55.");
+  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "55", "The service-worker cache must be v55.");
+  assert.match(readme, /authoritative deployed version[^\n]*\bv55\b/i);
+  assert.match(handoff, /current release \*\*v55\*\*/i);
+  assert.match(handoff, /release bumps ONE version number everywhere \(v55 at the time of writing\)/);
+  assert.match(serviceWorker, /InterVariable\.woff2\?v=55/);
+  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=55/);
+  assert.match(css, /InterVariable\.woff2\?v=55/);
+  assert.match(css, /InterVariable-Italic\.woff2\?v=55/);
+  assert.match(serviceWorker, /schedule-metadata\.js\?v=55/);
+  assert.match(serviceWorker, /undo\.js\?v=55/);
+  assert.match(serviceWorker, /hexlace-compare\.js\?v=55/);
+  assert.match(serviceWorker, /hex-owl\.js\?v=55/);
+  assert.match(serviceWorker, /hex-owl-base\.svg\?v=55/);
+  assert.match(serviceWorker, /hexadex\.js\?v=55/);
 });
 
 test("schedule and overlap policy stay explicit", async () => {
@@ -67,6 +70,8 @@ test("Hexlace coordination and closed-friend rendering safeguards stay enabled",
   ]);
   assert.match(config, /"name": "HEXLACES", "class_name": "HexlaceCoordinator"/);
   assert.match(config, /"name": "RATE_LIMITS", "class_name": "RateLimitCoordinator"/);
+  assert.match(config, /"name": "HEX_OWL_PROFILES", "class_name": "HexOwlProfile"/);
+  assert.match(config, /"name": "OWL_NUMBERS", "class_name": "OwlNumberAllocator"/);
   assert.match(config, /"new_sqlite_classes": \["HexlaceCoordinator", "RateLimitCoordinator"\]/);
   assert.match(coordinator, /CLAIM_CONTENTION_WINDOW_MS = 7 \* 24 \* 60 \* 60 \* 1000/);
   assert.match(hexlaces, /HANDOFF_REDEMPTION_KEY/);
@@ -86,10 +91,17 @@ test("Hexlace coordination and closed-friend rendering safeguards stay enabled",
   assert.match(hexlaces, /window\.HexlaceCompare\.sharedSets/);
   assert.match(hexlaces, /compareDayIndex = Math\.max\(0, days\.indexOf\(selectedComparisonDay\(\)\)\)/);
   assert.match(html, /id="hexlace-swap-open"[^>]*hidden/);
-  assert.match(hexlaces, /elements\.swapOpen\.hidden = navigator\.onLine === false/);
+  assert.match(hexlaces, /elements\.swapOpen\.hidden = navigator\.onLine === false \|\| !physical/);
   assert.match(coordinator, /trade\.targetReadId !== body\.requesterReadId/);
   assert.match(coordinator, /record\.trade\.confirmed/);
   assert.match(worker, /parts\[2\] === "release"/);
+  assert.match(worker, /parts\[0\] === "profiles".*parts\[2\] === "hexadex"/);
+  assert.match(html, /id="hexadex-open"/);
+  assert.match(html, /id="hex-owl-card"/);
+  assert.match(hexlaces, /params\.get\("tap"\)/);
+  assert.match(hexlaces, /function shareUrl\(readId\)[\s\S]*\?f=\$\{readId\}/);
+  assert.match(hexlaces, /writeTag\(tapUrl\(identity\.readId, identity\.tapToken\)\)/);
+  assert.match(hexlaces, /body: JSON\.stringify\(\{ targetReadId, targetTapToken \}\)/);
   assert.match(hexlaces, /if \(group\.open\) populateSetRows\(\)/);
 });
 

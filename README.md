@@ -8,7 +8,7 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v54 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v55 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
@@ -27,6 +27,9 @@ Hexlaces (live set-list sharing):
 - Passive pings: one tap on a saved set invites friends to meet there, while a nested location picker offers 30/60/90-minute availability at camp, the river, or vendors; pings expire automatically and never send notifications
 - Giveaway tags with claim tokens: opening one quietly records the local scan time, works offline, and lets the earliest scan own the Hexlace once signal returns (contention closes seven days after the first claim)
 - My Hexlace can be released for the next scanner without erasing the owner's saved sets; physical tag trades are online-only and require both owners to enter trade mode, tap each other's tags, and confirm the reciprocal match
+- A named profile with at least one saved set receives one deterministic, numbered Hex Owl. The renderer reuses the exact supplied Shambhala Owl vector as one cached base, then adds lightweight deterministic SVG traits; changing a display name never changes the Owl
+- A physical Hexlace and its Hex Owl trade together, always. Release is the only temporary separation: the profile retains its Owl while the tag becomes unclaimed, so reclaiming does not mint a replacement
+- Tap-specific physical Hexlace URLs add Owls to a private, multi-year Hexadex with broad festival/year context only. Shared links and QR codes still collect set lists but cannot collect Owls
 - On iOS 17.2+, a claimed Hexlace, saved sets, and collected-friend ids follow into a newly installed Home Screen app through a retry-safe 24-hour handoff; a compact connection code inside My Hexlace is the fallback when iOS does not copy the automatic cookie
 - Safari and the installed app retain the same ownership secret and periodically pull authenticated owner state, so online edits synchronize without revoking either context; collected-friend ids remain private and their public lists are fetched normally
 - Android can write tags in-app (Web NFC); iOS writes tags once with the NFC Tools app
@@ -62,7 +65,7 @@ https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#secret-garden
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#village
 ```
 
-Personal Hexlace tags use `?f=<readId>` (plus `&claim=<token>` on unclaimed giveaway tags). All URLs fit comfortably on NTAG213 tags.
+Shared links and QR codes use `?f=<readId>`. Physical Hexlaces use `?f=<readId>&tap=<token>`; an unclaimed tag also carries `&claim=<token>`. The tap token is required for Hexadex collection and trade, so an ordinary shared link cannot impersonate a physical tap. All URLs fit comfortably on NTAG213 tags.
 
 ## Files
 
@@ -74,6 +77,8 @@ Personal Hexlace tags use `?f=<readId>` (plus `&claim=<token>` on unclaimed give
 - `app.js` — tabs, search, Now Playing, preview mode, update checks, service-worker registration
 - `planner.js` — My Set List planner, overlap detection, day grouping
 - `hexlaces.js` — live sharing: identity, publishing, collecting, claims, releases, and reciprocal physical-tag trades
+- `hex-owl-base.svg` / `hex-owl.js` / `hex-owl-playground.html` — exact supplied Owl vector, frozen deterministic overlay renderer, and standalone seed/trait gallery
+- `hexadex.js` — private profile cache, tap-only collection queue, Hexadex grid, and reveal UI
 - `qrcode.js` — vendored qrcode-generator 1.4.4 (pinned)
 - `install.js` — Add to Home Screen behavior
 - `sw.js` — service worker (offline cache, network timeout, periodic background sync)
@@ -131,7 +136,7 @@ Do not put `preview=...` in NFC tag URLs.
 
 Stage IDs: `amp`, `fractal-forest`, `grove`, `living-room`, `pagoda`, `secret-garden`, `village`. Days: `Thursday`–`Sunday`, mapped in `app.js` to calendar dates 2026-07-23 through 2026-07-26; post-midnight sets stay in the previous evening's list and roll over internally.
 
-My Set List and Hexlace identity/collection live in browser localStorage (no accounts). Durable Objects serialize ownership and mutations; public Hexlace snapshots live in Cloudflare KV with a 60-day TTL so friend/ping reads remain fast and unchanged. Existing KV-only Hexlaces migrate into their coordinator on their first mutation. The full API surface is documented in HANDOFF.md.
+My Set List and local Hexlace credentials live in browser localStorage (no login account). Per-profile Durable Objects privately retain Hex Owl assignment and paged Hexadex entries across release, app handoff, device transfer, and future festival years. Per-Hexlace Durable Objects serialize ownership and mutations; physical Hexlace records are durable, while browser-only share identities and KV public snapshots use a rolling 60-day TTL. Existing KV-only Hexlaces migrate lazily on their next qualifying publish. The full API surface is documented in HANDOFF.md.
 
 ## Testing
 

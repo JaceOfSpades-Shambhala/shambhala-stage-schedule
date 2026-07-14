@@ -23,14 +23,14 @@
 //   GET  /lists/:readId/owner -> authenticated state for cross-context sync
 //   POST /handoffs/redeem       -> idempotently exchange it for ownership
 
-import { CLAIM_CONTENTION_WINDOW_MS, HexlaceCoordinator, RateLimitCoordinator } from "./durable-objects.js";
+import { CLAIM_CONTENTION_WINDOW_MS, HexlaceCoordinator, HexOwlProfile, OwlNumberAllocator, RateLimitCoordinator } from "./durable-objects.js";
 
-export { HexlaceCoordinator, RateLimitCoordinator };
+export { HexlaceCoordinator, HexOwlProfile, OwlNumberAllocator, RateLimitCoordinator };
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-Write-Key",
+  "Access-Control-Allow-Headers": "Content-Type, X-Write-Key, X-Profile-Key",
   "Access-Control-Max-Age": "86400"
 };
 
@@ -45,6 +45,7 @@ const LOCATION_PING_MINUTES = new Set([30, 60, 90]);
 const VALID_PING_LOCATIONS = new Set(["camp", "river", "vendors"]);
 const MIN_KEY_LENGTH = 16;
 const READ_ID_LENGTH = 8;
+const PROFILE_ID_LENGTH = 16;
 const VALID_DAYS = new Set(["Thursday", "Friday", "Saturday", "Sunday"]);
 const VALID_STAGE_IDS = new Set(["amp", "fractal-forest", "grove", "living-room", "pagoda", "secret-garden", "village"]);
 const TIME_PATTERN = /^(1[0-2]|[1-9]):[0-5]\d\s(?:AM|PM)$/;
@@ -125,6 +126,62 @@ function namedStub(namespace, name) {
 
 function hasHexlaceCoordinator(env) {
   return Boolean(env?.HEXLACES && (typeof env.HEXLACES.getByName === "function" || (typeof env.HEXLACES.idFromName === "function" && typeof env.HEXLACES.get === "function")));
+}
+
+function hasOwlInfrastructure(env) {
+  return Boolean(env?.HEX_OWL_PROFILES && env?.OWL_NUMBERS);
+}
+
+function validProfileCredentials(profileId, profileKey) {
+  return typeof profileId === "string" && profileId.length === PROFILE_ID_LENGTH
+    && [...profileId].every(character => ID_ALPHABET.includes(character))
+    && typeof profileKey === "string" && profileKey.length >= 24;
+}
+
+function cleanOwl(value) {
+  if (!value || typeof value !== "object") return null;
+  const seed = typeof value.seed === "string" ? value.seed.toLowerCase() : "";
+  const version = Number(value.version);
+  const number = Number(value.number);
+  const createdAt = Number(value.createdAt);
+  const season = Number(value.season);
+  if (!/^[0-9a-f]{32}$/.test(seed) || !Number.isSafeInteger(version) || version < 1
+    || !Number.isSafeInteger(number) || number < 1 || !Number.isSafeInteger(createdAt) || createdAt < 1
+    || !Number.isSafeInteger(season) || season < 2026) return null;
+  return { seed, version, number, createdAt, season };
+}
+
+async function callOwlProfile(env, profileId, path, body = {}) {
+  return namedStub(env.HEX_OWL_PROFILES, profileId).fetch(new Request(`https://profile.internal${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, profileId })
+  }));
+}
+
+async function initializeProfile(env, profileId, profileKey) {
+  const response = await callOwlProfile(env, profileId, "/initialize", { profileKey });
+  if (!response.ok) throw new HttpError(response.status, "The Hex Owl profile could not be initialized.");
+}
+
+async function qualifyProfile(env, { profileId, profileKey, eligible, claimedReadId = "", tagOwl = null }) {
+  await initializeProfile(env, profileId, profileKey);
+  if (cleanOwl(tagOwl) && claimedReadId) {
+    const adopted = await callOwlProfile(env, profileId, "/adopt", { profileKey, owl: cleanOwl(tagOwl), claimedReadId });
+    if (!adopted.ok) throw new HttpError(adopted.status, "The Hex Owl could not be synchronized.");
+    return cleanOwl((await adopted.json()).owl);
+  }
+  const response = await callOwlProfile(env, profileId, "/qualify", { profileKey, eligible, ...(claimedReadId ? { claimedReadId } : {}) });
+  if (!response.ok) throw new HttpError(response.status, "The Hex Owl could not be assigned.");
+  return cleanOwl((await response.json()).owl);
+}
+
+function profileCredentials(body) {
+  const suppliedId = body && typeof body.profileId === "string" ? body.profileId : "";
+  const suppliedKey = body && typeof body.profileKey === "string" ? body.profileKey : "";
+  return validProfileCredentials(suppliedId, suppliedKey)
+    ? { profileId: suppliedId, profileKey: suppliedKey }
+    : { profileId: randomId(PROFILE_ID_LENGTH), profileKey: randomId(32) };
 }
 
 async function callHexlaceCoordinator(env, readId, path, body = {}) {
@@ -298,12 +355,14 @@ function freshPing(ping, env) {
 
 function publicList(stored, env) {
   const list = JSON.parse(stored);
+  const owl = cleanOwl(list.owl);
   return {
     name: list.name,
     sets: list.sets,
     ping: freshPing(list.ping, env),
     updated: list.updated,
-    revision: list.revision
+    revision: list.revision,
+    ...(owl ? { owl } : {})
   };
 }
 
@@ -361,7 +420,14 @@ export default {
               sets: Array.isArray(list.sets) ? list.sets : [],
               ping: list.ping || null,
               friends: Array.isArray(data.list.friends) ? data.list.friends : [],
-              revision: Number.isSafeInteger(list.revision) ? list.revision : 1
+              revision: Number.isSafeInteger(list.revision) ? list.revision : 1,
+              ...(hasOwlInfrastructure(env) ? {
+                profileId: data.profileId || null,
+                profileKey: data.profileKey || null,
+                owl: cleanOwl(data.owl),
+                isPhysical: data.isPhysical === true,
+                tapToken: data.tapToken || null
+              } : {})
             };
           });
         }
@@ -379,6 +445,52 @@ export default {
         return json({ readId, writeKey, name: list.name || "", sets: Array.isArray(list.sets) ? list.sets : [], ping: list.ping || null, friends: Array.isArray(privateList.friends) ? privateList.friends : [], revision: Number.isSafeInteger(list.revision) ? list.revision : 1 });
       }
 
+      // Private, authenticated Hexadex storage. A source entry is accepted only
+      // after the physical tag's tap token is validated by its Hexlace object.
+      if (parts[0] === "profiles" && parts.length === 3 && parts[2] === "hexadex") {
+        if (!hasOwlInfrastructure(env) || !hasHexlaceCoordinator(env)) return json({ error: "Hexadex is temporarily unavailable." }, 503);
+        const profileId = parts[1];
+        const profileKey = request.headers.get("X-Profile-Key") || "";
+        if (!validProfileCredentials(profileId, profileKey)) return json({ error: "Not found." }, 404);
+        if (request.method === "GET") {
+          const url = new URL(request.url);
+          const response = await callOwlProfile(env, profileId, "/hexadex/read", {
+            profileKey,
+            cursor: url.searchParams.get("cursor") || "",
+            limit: Number(url.searchParams.get("limit")) || 24
+          });
+          return relayInternal(response);
+        }
+        if (request.method === "POST") {
+          const limited = await enforceRateLimit(request, env, "updateIp");
+          if (limited) return limited;
+          const body = await readJson(request);
+          const sourceReadId = body && typeof body.readId === "string" ? body.readId : "";
+          const tapToken = body && typeof body.tapToken === "string" ? body.tapToken : "";
+          if (!isReadId(sourceReadId) || tapToken.length < 16) return json({ error: "A physical Hexlace tap is required." }, 400);
+          const own = await callOwlProfile(env, profileId, "/read", { profileKey });
+          if (!own.ok) return relayInternal(own);
+          const ownState = await own.json();
+          if (ownState.claimedReadId === sourceReadId) return json({ error: "That is your own Hexlace." }, 409);
+          const collectible = await callHexlaceCoordinator(env, sourceReadId, "/collect", { tapToken });
+          if (!collectible.ok) return relayInternal(collectible);
+          const source = await collectible.json();
+          const owl = cleanOwl(source.owl);
+          if (!owl) return json({ error: "This Hexlace does not have a Hex Owl yet." }, 409);
+          const firstCollectedAt = Number(body.firstCollectedAt);
+          const entry = {
+            readId: sourceReadId,
+            name: typeof source.name === "string" ? source.name : "",
+            owl,
+            firstCollectedAt: Number.isSafeInteger(firstCollectedAt) && firstCollectedAt > 0 ? firstCollectedAt : nowMs(env),
+            festivalYear: owl.season,
+            context: `Shambhala ${owl.season}`
+          };
+          const saved = await callOwlProfile(env, profileId, "/hexadex/add", { profileKey, entry });
+          return relayInternal(saved);
+        }
+      }
+
       if (parts[0] !== "lists") return json({ error: "Not found." }, 404);
 
       // POST /lists — create a list.
@@ -386,22 +498,36 @@ export default {
         const limited = await enforceRateLimit(request, env, "create");
         if (limited) return limited;
         const body = await readJson(request);
-        const blob = serialize(cleanPayload(body), 1, env);
+        const payload = cleanPayload(body);
+        const blob = serialize(payload, 1, env);
         if (hasHexlaceCoordinator(env)) {
+          const claimable = body.claimable === true;
+          const credentials = !claimable && hasOwlInfrastructure(env) ? profileCredentials(body) : null;
+          const owl = credentials
+            ? await qualifyProfile(env, { ...credentials, eligible: payload.sets.length > 0 })
+            : null;
           for (let attempt = 0; attempt < 5; attempt++) {
             const readId = randomId(READ_ID_LENGTH);
-            const claimToken = body.claimable === true ? randomId(12) : null;
-            const writeKey = body.claimable === true ? null : randomId(24);
+            const claimToken = claimable ? randomId(12) : null;
+            const writeKey = claimable ? null : randomId(24);
+            const tapToken = randomId(24);
+            const isPhysical = claimable || body.physical !== false;
             const response = await callHexlaceCoordinator(env, readId, "/initialize", {
               list: JSON.parse(blob),
               claimToken,
-              writeKey
+              writeKey,
+              tapToken,
+              isPhysical,
+              ...(credentials ? { ...credentials, owl } : {})
             });
             if (response.status === 409) continue;
             if (response.status !== 201) return relayInternal(response);
-            return body.claimable === true
-              ? json({ readId, claimToken, revision: 1 }, 201)
-              : json({ readId, writeKey, revision: 1 }, 201);
+            if (!claimable && credentials && isPhysical && owl) {
+              await qualifyProfile(env, { ...credentials, eligible: true, claimedReadId: readId, tagOwl: owl });
+            }
+            return claimable
+              ? json({ readId, claimToken, tapToken, isPhysical: true, revision: 1 }, 201)
+              : json({ readId, writeKey, tapToken, isPhysical, revision: 1, ...credentials, ...(owl ? { owl } : {}) }, 201);
           }
           return json({ error: "Couldn't create a unique list. Please try again." }, 503);
         }
@@ -437,12 +563,33 @@ export default {
         if (!isReadId(readId)) return json({ error: "Not found." }, 404);
         const body = await readJson(request);
         if (hasHexlaceCoordinator(env)) {
+          let credentials = null;
+          let owl = null;
+          if (hasOwlInfrastructure(env)) {
+            credentials = profileCredentials(body);
+            owl = await qualifyProfile(env, { ...credentials, eligible: false });
+          }
           const response = await callHexlaceCoordinator(env, readId, "/claim", {
             claimToken: body && typeof body.claimToken === "string" ? body.claimToken : "",
             writeKey: body && typeof body.writeKey === "string" ? body.writeKey : "",
-            scannedAt: cleanScannedAt(body && body.scannedAt, env)
+            scannedAt: cleanScannedAt(body && body.scannedAt, env),
+            ...(credentials ? { ...credentials, owl } : {})
           });
-          return relayInternal(response);
+          if (!credentials) return relayInternal(response);
+          const claimed = await response.json().catch(() => ({}));
+          if (!response.ok) return json(claimed, response.status);
+          if (claimed.accepted) {
+            owl = await qualifyProfile(env, { ...credentials, eligible: false, claimedReadId: readId, tagOwl: owl });
+          }
+          return json({
+            ok: true,
+            accepted: claimed.accepted === true,
+            revision: claimed.revision,
+            isPhysical: true,
+            tapToken: claimed.tapToken || null,
+            ...credentials,
+            ...(owl ? { owl } : {})
+          });
         }
         const claim = parseClaimRecord(await env.LISTS.get(`claim:${readId}`));
         if (!claim) return json({ error: "Not claimable." }, 409);
@@ -497,6 +644,18 @@ export default {
         return json({ ok: true, revision });
       }
 
+      // Called only after Web NFC successfully writes the tap-specific URL.
+      if (request.method === "POST" && parts.length === 3 && parts[2] === "physical") {
+        const limited = await enforceRateLimit(request, env, "updateIp");
+        if (limited) return limited;
+        const readId = parts[1];
+        if (!isReadId(readId) || !hasHexlaceCoordinator(env)) return json({ error: "Not found." }, 404);
+        const response = await callHexlaceCoordinator(env, readId, "/physical", {
+          writeKey: request.headers.get("X-Write-Key") || ""
+        });
+        return relayInternal(response);
+      }
+
       // A trade is a reciprocal NFC handshake. Both owners must enter trade
       // mode, tap the other physical tag, and confirm the matched pair.
       if (parts.length >= 3 && parts[2] === "trade") {
@@ -510,6 +669,11 @@ export default {
           const body = await readJson(request);
           const targetReadId = body && typeof body.targetReadId === "string" ? body.targetReadId : "";
           if (!isReadId(targetReadId) || targetReadId === readId) return json({ error: "Invalid trade target." }, 400);
+          if (hasOwlInfrastructure(env)) {
+            const targetTapToken = body && typeof body.targetTapToken === "string" ? body.targetTapToken : "";
+            const tapped = await callHexlaceCoordinator(env, targetReadId, "/collect", { tapToken: targetTapToken });
+            if (!tapped.ok) return relayInternal(tapped);
+          }
           const targetStored = await env.LISTS.get(`list:${targetReadId}`);
           if (!targetStored) return json({ error: "That Hexlace is not available." }, 404);
           const response = await callHexlaceCoordinator(env, readId, "/trade", { writeKey, targetReadId });
@@ -533,11 +697,17 @@ export default {
           const settled = await settledResponse.json().catch(() => ({}));
           if (!settledResponse.ok || !settled.completed) return json(settled, settledResponse.status);
           const callerIsCoordinator = readId === settled.coordinatorReadId;
-          return json({
+          const completed = {
             completed: true,
             readId: callerIsCoordinator ? settled.targetReadId : settled.coordinatorReadId,
             revision: callerIsCoordinator ? settled.targetRevision : settled.selfRevision
-          });
+          };
+          if (hasOwlInfrastructure(env)) {
+            completed.owl = cleanOwl(callerIsCoordinator ? settled.targetOwl : settled.selfOwl);
+            completed.tapToken = callerIsCoordinator ? settled.targetTapToken : settled.selfTapToken;
+            completed.isPhysical = true;
+          }
+          return json(completed);
         }
         if (request.method === "POST" && parts.length === 4 && parts[3] === "cancel") {
           const response = await callHexlaceCoordinator(env, readId, "/trade/cancel", { writeKey });
@@ -607,7 +777,14 @@ export default {
             if (!data?.list) return data;
             return {
               ...publicList(JSON.stringify(data.list), env),
-              friends: Array.isArray(data.list.friends) ? data.list.friends : []
+              friends: Array.isArray(data.list.friends) ? data.list.friends : [],
+              ...(hasOwlInfrastructure(env) ? {
+                profileId: data.profileId || null,
+                profileKey: data.profileKey || null,
+                owl: cleanOwl(data.owl),
+                isPhysical: data.isPhysical === true,
+                tapToken: data.tapToken || null
+              } : {})
             };
           });
         }
@@ -629,7 +806,8 @@ export default {
           const response = await callHexlaceCoordinator(env, readId, "/read");
           if (response.status === 200) {
             const data = await response.json();
-            return json({ ...publicList(JSON.stringify(data.list), env), ...(data.claimToken ? { claimToken: data.claimToken } : {}) });
+            const list = { ...data.list, ...(cleanOwl(data.owl) ? { owl: cleanOwl(data.owl) } : {}) };
+            return json({ ...publicList(JSON.stringify(list), env), ...(data.claimToken ? { claimToken: data.claimToken } : {}) });
           }
         }
         if (!stored) return json({ error: "Not found." }, 404);
@@ -654,14 +832,42 @@ export default {
             return json({ error: "Invalid list revision." }, 400);
           }
           const list = JSON.parse(serialize(cleanPayload(body), 1, env));
+          let owlState = null;
+          if (hasOwlInfrastructure(env)) {
+            const requested = profileCredentials(body);
+            const linkedResponse = await callHexlaceCoordinator(env, readId, "/profile/link", {
+              writeKey: request.headers.get("X-Write-Key") || "",
+              ...requested
+            });
+            if (!linkedResponse.ok) return relayInternal(linkedResponse);
+            const linked = await linkedResponse.json();
+            const credentials = validProfileCredentials(linked.profileId, linked.profileKey)
+              ? { profileId: linked.profileId, profileKey: linked.profileKey }
+              : requested;
+            const owl = await qualifyProfile(env, {
+              ...credentials,
+              eligible: list.sets.length > 0,
+              claimedReadId: linked.isPhysical === true ? readId : "",
+              tagOwl: linked.isPhysical === true ? cleanOwl(linked.owl) : null
+            });
+            owlState = {
+              ...credentials,
+              owl,
+              isPhysical: linked.isPhysical === true,
+              tapToken: linked.tapToken || null
+            };
+          }
           const response = await callHexlaceCoordinator(env, readId, "/update", {
             writeKey: request.headers.get("X-Write-Key") || "",
             list,
             hasRevision,
             revision: suppliedRevision,
-            force: body.force === true
+            force: body.force === true,
+            ...(owlState || {})
           });
-          return relayInternal(response);
+          return relayInternal(response, data => hasOwlInfrastructure(env) && data?.ok
+            ? { ...data, ...owlState, owl: cleanOwl(data.owl) || cleanOwl(owlState?.owl) }
+            : data);
         }
         const expected = await env.LISTS.get(`auth:${readId}`);
         if (!expected) return json({ error: "Not found." }, 404);

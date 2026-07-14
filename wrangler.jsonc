@@ -14,13 +14,19 @@
   "durable_objects": {
     "bindings": [
       { "name": "HEXLACES", "class_name": "HexlaceCoordinator" },
-      { "name": "RATE_LIMITS", "class_name": "RateLimitCoordinator" }
+      { "name": "RATE_LIMITS", "class_name": "RateLimitCoordinator" },
+      { "name": "HEX_OWL_PROFILES", "class_name": "HexOwlProfile" },
+      { "name": "OWL_NUMBERS", "class_name": "OwlNumberAllocator" }
     ]
   },
   "migrations": [
     {
       "tag": "v1",
       "new_sqlite_classes": ["HexlaceCoordinator", "RateLimitCoordinator"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["HexOwlProfile", "OwlNumberAllocator"]
     }
   ]
 }

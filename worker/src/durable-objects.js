@@ -2,6 +2,10 @@ const TTL_SECONDS = 60 * 24 * 60 * 60;
 const HANDOFF_TTL_SECONDS = 24 * 60 * 60;
 const CLAIM_CONTENTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const TRADE_TTL_MS = 15 * 60 * 1000;
+const PROFILE_ID_LENGTH = 16;
+const OWL_VERSION = 1;
+const OWL_SEASON = 2026;
+const HEXADEX_PAGE_SIZE = 24;
 
 function nowMs(env) {
   return Number.isSafeInteger(env?.NOW_MS) ? env.NOW_MS : Date.now();
@@ -37,6 +41,40 @@ function validList(value) {
   return value && typeof value === "object" && typeof value.name === "string" && Array.isArray(value.sets);
 }
 
+function validProfileCredentials(profileId, profileKey) {
+  return typeof profileId === "string" && profileId.length === PROFILE_ID_LENGTH
+    && typeof profileKey === "string" && profileKey.length >= 24;
+}
+
+function validOwl(value) {
+  return value && typeof value === "object"
+    && /^[0-9a-f]{32}$/i.test(value.seed || "")
+    && Number.isSafeInteger(value.version) && value.version >= 1
+    && Number.isSafeInteger(value.number) && value.number >= 1
+    && Number.isSafeInteger(value.createdAt) && value.createdAt > 0
+    && Number.isSafeInteger(value.season) && value.season >= 2026;
+}
+
+function randomHex(byteLength) {
+  const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
+  return [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function callProfile(env, profileId, path, body = {}) {
+  if (!env?.HEX_OWL_PROFILES || !validProfileCredentials(profileId, body.profileKey)) return null;
+  return namedStub(env.HEX_OWL_PROFILES, profileId).fetch(new Request(`https://profile.internal${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, profileId })
+  }));
+}
+
+async function adoptProfileOwl(env, profileId, profileKey, owl, claimedReadId, tradeId = "") {
+  if (!validProfileCredentials(profileId, profileKey) || !validOwl(owl)) return false;
+  const response = await callProfile(env, profileId, "/adopt", { profileKey, owl, claimedReadId, tradeId });
+  return Boolean(response?.ok);
+}
+
 /**
  * One instance is addressed by Hexlace readId. All ownership, list mutations,
  * and handoff redemption for that Hexlace pass through this instance, making
@@ -64,7 +102,7 @@ export class HexlaceCoordinator {
     return this.serial(async () => {
       if (!this.record) return;
       const now = nowMs(this.env);
-      if (this.record.expiresAt <= now) {
+      if (Number.isFinite(this.record.expiresAt) && this.record.expiresAt <= now) {
         this.record = null;
         await this.ctx.storage.deleteAll();
         return;
@@ -76,11 +114,13 @@ export class HexlaceCoordinator {
           await this.ctx.storage.put("record", this.record);
         } catch (error) {
           console.error("Hexlace KV snapshot retry failed", error);
-          await this.ctx.storage.setAlarm(Math.min(this.record.expiresAt, now + 60_000));
+          await this.ctx.storage.setAlarm(Number.isFinite(this.record.expiresAt)
+            ? Math.min(this.record.expiresAt, now + 60_000)
+            : now + 60_000);
           return;
         }
       }
-      await this.ctx.storage.setAlarm(this.record.expiresAt);
+      if (Number.isFinite(this.record.expiresAt)) await this.ctx.storage.setAlarm(this.record.expiresAt);
     });
   }
 
@@ -101,6 +141,11 @@ export class HexlaceCoordinator {
       this.record.handoffs ||= {};
       this.record.redirects ||= {};
       this.record.appliedTrades ||= {};
+      this.record.profileId ||= null;
+      this.record.profileKey ||= null;
+      this.record.owl ||= null;
+      this.record.tapToken ||= null;
+      if (!Object.prototype.hasOwnProperty.call(this.record, "isPhysical")) this.record.isPhysical = Boolean(this.record.claim);
       if (!Object.prototype.hasOwnProperty.call(this.record, "trade")) this.record.trade = null;
     }
     this.sweepExpiredHandoffs();
@@ -108,6 +153,9 @@ export class HexlaceCoordinator {
     if (url.pathname === "/initialize" && request.method === "POST") return this.initialize(readId, body);
     if (!this.record) return json({ error: "Not found." }, 404);
     if (url.pathname === "/claim" && request.method === "POST") return this.claim(body);
+    if (url.pathname === "/profile/link" && request.method === "POST") return this.linkProfile(body);
+    if (url.pathname === "/physical" && request.method === "POST") return this.markPhysical(body);
+    if (url.pathname === "/collect" && request.method === "POST") return this.readCollectible(body);
     if (url.pathname === "/update" && request.method === "POST") return this.update(body);
     if (url.pathname === "/handoff" && request.method === "POST") return this.createHandoff(body);
     if (url.pathname === "/redeem" && request.method === "POST") return this.redeemHandoff(body);
@@ -126,7 +174,7 @@ export class HexlaceCoordinator {
 
   async ensureRecord(readId) {
     const now = nowMs(this.env);
-    if (this.record && this.record.expiresAt > now) return;
+    if (this.record && (!Number.isFinite(this.record.expiresAt) || this.record.expiresAt > now)) return;
     if (this.record) {
       this.record = null;
       await this.ctx.storage.deleteAll();
@@ -154,11 +202,19 @@ export class HexlaceCoordinator {
       trade: null,
       redirects: {},
       appliedTrades: {},
-      expiresAt: now + TTL_SECONDS * 1000,
+      profileId: null,
+      profileKey: null,
+      owl: validOwl(list.owl) ? list.owl : null,
+      tapToken: null,
+      // Legacy lists did not distinguish a browser-only share identity from a
+      // written NFC tag. Treat them as physical to preserve existing release
+      // and trade behavior; the new client explicitly marks virtual records.
+      isPhysical: true,
+      expiresAt: null,
       snapshotDirty: false
     };
     await this.ctx.storage.put("record", this.record);
-    await this.ctx.storage.setAlarm(this.record.expiresAt);
+    if (Number.isFinite(this.record.expiresAt)) await this.ctx.storage.setAlarm(this.record.expiresAt);
   }
 
   async initialize(readId, body) {
@@ -170,11 +226,16 @@ export class HexlaceCoordinator {
       list: body.list,
       auth: typeof body.writeKey === "string" ? body.writeKey : null,
       claim: typeof body.claimToken === "string" ? { token: body.claimToken } : null,
+      profileId: validProfileCredentials(body.profileId, body.profileKey) ? body.profileId : null,
+      profileKey: validProfileCredentials(body.profileId, body.profileKey) ? body.profileKey : null,
+      owl: validOwl(body.owl) ? body.owl : null,
+      tapToken: typeof body.tapToken === "string" && body.tapToken.length >= 16 ? body.tapToken : null,
+      isPhysical: typeof body.isPhysical === "boolean" ? body.isPhysical : true,
       handoffs: {},
       trade: null,
       redirects: {},
       appliedTrades: {},
-      expiresAt: now + TTL_SECONDS * 1000,
+      expiresAt: body.isPhysical === false ? now + TTL_SECONDS * 1000 : null,
       snapshotDirty: false
     };
     await this.commit();
@@ -193,8 +254,27 @@ export class HexlaceCoordinator {
     const firstClaimedAt = Number.isFinite(Number(claim.claimedAt)) ? Number(claim.claimedAt) : null;
     const contentionOpen = firstClaimedAt === null || now - firstClaimedAt < CLAIM_CONTENTION_WINDOW_MS;
     const accepted = !claim.ownerSet || (contentionOpen && scannedAt <= previousScannedAt);
+    let replacedProfile = null;
+    let previousOwl = null;
     if (accepted) {
+      if (validProfileCredentials(this.record.profileId, this.record.profileKey)) {
+        const sameProfile = body.profileId === this.record.profileId && body.profileKey === this.record.profileKey;
+        if (!sameProfile) {
+          replacedProfile = { profileId: this.record.profileId, profileKey: this.record.profileKey };
+          previousOwl = validOwl(this.record.owl) ? this.record.owl : null;
+          const detached = await callProfile(this.env, replacedProfile.profileId, "/release", {
+            profileKey: replacedProfile.profileKey,
+            readId: this.record.readId,
+            owl: previousOwl
+          });
+          if (!detached?.ok) return json({ error: "The previous Hex Owl profile could not be safely detached. Try again." }, 503);
+        }
+      }
       this.record.auth = body.writeKey;
+      this.record.profileId = validProfileCredentials(body.profileId, body.profileKey) ? body.profileId : null;
+      this.record.profileKey = validProfileCredentials(body.profileId, body.profileKey) ? body.profileKey : null;
+      this.record.owl = validOwl(body.owl) ? body.owl : null;
+      this.record.isPhysical = true;
       // A takeover invalidates tickets created by the temporary owner so an
       // old installed context can never redeem the rightful owner's new key.
       this.record.handoffs = {};
@@ -207,23 +287,82 @@ export class HexlaceCoordinator {
       await this.commit();
     }
     const revision = Number.isSafeInteger(this.record.list.revision) && this.record.list.revision > 0 ? this.record.list.revision : 1;
-    return json({ ok: true, accepted, revision });
+    const result = { ok: true, accepted, revision };
+    if (validProfileCredentials(body.profileId, body.profileKey)) {
+      Object.assign(result, { isPhysical: true, tapToken: this.record.tapToken, replacedProfile, previousOwl });
+    }
+    return json(result);
+  }
+
+  async linkProfile(body) {
+    const redirect = await this.authRedirect(body.writeKey);
+    if (redirect) return json({ transferredTo: redirect.readId, revision: redirect.revision }, 409);
+    if (redirect === false) return json({ error: "Invalid write key." }, 403);
+    if (!validProfileCredentials(this.record.profileId, this.record.profileKey)) {
+      if (!validProfileCredentials(body.profileId, body.profileKey)) return json({ error: "Valid profile credentials are required." }, 400);
+      this.record.profileId = body.profileId;
+      this.record.profileKey = body.profileKey;
+    }
+    if (!this.record.tapToken) this.record.tapToken = randomHex(12);
+    await this.saveRecord();
+    return json({
+      profileId: this.record.profileId,
+      profileKey: this.record.profileKey,
+      owl: validOwl(this.record.owl) ? this.record.owl : null,
+      isPhysical: this.record.isPhysical === true,
+      tapToken: this.record.tapToken || null
+    });
+  }
+
+  async markPhysical(body) {
+    if (!this.record.auth) return json({ error: "Not found." }, 404);
+    if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
+    if (!this.record.tapToken) this.record.tapToken = randomHex(12);
+    this.record.isPhysical = true;
+    this.record.expiresAt = null;
+    await this.commit();
+    try {
+      await adoptProfileOwl(this.env, this.record.profileId, this.record.profileKey, this.record.owl, this.record.readId);
+    } catch (error) {
+      console.error("Hex Owl profile reconciliation failed after writing a physical tag", error);
+    }
+    return json({ ok: true, isPhysical: true, tapToken: this.record.tapToken });
+  }
+
+  readCollectible(body) {
+    if (!this.record.isPhysical || !this.record.tapToken || body.tapToken !== this.record.tapToken) {
+      return json({ error: "A physical Hexlace tap is required." }, 403);
+    }
+    if (!this.record.auth || !validOwl(this.record.owl)) return json({ error: "This Hexlace does not have a Hex Owl yet." }, 409);
+    return json({ readId: this.record.readId, name: this.record.list.name || "", owl: this.record.owl });
   }
 
   readPublic() {
     const releasedClaim = !this.record.auth && this.record.claim?.released === true && !this.record.claim.ownerSet
       ? this.record.claim.token
       : null;
-    return json({ list: this.record.list, claimToken: releasedClaim });
+    return json({ list: this.record.list, owl: validOwl(this.record.owl) ? this.record.owl : null, claimToken: releasedClaim });
   }
 
   async release(body) {
     if (!this.record.auth) return json({ error: "Not found." }, 404);
     if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
     if (typeof body.claimToken !== "string" || body.claimToken.length < 12) return json({ error: "Invalid claim token." }, 400);
+    if (validProfileCredentials(this.record.profileId, this.record.profileKey)) {
+      const response = await callProfile(this.env, this.record.profileId, "/release", {
+        profileKey: this.record.profileKey,
+        readId: this.record.readId,
+        owl: validOwl(this.record.owl) ? this.record.owl : null
+      });
+      if (!response?.ok) return json({ error: "The Hex Owl could not be safely detached. Try again." }, 503);
+    }
     const revision = (Number.isSafeInteger(this.record.list.revision) ? this.record.list.revision : 1) + 1;
     this.record.list = { name: "Unclaimed Hexlace", sets: [], ping: null, friends: [], updated: nowMs(this.env), revision };
     this.record.auth = null;
+    this.record.profileId = null;
+    this.record.profileKey = null;
+    this.record.owl = null;
+    this.record.isPhysical = true;
     this.record.claim = { token: body.claimToken, released: true };
     this.record.handoffs = {};
     this.record.trade = null;
@@ -245,6 +384,7 @@ export class HexlaceCoordinator {
   async startTrade(body) {
     if (!this.record.auth) return json({ error: "Not found." }, 404);
     if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
+    if (!this.record.isPhysical) return json({ error: "Only physical Hexlaces can be traded." }, 409);
     if (typeof body.targetReadId !== "string" || body.targetReadId.length !== 8 || body.targetReadId === this.record.readId) {
       return json({ error: "Invalid trade target." }, 400);
     }
@@ -270,7 +410,7 @@ export class HexlaceCoordinator {
   }
 
   async matchTrade(body) {
-    if (!this.tradeActive() || this.record.trade.targetReadId !== body.requesterReadId) return json({ matched: false });
+    if (!this.record.isPhysical || !this.tradeActive() || this.record.trade.targetReadId !== body.requesterReadId) return json({ matched: false });
     this.record.trade.matched = true;
     await this.saveRecord();
     return json({ matched: true, name: this.record.list.name || "" });
@@ -313,6 +453,8 @@ export class HexlaceCoordinator {
         readId: targetReadId,
         requesterReadId: this.record.readId,
         requesterAuth: this.record.auth,
+        requesterProfileId: this.record.profileId,
+        requesterProfileKey: this.record.profileKey,
         tradeId
       })
     }));
@@ -321,12 +463,29 @@ export class HexlaceCoordinator {
     if (!response.ok || typeof applied.previousAuth !== "string") return json({ error: "Trade could not be completed." }, response.status || 409);
     const previousAuth = this.record.auth;
     this.record.auth = applied.previousAuth;
+    this.record.profileId = applied.previousProfileId || null;
+    this.record.profileKey = applied.previousProfileKey || null;
     this.record.redirects ||= {};
     this.record.redirects[await tokenHash(previousAuth)] = { readId: targetReadId, revision: applied.revision || 1 };
     this.record.trade = null;
     this.record.handoffs = {};
     await this.commit();
-    return json({ completed: true, coordinatorReadId: this.record.readId, targetReadId, selfRevision, targetRevision: applied.revision || 1 });
+    try {
+      await adoptProfileOwl(this.env, this.record.profileId, this.record.profileKey, this.record.owl, this.record.readId, tradeId);
+    } catch (error) {
+      console.error("Hex Owl profile reconciliation failed after trade", error);
+    }
+    return json({
+      completed: true,
+      coordinatorReadId: this.record.readId,
+      targetReadId,
+      selfRevision,
+      targetRevision: applied.revision || 1,
+      selfOwl: this.record.owl,
+      targetOwl: applied.owl || null,
+      selfTapToken: this.record.tapToken || null,
+      targetTapToken: applied.tapToken || null
+    });
   }
 
   async applyTrade(body) {
@@ -338,15 +497,24 @@ export class HexlaceCoordinator {
     }
     if (typeof body.requesterAuth !== "string" || body.requesterAuth.length < 16) return json({ error: "Invalid trade owner." }, 400);
     const previousAuth = this.record.auth;
+    const previousProfileId = this.record.profileId;
+    const previousProfileKey = this.record.profileKey;
     const revision = Number.isSafeInteger(this.record.list.revision) ? this.record.list.revision : 1;
     this.record.auth = body.requesterAuth;
+    this.record.profileId = validProfileCredentials(body.requesterProfileId, body.requesterProfileKey) ? body.requesterProfileId : null;
+    this.record.profileKey = validProfileCredentials(body.requesterProfileId, body.requesterProfileKey) ? body.requesterProfileKey : null;
     this.record.redirects ||= {};
     this.record.redirects[await tokenHash(previousAuth)] = { readId: body.requesterReadId, revision };
-    const result = { previousAuth, revision };
+    const result = { previousAuth, previousProfileId, previousProfileKey, revision, owl: this.record.owl, tapToken: this.record.tapToken || null };
     this.record.appliedTrades[body.tradeId] = result;
     this.record.trade = null;
     this.record.handoffs = {};
     await this.commit();
+    try {
+      await adoptProfileOwl(this.env, this.record.profileId, this.record.profileKey, this.record.owl, this.record.readId, body.tradeId);
+    } catch (error) {
+      console.error("Hex Owl profile reconciliation failed while applying trade", error);
+    }
     return json(result);
   }
 
@@ -367,6 +535,14 @@ export class HexlaceCoordinator {
     if (body.hasRevision && body.revision !== currentRevision && body.force !== true) {
       return json({ error: "This Hexlace changed in another app.", currentRevision }, 409);
     }
+    if (validProfileCredentials(body.profileId, body.profileKey)) {
+      if (validProfileCredentials(this.record.profileId, this.record.profileKey)
+        && (body.profileId !== this.record.profileId || body.profileKey !== this.record.profileKey)) {
+        return json({ error: "This Hexlace is linked to another profile." }, 409);
+      }
+      this.record.profileId = body.profileId;
+      this.record.profileKey = body.profileKey;
+    }
     this.record.list = {
       ...body.list,
       friends: Array.isArray(body.list.friends)
@@ -374,8 +550,13 @@ export class HexlaceCoordinator {
         : (Array.isArray(this.record.list.friends) ? this.record.list.friends : []),
       revision: currentRevision + 1
     };
+    if (validOwl(body.owl) && (!this.record.isPhysical || !validOwl(this.record.owl))) this.record.owl = body.owl;
     await this.commit();
-    return json({ ok: true, updated: this.record.list.updated, revision: this.record.list.revision });
+    const result = { ok: true, updated: this.record.list.updated, revision: this.record.list.revision };
+    if (validProfileCredentials(this.record.profileId, this.record.profileKey)) {
+      Object.assign(result, { owl: this.record.owl, isPhysical: this.record.isPhysical, tapToken: this.record.tapToken });
+    }
+    return json(result);
   }
 
   async createHandoff(body) {
@@ -393,7 +574,19 @@ export class HexlaceCoordinator {
     const redirect = await this.authRedirect(body.writeKey);
     if (redirect) return json({ transferredTo: redirect.readId, revision: redirect.revision }, 409);
     if (redirect === false) return json({ error: "Invalid write key." }, 403);
-    return json({ list: this.record.list });
+    try {
+      await adoptProfileOwl(this.env, this.record.profileId, this.record.profileKey, this.record.owl, this.record.readId);
+    } catch (error) {
+      console.error("Hex Owl profile reconciliation failed during owner sync", error);
+    }
+    return json({
+      list: this.record.list,
+      profileId: this.record.profileId,
+      profileKey: this.record.profileKey,
+      owl: validOwl(this.record.owl) ? this.record.owl : null,
+      isPhysical: this.record.isPhysical === true,
+      tapToken: this.record.tapToken || null
+    });
   }
 
   async redeemHandoff(body) {
@@ -412,7 +605,12 @@ export class HexlaceCoordinator {
     return json({
       readId: this.record.readId,
       writeKey: this.record.auth,
-      list: this.record.list
+      list: this.record.list,
+      profileId: this.record.profileId,
+      profileKey: this.record.profileKey,
+      owl: validOwl(this.record.owl) ? this.record.owl : null,
+      isPhysical: this.record.isPhysical === true,
+      tapToken: this.record.tapToken || null
     });
   }
 
@@ -426,11 +624,11 @@ export class HexlaceCoordinator {
 
   async saveRecord() {
     await this.ctx.storage.put("record", this.record);
-    await this.ctx.storage.setAlarm(this.record.expiresAt);
+    if (Number.isFinite(this.record.expiresAt)) await this.ctx.storage.setAlarm(this.record.expiresAt);
   }
 
   async commit() {
-    this.record.expiresAt = nowMs(this.env) + TTL_SECONDS * 1000;
+    this.record.expiresAt = this.record.isPhysical ? null : nowMs(this.env) + TTL_SECONDS * 1000;
     this.record.snapshotDirty = true;
     await this.saveRecord();
     try {
@@ -439,18 +637,211 @@ export class HexlaceCoordinator {
       await this.saveRecord();
     } catch (error) {
       console.error("Hexlace KV snapshot write failed", error);
-      await this.ctx.storage.setAlarm(Math.min(this.record.expiresAt, nowMs(this.env) + 60_000));
+      await this.ctx.storage.setAlarm(Number.isFinite(this.record.expiresAt)
+        ? Math.min(this.record.expiresAt, nowMs(this.env) + 60_000)
+        : nowMs(this.env) + 60_000);
     }
   }
 
   async syncKv() {
     const options = { expirationTtl: TTL_SECONDS };
-    const writes = [this.env.LISTS.put(`list:${this.record.readId}`, JSON.stringify(this.record.list), options)];
+    const publicSnapshot = { ...this.record.list, ...(validOwl(this.record.owl) ? { owl: this.record.owl } : {}) };
+    const writes = [this.env.LISTS.put(`list:${this.record.readId}`, JSON.stringify(publicSnapshot), options)];
     if (this.record.auth) writes.push(this.env.LISTS.put(`auth:${this.record.readId}`, this.record.auth, options));
     else writes.push(this.env.LISTS.delete(`auth:${this.record.readId}`));
     if (this.record.claim) writes.push(this.env.LISTS.put(`claim:${this.record.readId}`, JSON.stringify(this.record.claim), options));
     else writes.push(this.env.LISTS.delete(`claim:${this.record.readId}`));
     await Promise.all(writes);
+  }
+}
+
+/**
+ * One instance per user profile. Owl identity and Hexadex entries live here so
+ * they survive a released physical tag, browser/app handoff, and future years.
+ * Hexadex entries are stored separately and read in bounded pages.
+ */
+export class HexOwlProfile {
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+    this.record = null;
+    this.queue = Promise.resolve();
+    ctx.blockConcurrencyWhile(async () => {
+      this.record = (await ctx.storage.get("profile")) || null;
+    });
+  }
+
+  fetch(request) {
+    const result = this.queue.then(() => this.handle(request));
+    this.queue = result.then(() => undefined, () => undefined);
+    return result;
+  }
+
+  async handle(request) {
+    const url = new URL(request.url);
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body.profileId !== "string" || body.profileId.length !== PROFILE_ID_LENGTH) {
+      return json({ error: "Invalid profile." }, 400);
+    }
+    if (url.pathname === "/initialize") return this.initialize(body);
+    if (!this.record) return json({ error: "Profile not found." }, 404);
+    if (!(await this.authorized(body.profileKey))) return json({ error: "Invalid profile key." }, 403);
+    if (url.pathname === "/qualify") return this.qualify(body);
+    if (url.pathname === "/adopt") return this.adopt(body);
+    if (url.pathname === "/release") return this.release(body);
+    if (url.pathname === "/read") return this.readProfile();
+    if (url.pathname === "/hexadex/add") return this.addHexadex(body);
+    if (url.pathname === "/hexadex/read") return this.readHexadex(body);
+    return json({ error: "Not found." }, 404);
+  }
+
+  async authorized(profileKey) {
+    if (typeof profileKey !== "string" || profileKey.length < 24) return false;
+    return (await tokenHash(profileKey)) === this.record.authHash;
+  }
+
+  async initialize(body) {
+    if (!validProfileCredentials(body.profileId, body.profileKey)) return json({ error: "Invalid profile credentials." }, 400);
+    const authHash = await tokenHash(body.profileKey);
+    if (this.record) return this.record.authHash === authHash ? json({ ok: true, owl: this.record.owl || null }) : json({ error: "Profile already exists." }, 409);
+    this.record = {
+      profileId: body.profileId,
+      authHash,
+      owl: null,
+      claimedReadId: null,
+      total: 0,
+      createdAt: nowMs(this.env),
+      updatedAt: nowMs(this.env),
+      lastTradeId: ""
+    };
+    await this.ctx.storage.put("profile", this.record);
+    return json({ ok: true, owl: null }, 201);
+  }
+
+  async qualify(body) {
+    if (!this.record.owl && body.eligible === true) {
+      if (!this.env?.OWL_NUMBERS) return json({ error: "Hex Owl numbering is unavailable." }, 503);
+      const allocation = await namedStub(this.env.OWL_NUMBERS, "global").fetch(new Request("https://owl-number.internal/allocate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileId: this.record.profileId })
+      }));
+      const allocated = await allocation.json().catch(() => ({}));
+      if (!allocation.ok || !Number.isSafeInteger(allocated.number)) return json({ error: "Hex Owl numbering is unavailable." }, 503);
+      this.record.owl = {
+        seed: randomHex(16),
+        version: OWL_VERSION,
+        number: allocated.number,
+        createdAt: nowMs(this.env),
+        season: OWL_SEASON
+      };
+    }
+    if (typeof body.claimedReadId === "string" && body.claimedReadId.length === 8) this.record.claimedReadId = body.claimedReadId;
+    this.record.updatedAt = nowMs(this.env);
+    await this.ctx.storage.put("profile", this.record);
+    return json({ ok: true, owl: this.record.owl || null, claimedReadId: this.record.claimedReadId, total: this.record.total || 0 });
+  }
+
+  async adopt(body) {
+    if (!validOwl(body.owl) || typeof body.claimedReadId !== "string" || body.claimedReadId.length !== 8) {
+      return json({ error: "Invalid Hex Owl assignment." }, 400);
+    }
+    if (body.tradeId && body.tradeId === this.record.lastTradeId && this.record.claimedReadId === body.claimedReadId) {
+      return json({ ok: true, owl: this.record.owl });
+    }
+    if (!body.tradeId && this.record.claimedReadId === body.claimedReadId
+      && validOwl(this.record.owl) && this.record.owl.seed === body.owl.seed
+      && this.record.owl.version === body.owl.version && this.record.owl.number === body.owl.number) {
+      return json({ ok: true, owl: this.record.owl });
+    }
+    this.record.owl = body.owl;
+    this.record.claimedReadId = body.claimedReadId;
+    this.record.lastTradeId = typeof body.tradeId === "string" ? body.tradeId.slice(0, 80) : "";
+    this.record.updatedAt = nowMs(this.env);
+    await this.ctx.storage.put("profile", this.record);
+    return json({ ok: true, owl: this.record.owl });
+  }
+
+  async release(body) {
+    if (body.owl != null && !validOwl(body.owl)) return json({ error: "Invalid Hex Owl." }, 400);
+    if (validOwl(body.owl)) this.record.owl = body.owl;
+    if (!body.readId || this.record.claimedReadId === body.readId) this.record.claimedReadId = null;
+    this.record.updatedAt = nowMs(this.env);
+    await this.ctx.storage.put("profile", this.record);
+    return json({ ok: true, owl: this.record.owl || null });
+  }
+
+  readProfile() {
+    return json({ owl: this.record.owl || null, claimedReadId: this.record.claimedReadId, total: this.record.total || 0 });
+  }
+
+  async addHexadex(body) {
+    const source = body.entry;
+    if (!source || typeof source.readId !== "string" || source.readId.length !== 8 || !validOwl(source.owl)) {
+      return json({ error: "Invalid Hexadex entry." }, 400);
+    }
+    // The collection is an Owl-dex, not a tag history. A released Hexlace may
+    // later carry a different Owl, while the same Owl may later be reclaimed
+    // onto another Hexlace; the globally unique Owl number is the stable key.
+    const indexKey = `hexadex-owl:${source.owl.number}`;
+    const priorKey = await this.ctx.storage.get(indexKey);
+    const prior = priorKey ? await this.ctx.storage.get(priorKey) : null;
+    const firstCollectedAt = prior?.firstCollectedAt || (Number.isSafeInteger(source.firstCollectedAt) && source.firstCollectedAt > 0 ? source.firstCollectedAt : nowMs(this.env));
+    const entry = {
+      readId: source.readId,
+      name: typeof source.name === "string" ? source.name.trim().slice(0, 60) : "",
+      owl: source.owl,
+      firstCollectedAt,
+      context: typeof source.context === "string" ? source.context.slice(0, 80) : `Shambhala ${source.owl.season}`,
+      festivalYear: Number.isSafeInteger(source.festivalYear) ? source.festivalYear : source.owl.season,
+      lastSyncedAt: nowMs(this.env)
+    };
+    const entryKey = priorKey || `hexadex:${String(Number.MAX_SAFE_INTEGER - Math.min(firstCollectedAt, Number.MAX_SAFE_INTEGER)).padStart(16, "0")}:${source.owl.number}`;
+    const added = !priorKey;
+    if (added) this.record.total = (this.record.total || 0) + 1;
+    this.record.updatedAt = nowMs(this.env);
+    await this.ctx.storage.put({ [entryKey]: entry, [indexKey]: entryKey, profile: this.record });
+    return json({ added, entry, total: this.record.total || 0 });
+  }
+
+  async readHexadex(body) {
+    const requested = Number(body.limit);
+    const limit = Number.isSafeInteger(requested) ? Math.max(1, Math.min(48, requested)) : HEXADEX_PAGE_SIZE;
+    const cursor = typeof body.cursor === "string" && body.cursor.startsWith("hexadex:") && body.cursor.length < 160 ? body.cursor : "";
+    const records = await this.ctx.storage.list({ prefix: "hexadex:", ...(cursor ? { startAfter: cursor } : {}), limit: limit + 1 });
+    const pairs = [...records.entries()];
+    const visible = pairs.slice(0, limit);
+    return json({
+      entries: visible.map(([, entry]) => entry),
+      total: this.record.total || 0,
+      nextCursor: pairs.length > limit ? visible[visible.length - 1][0] : null,
+      owl: this.record.owl || null
+    });
+  }
+}
+
+/** A single low-frequency allocator used only once per profile qualification. */
+export class OwlNumberAllocator {
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+    this.queue = Promise.resolve();
+  }
+
+  fetch(request) {
+    const result = this.queue.then(async () => {
+      const body = await request.json().catch(() => null);
+      const profileId = body && typeof body.profileId === "string" ? body.profileId : "";
+      if (profileId.length !== PROFILE_ID_LENGTH) return json({ error: "Invalid profile." }, 400);
+      const allocationKey = `allocation:${profileId}`;
+      const existing = await this.ctx.storage.get(allocationKey);
+      if (Number.isSafeInteger(existing) && existing > 0) return json({ number: existing });
+      const next = (Number(await this.ctx.storage.get("counter")) || 0) + 1;
+      await this.ctx.storage.put({ counter: next, [allocationKey]: next });
+      return json({ number: next }, 201);
+    });
+    this.queue = result.then(() => undefined, () => undefined);
+    return result;
   }
 }
 

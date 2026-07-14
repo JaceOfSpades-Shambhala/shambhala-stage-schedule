@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Hex Owl Generator Playground</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      --page: #0b0d1b;
+      --panel: rgba(22, 24, 46, .86);
+      --panel-strong: #171a32;
+      --ink: #f8f7ff;
+      --muted: #aaa9c1;
+      --accent: #ec8cba;
+      --teal: #33c7a5;
+      --line: rgba(248, 247, 255, .13);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 50% 0, rgba(163, 133, 214, .18), transparent 30rem),
+        radial-gradient(circle at 10% 48%, rgba(51, 199, 165, .08), transparent 24rem),
+        var(--page);
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    main { width: min(100% - 2rem, 760px); margin: 0 auto; padding: 3rem 0 4rem; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: .65rem; font-size: clamp(2.7rem, 12vw, 5.2rem); line-height: .9; letter-spacing: -.055em; }
+    h2 { margin-bottom: .25rem; font-size: 1.05rem; letter-spacing: -.015em; }
+    .eyebrow { color: var(--accent); font-size: .68rem; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
+    .lede { max-width: 38rem; margin: 0 auto; color: var(--muted); font-size: .94rem; font-weight: 650; line-height: 1.55; }
+    .hero { margin-bottom: 1.25rem; text-align: center; }
+    .stack { display: grid; gap: 1rem; }
+    .panel {
+      padding: 1.25rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 1.15rem;
+      box-shadow: 0 20px 65px rgba(0, 0, 0, .28);
+      backdrop-filter: blur(18px);
+    }
+    .panel-head { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+    .panel-note { margin: .2rem 0 0; color: var(--muted); font-size: .76rem; font-weight: 650; line-height: 1.45; }
+    .version { color: var(--ink); font-size: .72rem; font-weight: 900; letter-spacing: .08em; white-space: nowrap; }
+    .controls { display: grid; grid-template-columns: 1fr auto; gap: .6rem; margin-bottom: 1rem; }
+    label { display: grid; gap: .4rem; color: var(--muted); font-size: .72rem; font-weight: 750; }
+    input, button {
+      min-height: 44px;
+      padding: .62rem .85rem;
+      border: 1px solid rgba(248, 247, 255, .18);
+      border-radius: .72rem;
+      background: rgba(248, 247, 255, .05);
+    }
+    input { width: 100%; color: var(--ink); font-weight: 720; }
+    button { cursor: pointer; font-size: .8rem; font-weight: 850; transition: transform .15s ease, border-color .15s ease, background .15s ease; }
+    button:hover { transform: translateY(-1px); border-color: rgba(248, 247, 255, .48); }
+    button:focus-visible, input:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+    .primary { border-color: transparent; color: #21142b; background: var(--accent); }
+    .owl-layout { display: grid; grid-template-columns: minmax(220px, 310px) 1fr; gap: 1.2rem; align-items: center; }
+    .main-owl { width: 100%; aspect-ratio: 1; }
+    .main-owl svg, .scale svg, .gallery svg { display: block; width: 100%; height: 100%; }
+    .owl-name { margin: .1rem 0 1rem; font-size: 1.55rem; line-height: 1; letter-spacing: -.03em; }
+    dl { display: grid; grid-template-columns: 1fr auto; gap: 0; margin: 0; }
+    dt, dd { padding: .45rem 0; border-top: 1px solid var(--line); }
+    dt { color: var(--muted); font-size: .63rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+    dd { margin: 0; padding-left: 1rem; font-size: .78rem; font-weight: 800; text-align: right; }
+    .scale-check { display: flex; gap: 1rem; align-items: end; margin-top: 1rem; color: var(--muted); font-size: .64rem; text-align: center; }
+    .scale { display: grid; gap: .28rem; }
+    .s48 { width: 48px; height: 48px; }
+    .s64 { width: 64px; height: 64px; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(94px, 1fr)); gap: .65rem; }
+    .gallery button { display: grid; gap: .35rem; justify-items: center; min-height: 0; padding: .55rem .35rem; border-color: var(--line); background: rgba(248, 247, 255, .025); }
+    .gallery-art { width: 76px; height: 76px; }
+    .gallery code { max-width: 100%; overflow: hidden; color: var(--muted); font: 800 .58rem/1.2 ui-monospace, monospace; letter-spacing: .05em; text-overflow: ellipsis; }
+    .steps, .catalog { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; }
+    .step, .trait-card { padding: .8rem; border: 1px solid var(--line); border-radius: .8rem; background: rgba(248, 247, 255, .025); }
+    .step strong, .trait-card strong { display: block; margin-bottom: .3rem; font-size: .8rem; }
+    .step p, .trait-card p { margin: 0; color: var(--muted); font-size: .72rem; font-weight: 650; line-height: 1.45; }
+    .step-num { display: grid; width: 1.5rem; height: 1.5rem; margin-bottom: .55rem; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--accent); font-size: .7rem; font-weight: 950; }
+    .status { display: inline-block; margin-bottom: .35rem; color: var(--teal); font-size: .57rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+    .status.future { color: #f5bf4f; }
+    footer { padding-top: .8rem; color: var(--muted); font-size: .7rem; font-weight: 650; line-height: 1.5; text-align: center; }
+    footer strong { color: var(--ink); }
+    @media (max-width: 660px) {
+      main { width: min(100% - 1.25rem, 760px); padding-top: 2rem; }
+      .owl-layout, .steps, .catalog { grid-template-columns: 1fr; }
+      .main-owl { width: min(100%, 300px); margin: 0 auto; }
+      .controls { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <div class="eyebrow">Camp Hexadecibel</div>
+      <h1>Hex Owls</h1>
+      <p class="lede">Every physical hexlace carries one Hex Owl. The exact Shambhala Owl mark is coloured and decorated from its permanent key: same key, same Owl, forever.</p>
+    </header>
+
+    <div class="stack">
+      <section class="panel" aria-labelledby="your-owl-title">
+        <div class="panel-head">
+          <div><div class="eyebrow">Your Owl</div><h2 id="your-owl-title" class="owl-name">Night Owl</h2></div>
+          <div class="version">V1 · 2026</div>
+        </div>
+        <div class="controls">
+          <label>Owl seed or key<input id="seed" autocomplete="off" spellcheck="false"></label>
+          <button id="random" class="primary" type="button">New playground key</button>
+          <label>Display name — label only<input id="name" maxlength="60" value="Night Owl"></label>
+          <button id="render" type="button">Render key</button>
+        </div>
+        <div class="owl-layout">
+          <div>
+            <div id="owlMain" class="main-owl" aria-live="polite"></div>
+            <div class="scale-check" aria-label="Small-size checks">
+              <div class="scale"><div id="owl48" class="s48"></div><span>48px</span></div>
+              <div class="scale"><div id="owl64" class="s64"></div><span>64px</span></div>
+              <span>The original eyes and stacked brow ridge remain the same at every size.</span>
+            </div>
+          </div>
+          <dl id="traits" aria-label="Selected Owl traits"></dl>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="flock-title">
+        <div class="panel-head">
+          <div><div class="eyebrow">The flock</div><h2 id="flock-title">Browse deterministic variations</h2><p class="panel-note">Tap an Owl to load its key above.</p></div>
+          <button id="shuffle" type="button">Shuffle</button>
+        </div>
+        <div id="gallery" class="gallery" aria-label="Random Hex Owl gallery"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="works-title">
+        <div class="eyebrow">How it works</div>
+        <h2 id="works-title">Built for the moment, not the scroll</h2>
+        <div class="steps">
+          <article class="step"><span class="step-num">1</span><strong>One permanent key</strong><p>The key stays with the physical hexlace through releases, reclaims, name changes, and new phones.</p></article>
+          <article class="step"><span class="step-num">2</span><strong>One cached source mark</strong><p>The supplied Shambhala Owl vector is loaded once. Lightweight SVG overlays provide the variation offline.</p></article>
+          <article class="step"><span class="step-num">3</span><strong>Trade in person</strong><p>A confirmed physical hexlace trade moves its Hex Owl too. The fun is the exchange; then the phone goes away.</p></article>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="traits-title">
+        <div class="eyebrow">Trait system</div>
+        <h2 id="traits-title">Accessories and room to grow</h2>
+        <p class="panel-note">The mockup’s extra ideas are included without changing the original Owl anatomy.</p>
+        <div class="catalog">
+          <article class="trait-card"><span class="status">Active</span><strong>Festival accessories</strong><p>Single and double kandi, LED ear cuffs, glow hoops, a disco chin gem, and glowstick earrings stay clear of the Owl edges.</p></article>
+          <article class="trait-card"><span class="status">Active</span><strong>Exact-vector brow gems</strong><p>Crown Gem, Brow Echo, Triple Prism, and Moonstone recolour portions of the original brow path instead of drawing feathers over it.</p></article>
+          <article class="trait-card"><span class="status">Active</span><strong>Facial disc patterns</strong><p>UV glow, freckles, arcs, and diamond dust stay inside the open cheek pockets below the original eyes.</p></article>
+          <article class="trait-card"><span class="status">Active</span><strong>Gem beaks</strong><p>The original mark remains most common, with small amber, moonstone, and laser-prism shards fitted into the centre opening.</p></article>
+          <article class="trait-card"><span class="status">Active</span><strong>Portal finish and rarity</strong><p>Nearly every Owl uses one portal colour. Pagoda Sunset, Aurora Bloom, and Moon Prism are reserved for legendary Owls and future camp-only keys.</p></article>
+          <article class="trait-card"><span class="status">Active</span><strong>Subtle aura</strong><p>Quiet, short portal rays, or sparse festival confetti for ordinary Owls; rare and legendary Owls receive the sparkle field.</p></article>
+          <article class="trait-card"><span class="status">Active</span><strong>Year stamp</strong><p>A subtle 26 remembers when this first trait pack hatched while later packs can add new editions.</p></article>
+          <article class="trait-card"><span class="status future">Held for camp</span><strong>Camp-only Owls</strong><p>A future reserved key range can identify Owls handed out in person; ordinary random keys never receive it.</p></article>
+        </div>
+      </section>
+    </div>
+
+    <footer><strong>Made by Camp Hexadecibel — come visit us.</strong><br>Hex Owls are for meeting and trading at the festival, not for keeping people glued to a screen.</footer>
+  </main>
+  <script src="hex-owl.js"></script>
+  <script>
+    (() => {
+      const seedInput = document.querySelector("#seed");
+      const nameInput = document.querySelector("#name");
+      const gallery = document.querySelector("#gallery");
+
+      function render() {
+        const seed = HexOwl.normalizeSeed(seedInput.value);
+        const svg = HexOwl.renderSvg(seed, 1);
+        seedInput.value = seed;
+        for (const id of ["owlMain", "owl48", "owl64"]) document.querySelector(`#${id}`).innerHTML = svg;
+        document.querySelector("#your-owl-title").textContent = nameInput.value.trim() || "Unnamed Owl";
+        const traits = document.querySelector("#traits");
+        traits.replaceChildren();
+        for (const [label, value] of Object.entries(HexOwl.traitNames(seed, 1))) {
+          const term = document.createElement("dt");
+          term.textContent = label;
+          const detail = document.createElement("dd");
+          detail.textContent = value;
+          traits.append(term, detail);
+        }
+      }
+
+      function useSeed(seed) {
+        seedInput.value = seed;
+        render();
+        document.querySelector("#your-owl-title").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function fillGallery() {
+        gallery.replaceChildren();
+        for (let index = 0; index < 24; index += 1) {
+          const seed = HexOwl.randomSeed();
+          const button = document.createElement("button");
+          button.type = "button";
+          button.title = "Load this Owl key";
+          const art = document.createElement("div");
+          art.className = "gallery-art";
+          art.innerHTML = HexOwl.renderSvg(seed, 1);
+          const code = document.createElement("code");
+          code.textContent = seed.slice(0, 8).toUpperCase();
+          button.append(art, code);
+          button.addEventListener("click", () => useSeed(seed));
+          gallery.append(button);
+        }
+      }
+
+      seedInput.value = HexOwl.randomSeed();
+      document.querySelector("#render").addEventListener("click", render);
+      document.querySelector("#random").addEventListener("click", () => { seedInput.value = HexOwl.randomSeed(); render(); });
+      document.querySelector("#shuffle").addEventListener("click", fillGallery);
+      nameInput.addEventListener("input", () => { document.querySelector("#your-owl-title").textContent = nameInput.value.trim() || "Unnamed Owl"; });
+      fillGallery();
+      render();
+    })();
+  </script>
+</body>
+</html>
