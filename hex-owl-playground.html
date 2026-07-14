@@ -3,223 +3,1029 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Hex Owl Generator Playground</title>
+  <meta name="theme-color" content="#090a12">
+  <title>Hex Owl V1 Playground</title>
   <style>
     :root {
       color-scheme: dark;
-      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-      --page: #0b0d1b;
-      --panel: rgba(22, 24, 46, .86);
-      --panel-strong: #171a32;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --page: #090a12;
+      --page-soft: #101321;
+      --panel: rgba(20, 23, 41, .92);
+      --panel-strong: #171a2d;
       --ink: #f8f7ff;
-      --muted: #aaa9c1;
-      --accent: #ec8cba;
-      --teal: #33c7a5;
+      --muted: #aaaac2;
       --line: rgba(248, 247, 255, .13);
+      --line-strong: rgba(248, 247, 255, .25);
+      --pink: #ec8cba;
+      --teal: #33c7a5;
+      --amber: #f5bf4f;
+      --danger: #ff667b;
+      --radius: 1rem;
+      --shadow: 0 24px 70px rgba(0, 0, 0, .3);
     }
+
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
+      min-width: 320px;
       min-height: 100vh;
       color: var(--ink);
       background:
-        radial-gradient(circle at 50% 0, rgba(163, 133, 214, .18), transparent 30rem),
-        radial-gradient(circle at 10% 48%, rgba(51, 199, 165, .08), transparent 24rem),
-        var(--page);
+        radial-gradient(circle at 12% -5%, rgba(236, 140, 186, .16), transparent 32rem),
+        radial-gradient(circle at 96% 18%, rgba(51, 199, 165, .1), transparent 28rem),
+        linear-gradient(180deg, var(--page-soft), var(--page));
     }
-    button, input { font: inherit; }
-    button { color: inherit; }
-    main { width: min(100% - 2rem, 760px); margin: 0 auto; padding: 3rem 0 4rem; }
+    button, input, select { font: inherit; }
+    button, select, input { color: inherit; }
+    button { cursor: pointer; }
+    button:disabled, select:disabled, input:disabled { cursor: not-allowed; opacity: .5; }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid var(--teal);
+      outline-offset: 2px;
+    }
     h1, h2, h3, p { margin-top: 0; }
-    h1 { margin-bottom: .65rem; font-size: clamp(2.7rem, 12vw, 5.2rem); line-height: .9; letter-spacing: -.055em; }
-    h2 { margin-bottom: .25rem; font-size: 1.05rem; letter-spacing: -.015em; }
-    .eyebrow { color: var(--accent); font-size: .68rem; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
-    .lede { max-width: 38rem; margin: 0 auto; color: var(--muted); font-size: .94rem; font-weight: 650; line-height: 1.55; }
-    .hero { margin-bottom: 1.25rem; text-align: center; }
-    .stack { display: grid; gap: 1rem; }
-    .panel {
-      padding: 1.25rem;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 1.15rem;
-      box-shadow: 0 20px 65px rgba(0, 0, 0, .28);
-      backdrop-filter: blur(18px);
+
+    .shell { width: min(calc(100% - 2rem), 1440px); margin: 0 auto; padding: 2.5rem 0 4rem; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 1.5rem; margin-bottom: 1.25rem; }
+    .hero h1 { max-width: 11ch; margin-bottom: .65rem; font-size: clamp(2.5rem, 7vw, 5rem); line-height: .88; letter-spacing: -.06em; }
+    .hero p { max-width: 58rem; margin-bottom: 0; color: var(--muted); font-size: .94rem; font-weight: 650; line-height: 1.55; }
+    .eyebrow { margin-bottom: .5rem; color: var(--pink); font-size: .65rem; font-weight: 950; letter-spacing: .15em; text-transform: uppercase; }
+    .version-badge { align-self: start; padding: .48rem .72rem; border: 1px solid var(--line-strong); border-radius: 999px; background: rgba(255, 255, 255, .045); font-size: .72rem; font-weight: 900; letter-spacing: .08em; white-space: nowrap; }
+
+    .workspace { display: grid; grid-template-columns: minmax(290px, 390px) minmax(0, 1fr); gap: 1rem; align-items: start; }
+    .sidebar, .content, .stack { display: grid; gap: 1rem; }
+    .sidebar { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto; scrollbar-width: thin; }
+    .panel { padding: 1.05rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); backdrop-filter: blur(18px); }
+    .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .9rem; }
+    .panel-head h2, .panel-head h3 { margin-bottom: .18rem; font-size: 1rem; letter-spacing: -.015em; }
+    .panel-note { margin: 0; color: var(--muted); font-size: .72rem; font-weight: 650; line-height: 1.45; }
+
+    .field { display: grid; gap: .38rem; min-width: 0; }
+    .field > span, .field-label { color: var(--muted); font-size: .65rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    input, select {
+      width: 100%;
+      min-height: 42px;
+      padding: .58rem .7rem;
+      border: 1px solid var(--line-strong);
+      border-radius: .65rem;
+      background: rgba(255, 255, 255, .055);
     }
-    .panel-head { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
-    .panel-note { margin: .2rem 0 0; color: var(--muted); font-size: .76rem; font-weight: 650; line-height: 1.45; }
-    .version { color: var(--ink); font-size: .72rem; font-weight: 900; letter-spacing: .08em; white-space: nowrap; }
-    .controls { display: grid; grid-template-columns: 1fr auto; gap: .6rem; margin-bottom: 1rem; }
-    label { display: grid; gap: .4rem; color: var(--muted); font-size: .72rem; font-weight: 750; }
-    input, button {
-      min-height: 44px;
-      padding: .62rem .85rem;
-      border: 1px solid rgba(248, 247, 255, .18);
-      border-radius: .72rem;
-      background: rgba(248, 247, 255, .05);
+    input { font-weight: 720; }
+    .seed-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; }
+    .seed-row input { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .74rem; }
+    .button-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin-top: .65rem; }
+    .button-row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .button {
+      min-height: 42px;
+      padding: .55rem .68rem;
+      border: 1px solid var(--line-strong);
+      border-radius: .65rem;
+      background: rgba(255, 255, 255, .055);
+      font-size: .74rem;
+      font-weight: 870;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
     }
-    input { width: 100%; color: var(--ink); font-weight: 720; }
-    button { cursor: pointer; font-size: .8rem; font-weight: 850; transition: transform .15s ease, border-color .15s ease, background .15s ease; }
-    button:hover { transform: translateY(-1px); border-color: rgba(248, 247, 255, .48); }
-    button:focus-visible, input:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
-    .primary { border-color: transparent; color: #21142b; background: var(--accent); }
-    .owl-layout { display: grid; grid-template-columns: minmax(220px, 310px) 1fr; gap: 1.2rem; align-items: center; }
-    .main-owl { width: 100%; aspect-ratio: 1; }
-    .main-owl svg, .scale svg, .gallery svg { display: block; width: 100%; height: 100%; }
-    .owl-name { margin: .1rem 0 1rem; font-size: 1.55rem; line-height: 1; letter-spacing: -.03em; }
-    dl { display: grid; grid-template-columns: 1fr auto; gap: 0; margin: 0; }
-    dt, dd { padding: .45rem 0; border-top: 1px solid var(--line); }
-    dt { color: var(--muted); font-size: .63rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
-    dd { margin: 0; padding-left: 1rem; font-size: .78rem; font-weight: 800; text-align: right; }
-    .scale-check { display: flex; gap: 1rem; align-items: end; margin-top: 1rem; color: var(--muted); font-size: .64rem; text-align: center; }
-    .scale { display: grid; gap: .28rem; }
-    .s48 { width: 48px; height: 48px; }
-    .s64 { width: 64px; height: 64px; }
-    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(94px, 1fr)); gap: .65rem; }
-    .gallery button { display: grid; gap: .35rem; justify-items: center; min-height: 0; padding: .55rem .35rem; border-color: var(--line); background: rgba(248, 247, 255, .025); }
-    .gallery-art { width: 76px; height: 76px; }
-    .gallery code { max-width: 100%; overflow: hidden; color: var(--muted); font: 800 .58rem/1.2 ui-monospace, monospace; letter-spacing: .05em; text-overflow: ellipsis; }
-    .steps, .catalog { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; }
-    .step, .trait-card { padding: .8rem; border: 1px solid var(--line); border-radius: .8rem; background: rgba(248, 247, 255, .025); }
-    .step strong, .trait-card strong { display: block; margin-bottom: .3rem; font-size: .8rem; }
-    .step p, .trait-card p { margin: 0; color: var(--muted); font-size: .72rem; font-weight: 650; line-height: 1.45; }
-    .step-num { display: grid; width: 1.5rem; height: 1.5rem; margin-bottom: .55rem; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--accent); font-size: .7rem; font-weight: 950; }
-    .status { display: inline-block; margin-bottom: .35rem; color: var(--teal); font-size: .57rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
-    .status.future { color: #f5bf4f; }
-    footer { padding-top: .8rem; color: var(--muted); font-size: .7rem; font-weight: 650; line-height: 1.5; text-align: center; }
-    footer strong { color: var(--ink); }
-    @media (max-width: 660px) {
-      main { width: min(100% - 1.25rem, 760px); padding-top: 2rem; }
-      .owl-layout, .steps, .catalog { grid-template-columns: 1fr; }
-      .main-owl { width: min(100%, 300px); margin: 0 auto; }
-      .controls { grid-template-columns: 1fr; }
+    .button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(248, 247, 255, .48); background: rgba(255, 255, 255, .09); }
+    .button.primary { border-color: transparent; color: #211321; background: var(--pink); }
+    .button.primary:hover:not(:disabled) { background: #f2a4ca; }
+    .button.compact { min-height: 34px; padding: .35rem .55rem; font-size: .67rem; }
+
+    .api-status { display: flex; align-items: flex-start; gap: .5rem; margin-top: .75rem; padding: .58rem .65rem; border: 1px solid var(--line); border-radius: .62rem; color: var(--muted); background: rgba(255, 255, 255, .025); font-size: .68rem; font-weight: 700; line-height: 1.42; }
+    .api-dot { width: .55rem; height: .55rem; margin-top: .17rem; flex: 0 0 auto; border-radius: 50%; background: var(--teal); box-shadow: 0 0 10px rgba(51, 199, 165, .75); }
+    .api-status.is-fallback .api-dot { background: var(--amber); box-shadow: 0 0 10px rgba(245, 191, 79, .6); }
+    .api-status.is-error .api-dot { background: var(--danger); box-shadow: 0 0 10px rgba(255, 102, 123, .6); }
+
+    .trait-controls { display: grid; gap: .58rem; }
+    .trait-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; align-items: end; padding-top: .58rem; border-top: 1px solid var(--line); }
+    .trait-row:first-child { padding-top: 0; border-top: 0; }
+    .trait-row select { min-height: 39px; padding-block: .48rem; font-size: .75rem; }
+    .lock {
+      display: grid;
+      min-width: 46px;
+      min-height: 39px;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: .62rem;
+      color: var(--muted);
+      background: rgba(255, 255, 255, .035);
+      cursor: pointer;
+    }
+    .lock input { position: absolute; width: 1px; height: 1px; min-height: 0; opacity: 0; }
+    .lock span { font-size: .65rem; font-weight: 900; letter-spacing: .04em; }
+    .lock:has(input:checked) { border-color: color-mix(in srgb, var(--pink) 70%, transparent); color: var(--ink); background: color-mix(in srgb, var(--pink) 18%, transparent); }
+
+    .preview-panel { overflow: hidden; }
+    .preview-layout { display: grid; grid-template-columns: minmax(280px, 512px) minmax(250px, 1fr); gap: 1rem; align-items: start; }
+    .preview-large { display: grid; gap: .45rem; justify-items: center; }
+    .art-frame { width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: .9rem; background: #090716; }
+    .art-frame svg { display: block; width: 100%; height: 100%; }
+    .art-512 { width: min(100%, 512px); aspect-ratio: 1; }
+    .size-label { color: var(--muted); font-size: .64rem; font-weight: 850; letter-spacing: .07em; text-align: center; text-transform: uppercase; }
+    .scale-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; align-items: start; }
+    .scale-card { display: grid; gap: .38rem; justify-items: center; min-width: 0; padding: .65rem; border: 1px solid var(--line); border-radius: .75rem; background: rgba(255, 255, 255, .025); }
+    .art-64 { width: 64px; height: 64px; }
+    .art-128 { width: 128px; height: 128px; max-width: 100%; }
+    .scale-card.wide { grid-column: 1 / -1; }
+    .art-320 { width: min(100%, 320px); aspect-ratio: 1; }
+
+    .summary { margin-top: 1rem; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: .45rem; }
+    .summary-item { min-width: 0; padding: .55rem .62rem; border: 1px solid var(--line); border-radius: .65rem; background: rgba(255, 255, 255, .025); }
+    .summary-item dt { overflow: hidden; margin-bottom: .18rem; color: var(--muted); font-size: .57rem; font-weight: 900; letter-spacing: .09em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+    .summary-item dd { overflow-wrap: anywhere; margin: 0; font-size: .75rem; font-weight: 820; }
+
+    .validation { display: grid; gap: .5rem; }
+    .validation-ok { display: flex; align-items: center; gap: .5rem; margin: 0; color: #b8f3df; font-size: .75rem; font-weight: 750; }
+    .validation-ok::before { content: "✓"; display: grid; width: 1.35rem; height: 1.35rem; place-items: center; border-radius: 50%; color: #0b211a; background: var(--teal); font-size: .75rem; font-weight: 950; }
+    .message-list { display: grid; gap: .42rem; margin: 0; padding: 0; list-style: none; }
+    .message { padding: .58rem .65rem; border: 1px solid color-mix(in srgb, var(--amber) 42%, transparent); border-radius: .62rem; color: #f7dfab; background: color-mix(in srgb, var(--amber) 8%, transparent); font-size: .7rem; font-weight: 700; line-height: 1.45; }
+    .message.repair { border-color: color-mix(in srgb, var(--teal) 42%, transparent); color: #c3efe2; background: color-mix(in srgb, var(--teal) 8%, transparent); }
+    .message.error { border-color: color-mix(in srgb, var(--danger) 48%, transparent); color: #ffd0d7; background: color-mix(in srgb, var(--danger) 8%, transparent); }
+    .message strong { display: block; margin-bottom: .1rem; color: var(--ink); font-size: .61rem; letter-spacing: .08em; text-transform: uppercase; }
+
+    .two-up { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .layer-list { display: grid; gap: .45rem; margin: 0; padding: 0; list-style: none; counter-reset: layer; }
+    .layer-list li { display: grid; grid-template-columns: 1.65rem minmax(0, 1fr); align-items: center; gap: .55rem; min-height: 2rem; padding: .38rem .5rem; border: 1px solid var(--line); border-radius: .6rem; background: rgba(255, 255, 255, .025); font-size: .72rem; font-weight: 800; }
+    .layer-list li::before { counter-increment: layer; content: counter(layer); display: grid; width: 1.35rem; height: 1.35rem; place-items: center; border-radius: 50%; color: #211321; background: var(--pink); font-size: .61rem; font-weight: 950; }
+
+    .preset-grid, .contact-sheet, .palette-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: .65rem; }
+    .preset-card, .contact-card, .palette-card { min-width: 0; padding: .58rem; border: 1px solid var(--line); border-radius: .72rem; background: rgba(255, 255, 255, .025); }
+    .preset-card { display: grid; gap: .45rem; text-align: left; }
+    .preset-card:hover, .contact-card:hover, .palette-card:hover { border-color: var(--line-strong); background: rgba(255, 255, 255, .055); }
+    .preset-card strong, .contact-card strong, .palette-card strong { display: block; overflow-wrap: anywhere; font-size: .74rem; }
+    .preset-card span, .contact-card span, .palette-card span { display: block; color: var(--muted); font-size: .62rem; font-weight: 680; line-height: 1.4; }
+    .preset-seed, .seed-code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .04em; }
+
+    .palette-tools { display: grid; grid-template-columns: minmax(180px, 280px) minmax(0, 1fr); gap: .75rem; align-items: end; margin-bottom: .8rem; }
+    .palette-card, .contact-card { cursor: pointer; text-align: left; }
+    .palette-art, .contact-art { width: 100%; aspect-ratio: 1; margin-bottom: .45rem; overflow: hidden; border-radius: .55rem; background: #090716; }
+    .palette-art svg, .contact-art svg { display: block; width: 100%; height: 100%; }
+    .swatches { display: flex; gap: .25rem; margin: .35rem 0 .1rem; }
+    .swatch { width: 1rem; height: 1rem; border: 1px solid rgba(255, 255, 255, .25); border-radius: 50%; background: var(--swatch); }
+
+    .contact-sheet { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    .contact-card { padding: .5rem; }
+    .contact-card .rarity { color: var(--pink); font-size: .56rem; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
+
+    .empty { margin: 0; padding: .75rem; border: 1px dashed var(--line-strong); border-radius: .65rem; color: var(--muted); font-size: .72rem; font-weight: 680; line-height: 1.45; }
+    footer { padding-top: 1.2rem; color: var(--muted); font-size: .7rem; font-weight: 650; line-height: 1.5; text-align: center; }
+
+    @media (max-width: 1080px) {
+      .workspace { grid-template-columns: 330px minmax(0, 1fr); }
+      .preview-layout { grid-template-columns: 1fr; }
+      .preview-large { max-width: 512px; margin-inline: auto; }
+    }
+    @media (max-width: 820px) {
+      .shell { width: min(calc(100% - 1.25rem), 720px); padding-top: 1.75rem; }
+      .hero { grid-template-columns: 1fr; }
+      .version-badge { justify-self: start; }
+      .workspace { grid-template-columns: 1fr; }
+      .sidebar { position: static; max-height: none; overflow: visible; }
+      .two-up { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 520px) {
+      .panel { padding: .85rem; }
+      .seed-row, .button-row.three, .palette-tools { grid-template-columns: 1fr; }
+      .scale-grid { grid-template-columns: 1fr 1fr; }
+      .art-320 { max-width: 100%; }
+      .preset-grid, .palette-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 390px) {
+      .button-row, .preset-grid, .palette-grid { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .button { transition: none; }
     }
   </style>
 </head>
 <body>
-  <main>
+  <main class="shell">
     <header class="hero">
-      <div class="eyebrow">Camp Hexadecibel</div>
-      <h1>Hex Owls</h1>
-      <p class="lede">Every physical hexlace carries one Hex Owl. The exact Shambhala Owl mark is coloured and decorated from its permanent key: same key, same Owl, forever.</p>
+      <div>
+        <div class="eyebrow">Camp Hexadecibel · Art workshop</div>
+        <h1>Hex Owl Playground</h1>
+        <p>Inspect the deterministic renderer, force traits, study repairs, and compare every treatment at its real delivery sizes. Playground choices never alter an assigned Hexlace or its Hexadex record.</p>
+      </div>
+      <div id="versionBadge" class="version-badge">Loading renderer…</div>
     </header>
 
-    <div class="stack">
-      <section class="panel" aria-labelledby="your-owl-title">
-        <div class="panel-head">
-          <div><div class="eyebrow">Your Owl</div><h2 id="your-owl-title" class="owl-name">Night Owl</h2></div>
-          <div class="version">V1 · 2026</div>
-        </div>
-        <div class="controls">
-          <label>Owl seed or key<input id="seed" autocomplete="off" spellcheck="false"></label>
-          <button id="random" class="primary" type="button">New playground key</button>
-          <label>Display name — label only<input id="name" maxlength="60" value="Night Owl"></label>
-          <button id="render" type="button">Render key</button>
-        </div>
-        <div class="owl-layout">
-          <div>
-            <div id="owlMain" class="main-owl" aria-live="polite"></div>
-            <div class="scale-check" aria-label="Small-size checks">
-              <div class="scale"><div id="owl48" class="s48"></div><span>48px</span></div>
-              <div class="scale"><div id="owl64" class="s64"></div><span>64px</span></div>
-              <span>The original eyes and stacked brow ridge remain the same at every size.</span>
+    <div class="workspace">
+      <aside class="sidebar" aria-label="Hex Owl controls">
+        <section class="panel" aria-labelledby="seed-title">
+          <div class="panel-head">
+            <div><div class="eyebrow">Deterministic input</div><h2 id="seed-title">Seed and rarity</h2></div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="seed">Permanent Owl seed or key</label>
+            <div class="seed-row"><input id="seed" autocomplete="off" spellcheck="false" inputmode="text"><button id="applySeed" class="button compact" type="button">Apply</button></div>
+          </div>
+          <label class="field" style="margin-top:.65rem">
+            <span>Rarity</span>
+            <select id="rarity"><option value="">Auto · from seed</option></select>
+          </label>
+          <div class="button-row three">
+            <button id="rollAll" class="button primary" type="button">Roll all</button>
+            <button id="rollUnlocked" class="button" type="button">Roll unlocked</button>
+            <button id="clearForces" class="button" type="button">Clear forces</button>
+          </div>
+          <div id="apiStatus" class="api-status" role="status"><span class="api-dot"></span><span>Reading the renderer contract…</span></div>
+        </section>
+
+        <section class="panel" aria-labelledby="traits-control-title">
+          <div class="panel-head">
+            <div><div class="eyebrow">Manual workshop</div><h2 id="traits-control-title">Trait forces and locks</h2><p class="panel-note">Auto follows the seed. Lock a resolved value before rolling the other categories.</p></div>
+          </div>
+          <div id="traitControls" class="trait-controls"></div>
+        </section>
+      </aside>
+
+      <div class="content">
+        <section class="panel preview-panel" aria-labelledby="preview-title">
+          <div class="panel-head">
+            <div><div class="eyebrow">Resolved output</div><h2 id="preview-title">Synchronized size checks</h2><p class="panel-note">Every tile renders the same seed, rarity request, and forced-trait request.</p></div>
+            <button id="copySeed" class="button compact" type="button">Copy seed</button>
+          </div>
+          <div class="preview-layout">
+            <div class="preview-large">
+              <div id="preview512" class="art-frame art-512" aria-live="polite"></div>
+              <div class="size-label">512 px · detail and edge clearance</div>
+            </div>
+            <div class="scale-grid">
+              <div class="scale-card"><div id="preview64" class="art-frame art-64"></div><div class="size-label">64 px · minimum</div></div>
+              <div class="scale-card"><div id="preview128" class="art-frame art-128"></div><div class="size-label">128 px · card</div></div>
+              <div class="scale-card wide"><div id="preview320" class="art-frame art-320"></div><div class="size-label">320 px · profile</div></div>
             </div>
           </div>
-          <dl id="traits" aria-label="Selected Owl traits"></dl>
-        </div>
-      </section>
+          <div class="summary"><dl id="traitSummary" class="summary-grid"></dl></div>
+        </section>
 
-      <section class="panel" aria-labelledby="flock-title">
-        <div class="panel-head">
-          <div><div class="eyebrow">The flock</div><h2 id="flock-title">Browse deterministic variations</h2><p class="panel-note">Tap an Owl to load its key above.</p></div>
-          <button id="shuffle" type="button">Shuffle</button>
-        </div>
-        <div id="gallery" class="gallery" aria-label="Random Hex Owl gallery"></div>
-      </section>
+        <section class="panel" aria-labelledby="validation-title">
+          <div class="panel-head">
+            <div><div class="eyebrow">Combination grammar</div><h2 id="validation-title">Warnings and deterministic repairs</h2><p class="panel-note">Forced requests remain visible above; this panel explains what production resolves before rendering.</p></div>
+          </div>
+          <div id="validation" class="validation" aria-live="polite"></div>
+        </section>
 
-      <section class="panel" aria-labelledby="works-title">
-        <div class="eyebrow">How it works</div>
-        <h2 id="works-title">Built for the moment, not the scroll</h2>
-        <div class="steps">
-          <article class="step"><span class="step-num">1</span><strong>One permanent key</strong><p>The key stays with the physical hexlace through releases, reclaims, name changes, and new phones.</p></article>
-          <article class="step"><span class="step-num">2</span><strong>One cached source mark</strong><p>The supplied Shambhala Owl vector is loaded once. Lightweight SVG overlays provide the variation offline.</p></article>
-          <article class="step"><span class="step-num">3</span><strong>Trade in person</strong><p>A confirmed physical hexlace trade moves its Hex Owl too. The fun is the exchange; then the phone goes away.</p></article>
+        <div class="two-up">
+          <section class="panel" aria-labelledby="layers-title">
+            <div class="panel-head"><div><div class="eyebrow">Rendering contract</div><h2 id="layers-title">Layer order</h2><p class="panel-note">Back to front, from the versioned specification.</p></div></div>
+            <ol id="layerOrder" class="layer-list"></ol>
+          </section>
+          <section class="panel" aria-labelledby="presets-title">
+            <div class="panel-head"><div><div class="eyebrow">Regression probes</div><h2 id="presets-title">Difficult combinations</h2><p class="panel-note">Fixed seeds and requests make every stress case reproducible.</p></div></div>
+            <div id="presetGrid" class="preset-grid"></div>
+          </section>
         </div>
-      </section>
 
-      <section class="panel" aria-labelledby="traits-title">
-        <div class="eyebrow">Trait system</div>
-        <h2 id="traits-title">Accessories and room to grow</h2>
-        <p class="panel-note">The mockup’s extra ideas are included without changing the original Owl anatomy.</p>
-        <div class="catalog">
-          <article class="trait-card"><span class="status">Active</span><strong>Festival accessories</strong><p>Single and double kandi, LED ear cuffs, glow hoops, a disco chin gem, and glowstick earrings stay clear of the Owl edges.</p></article>
-          <article class="trait-card"><span class="status">Active</span><strong>Exact-vector brow gems</strong><p>Crown Gem, Brow Echo, Triple Prism, and Moonstone recolour portions of the original brow path instead of drawing feathers over it.</p></article>
-          <article class="trait-card"><span class="status">Active</span><strong>Facial disc patterns</strong><p>UV glow, freckles, arcs, and diamond dust stay inside the open cheek pockets below the original eyes.</p></article>
-          <article class="trait-card"><span class="status">Active</span><strong>Gem beaks</strong><p>The original mark remains most common, with small amber, moonstone, and laser-prism shards fitted into the centre opening.</p></article>
-          <article class="trait-card"><span class="status">Active</span><strong>Portal finish and rarity</strong><p>Nearly every Owl uses one portal colour. Pagoda Sunset, Aurora Bloom, and Moon Prism are reserved for legendary Owls and future camp-only keys.</p></article>
-          <article class="trait-card"><span class="status">Active</span><strong>Subtle aura</strong><p>Quiet, short portal rays, or sparse festival confetti for ordinary Owls; rare and legendary Owls receive the sparkle field.</p></article>
-          <article class="trait-card"><span class="status">Active</span><strong>Year stamp</strong><p>A subtle 26 remembers when this first trait pack hatched while later packs can add new editions.</p></article>
-          <article class="trait-card"><span class="status future">Held for camp</span><strong>Camp-only Owls</strong><p>A future reserved key range can identify Owls handed out in person; ordinary random keys never receive it.</p></article>
-        </div>
-      </section>
+        <section class="panel" aria-labelledby="palettes-title">
+          <div class="panel-head"><div><div class="eyebrow">Same-family study</div><h2 id="palettes-title">Palette family and variant comparison</h2><p class="panel-note">All other requested traits remain fixed while the selected family’s palette variants change.</p></div></div>
+          <div class="palette-tools">
+            <label class="field"><span>Palette family</span><select id="paletteFamily"></select></label>
+            <p id="paletteFamilyNote" class="panel-note">Choose a family to compare its variants.</p>
+          </div>
+          <div id="paletteGrid" class="palette-grid"></div>
+        </section>
+
+        <section class="panel" aria-labelledby="contact-title">
+          <div class="panel-head">
+            <div><div class="eyebrow">Seeded contact sheet</div><h2 id="contact-title">A modest deterministic flock</h2><p class="panel-note">These fixed samples never shuffle. Select one to load its permanent seed into the workshop.</p></div>
+            <button id="refreshContact" class="button compact" type="button">Re-render sheet</button>
+          </div>
+          <div id="contactSheet" class="contact-sheet"></div>
+        </section>
+      </div>
     </div>
 
-    <footer><strong>Made by Camp Hexadecibel — come visit us.</strong><br>Hex Owls are for meeting and trading at the festival, not for keeping people glued to a screen.</footer>
+    <footer>Standalone, framework-free, and offline-compatible. The production Hexlace interface remains intentionally minimal.</footer>
   </main>
-  <script src="hex-owl.js"></script>
+
+  <script src="hex-owl.js?v=57"></script>
   <script>
     (() => {
-      const seedInput = document.querySelector("#seed");
-      const nameInput = document.querySelector("#name");
-      const gallery = document.querySelector("#gallery");
+      "use strict";
 
-      function render() {
-        const seed = HexOwl.normalizeSeed(seedInput.value);
-        const svg = HexOwl.renderSvg(seed, 1);
-        seedInput.value = seed;
-        for (const id of ["owlMain", "owl48", "owl64"]) document.querySelector(`#${id}`).innerHTML = svg;
-        document.querySelector("#your-owl-title").textContent = nameInput.value.trim() || "Unnamed Owl";
-        const traits = document.querySelector("#traits");
-        traits.replaceChildren();
-        for (const [label, value] of Object.entries(HexOwl.traitNames(seed, 1))) {
+      const api = window.HexOwl || {};
+      const byId = id => document.getElementById(id);
+      const elements = {
+        seed: byId("seed"),
+        rarity: byId("rarity"),
+        traitControls: byId("traitControls"),
+        traitSummary: byId("traitSummary"),
+        validation: byId("validation"),
+        layerOrder: byId("layerOrder"),
+        paletteFamily: byId("paletteFamily"),
+        paletteFamilyNote: byId("paletteFamilyNote"),
+        paletteGrid: byId("paletteGrid"),
+        presetGrid: byId("presetGrid"),
+        contactSheet: byId("contactSheet"),
+        apiStatus: byId("apiStatus"),
+        versionBadge: byId("versionBadge")
+      };
+      const previewIds = ["preview64", "preview128", "preview320", "preview512"];
+      const state = { resolved: null, request: null, renderFrame: 0, copyTimer: 0 };
+
+      function safeCall(callback, fallback) {
+        try { return callback(); }
+        catch (error) { return fallback === undefined ? null : fallback; }
+      }
+
+      const spec = api.SPEC && typeof api.SPEC === "object" ? api.SPEC : {};
+      const rawCatalogue = safeCall(() => typeof api.catalogue === "function" ? api.catalogue() : spec.catalogue, {}) || {};
+      const version = Number(spec.version ?? api.VERSION ?? 1);
+
+      function slug(value) {
+        return String(value || "trait").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "trait";
+      }
+
+      function displayName(value) {
+        if (value == null) return "—";
+        if (typeof value === "string" || typeof value === "number") return String(value);
+        return String(value.name ?? value.label ?? value.title ?? value.id ?? value.type ?? value.value ?? "—");
+      }
+
+      function optionId(value) {
+        if (value == null) return "";
+        if (typeof value === "string" || typeof value === "number") return String(value);
+        return String(value.id ?? value.type ?? value.value ?? value.key ?? slug(displayName(value)));
+      }
+
+      function collection(value) {
+        if (Array.isArray(value)) return value;
+        if (!value || typeof value !== "object") return [];
+        return Object.entries(value).map(([key, item]) => typeof item === "object" && item !== null ? { _key: key, ...item } : { id: key, name: item });
+      }
+
+      function normaliseOptions(value) {
+        return collection(value).map(item => {
+          const id = item?._key ?? optionId(item);
+          return { ...item, id: String(id), name: displayName(item) };
+        }).filter(item => item.id);
+      }
+
+      function normaliseCategories(catalogue) {
+        const source = catalogue.categories || catalogue.traits || catalogue;
+        if (!source || typeof source !== "object") return [];
+        const entries = Array.isArray(source) ? source.map((item, index) => [item.id || item.key || `trait-${index}`, item]) : Object.entries(source);
+        return entries.map(([key, item]) => {
+          const category = Array.isArray(item) ? { options: item } : (item || {});
+          const options = normaliseOptions(category.options || category.values || category.items || category.traits || []);
+          return {
+            ...category,
+            id: String(category.id || key),
+            name: category.name || category.label || String(key).replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[-_]/g, " ").replace(/\b\w/g, letter => letter.toUpperCase()),
+            options
+          };
+        }).filter(category => category.options.length > 1);
+      }
+
+      const categories = normaliseCategories(rawCatalogue);
+      const categoryById = new Map(categories.map(category => [category.id, category]));
+      const rarities = normaliseOptions(spec.rarities || rawCatalogue.rarities || []);
+
+      function setApiStatus(kind, message) {
+        elements.apiStatus.className = `api-status${kind ? ` is-${kind}` : ""}`;
+        elements.apiStatus.lastElementChild.textContent = message;
+      }
+
+      function optionMeta(option) {
+        const details = [];
+        if (Number.isFinite(Number(option.cost))) details.push(`cost ${option.cost}`);
+        if (option.minRarity) details.push(`${displayName(option.minRarity)}+`);
+        if (option.focal) details.push("focal");
+        if (option.campOnly) details.push("camp only");
+        return details.length ? ` · ${details.join(" · ")}` : "";
+      }
+
+      function renderRarities() {
+        for (const rarity of rarities) {
+          const option = document.createElement("option");
+          option.value = rarity.id;
+          option.textContent = `${rarity.name}${Number.isFinite(Number(rarity.budget)) ? ` · budget ${rarity.budget}` : ""}`;
+          elements.rarity.append(option);
+        }
+      }
+
+      function renderTraitControls() {
+        elements.traitControls.replaceChildren();
+        if (!categories.length) {
+          const empty = document.createElement("p");
+          empty.className = "empty";
+          empty.textContent = "This cached renderer does not expose the frozen V1 catalogue yet. Seeded automatic previews still work; refresh after the new renderer is available to force and lock traits.";
+          elements.traitControls.append(empty);
+          return;
+        }
+        for (const category of categories) {
+          const row = document.createElement("div");
+          row.className = "trait-row";
+          row.dataset.category = category.id;
+          const field = document.createElement("label");
+          field.className = "field";
+          const label = document.createElement("span");
+          label.textContent = category.name;
+          const select = document.createElement("select");
+          select.dataset.traitSelect = category.id;
+          select.setAttribute("aria-label", `Force ${category.name}`);
+          const automatic = document.createElement("option");
+          automatic.value = "";
+          automatic.textContent = "Auto · from seed";
+          select.append(automatic);
+          for (const trait of category.options) {
+            const option = document.createElement("option");
+            option.value = trait.id;
+            option.textContent = `${trait.name}${optionMeta(trait)}`;
+            select.append(option);
+          }
+          select.addEventListener("change", scheduleRender);
+          field.append(label, select);
+
+          const lock = document.createElement("label");
+          lock.className = "lock";
+          lock.title = `Preserve ${category.name} when rolling unlocked traits`;
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.dataset.traitLock = category.id;
+          checkbox.setAttribute("aria-label", `Lock ${category.name}`);
+          const lockText = document.createElement("span");
+          lockText.textContent = "Lock";
+          lock.append(checkbox, lockText);
+          row.append(field, lock);
+          elements.traitControls.append(row);
+        }
+      }
+
+      function traitSelect(categoryId) {
+        return elements.traitControls.querySelector(`[data-trait-select="${CSS.escape(categoryId)}"]`);
+      }
+
+      function requestedOverrides() {
+        const overrides = {};
+        for (const category of categories) {
+          const value = traitSelect(category.id)?.value;
+          if (value) overrides[category.id] = value;
+        }
+        return overrides;
+      }
+
+      function currentRequest() {
+        const rarity = elements.rarity.value || undefined;
+        return { rarity, overrides: requestedOverrides() };
+      }
+
+      function normalizeSeed(value) {
+        if (typeof api.normalizeSeed === "function") return api.normalizeSeed(value);
+        const stripped = String(value || "").trim().replace(/^0x/i, "").toLowerCase();
+        return /^[0-9a-f]{32}$/.test(stripped) ? stripped : stripped.padEnd(32, "0").slice(0, 32);
+      }
+
+      function makeSeed(label) {
+        if (typeof api.randomSeed === "function") return api.randomSeed();
+        if (window.crypto?.getRandomValues) {
+          const bytes = crypto.getRandomValues(new Uint8Array(16));
+          return [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+        }
+        return normalizeSeed(`${label}-${Date.now()}`);
+      }
+
+      function resolveRequest(seed, request) {
+        if (typeof api.resolveTraits === "function") {
+          const result = api.resolveTraits(seed, request, version);
+          return result?.traits || result?.resolved || result;
+        }
+        if (typeof api.selectTraits === "function") return api.selectTraits(seed, version);
+        throw new Error("HexOwl.selectTraits is unavailable.");
+      }
+
+      function renderRequest(seed, request, resolved) {
+        if (typeof api.renderWithTraits === "function") {
+          try { return api.renderWithTraits(seed, resolved, version); }
+          catch (firstError) { return api.renderWithTraits(seed, request, version); }
+        }
+        if (typeof api.renderSvg !== "function") throw new Error("HexOwl.renderSvg is unavailable.");
+        if (!request.rarity && !Object.keys(request.overrides || {}).length) return api.renderSvg(seed, version);
+        const attempts = [
+          () => api.renderSvg(seed, version, request),
+          () => api.renderSvg(seed, request, version),
+          () => api.renderSvg(seed, request)
+        ];
+        for (const attempt of attempts) {
+          try { return attempt(); }
+          catch {}
+        }
+        return api.renderSvg(seed, version);
+      }
+
+      function resolvedValue(resolved, categoryId) {
+        const aliases = {
+          direction: ["direction", "ringDirection"],
+          palette: ["palette", "face"],
+          ringMode: ["ringMode", "rings"],
+          ringStyle: ["ringStyle"],
+          brow: ["brow"],
+          eyes: ["eyes"],
+          beak: ["beak"],
+          marking: ["marking"],
+          accessory: ["accessory"],
+          aura: ["aura"]
+        };
+        for (const key of aliases[categoryId] || [categoryId]) {
+          if (resolved && resolved[key] != null) return resolved[key];
+        }
+        return null;
+      }
+
+      function findResolvedOptionId(resolved, category) {
+        const value = resolvedValue(resolved, category.id);
+        const direct = optionId(value);
+        if (category.options.some(option => option.id === direct)) return direct;
+        const name = displayName(value).toLowerCase();
+        return category.options.find(option => option.name.toLowerCase() === name)?.id || "";
+      }
+
+      function setPreviewSvg(svg) {
+        for (const id of previewIds) byId(id).innerHTML = svg;
+      }
+
+      function summaryEntries(resolved) {
+        const entries = [["Rarity", displayName(resolved?.rarity)]];
+        for (const category of categories) entries.push([category.name, displayName(resolvedValue(resolved, category.id))]);
+        if (!categories.length && typeof api.traitNames === "function") {
+          const names = safeCall(() => api.traitNames(elements.seed.value, version), {}) || {};
+          entries.push(...Object.entries(names).filter(([label]) => label !== "Rarity"));
+        }
+        if (Number.isFinite(Number(resolved?.cost))) entries.push(["Density cost", `${resolved.cost} / ${resolved.budget ?? "—"}`]);
+        if (Number.isFinite(Number(resolved?.focalCount))) entries.push(["Focal treatments", String(resolved.focalCount)]);
+        return entries.filter(([, value]) => value && value !== "—");
+      }
+
+      function renderSummary(resolved) {
+        elements.traitSummary.replaceChildren();
+        for (const [label, value] of summaryEntries(resolved)) {
+          const item = document.createElement("div");
+          item.className = "summary-item";
           const term = document.createElement("dt");
           term.textContent = label;
           const detail = document.createElement("dd");
           detail.textContent = value;
-          traits.append(term, detail);
+          item.append(term, detail);
+          elements.traitSummary.append(item);
         }
       }
 
-      function useSeed(seed) {
-        seedInput.value = seed;
-        render();
-        document.querySelector("#your-owl-title").scrollIntoView({ behavior: "smooth", block: "start" });
+      function messageText(item) {
+        if (typeof item === "string") return item;
+        if (!item || typeof item !== "object") return String(item || "Unknown validation message");
+        if (item.message || item.reason || item.description) return String(item.message || item.reason || item.description);
+        const category = item.category || item.trait || item.key;
+        const from = item.from || item.requested;
+        const to = item.to || item.replacement || item.resolved;
+        if (category && (from || to)) return `${category}: ${displayName(from)} → ${displayName(to)}`;
+        return Object.entries(item).map(([key, value]) => `${key}: ${displayName(value)}`).join(" · ");
       }
 
-      function fillGallery() {
-        gallery.replaceChildren();
-        for (let index = 0; index < 24; index += 1) {
-          const seed = HexOwl.randomSeed();
+      function validateResolved(resolved) {
+        if (typeof api.validateTraits !== "function") return { available: false, valid: false, issues: [], repairs: [] };
+        let result;
+        try {
+          result = api.validateTraits(resolved, version);
+        } catch (error) {
+          return { available: true, valid: false, issues: [{ severity: "error", code: "Validator error", message: error?.message || String(error) }], repairs: [] };
+        }
+        const issues = collection(result?.issues || result?.warnings || result?.errors || (Array.isArray(result) ? result : []));
+        const repairs = [
+          ...collection(resolved?.repairs),
+          ...collection(result?.repairs)
+        ];
+        const uniqueRepairs = repairs.filter((item, index) => repairs.findIndex(candidate => messageText(candidate) === messageText(item)) === index);
+        return { available: true, valid: result?.valid !== false && !issues.some(issue => issue.severity === "error"), issues, repairs: uniqueRepairs };
+      }
+
+      function renderValidation(validation) {
+        elements.validation.replaceChildren();
+        if (!validation.available) {
+          const unavailable = document.createElement("p");
+          unavailable.className = "message";
+          unavailable.textContent = "The cached renderer does not expose frozen V1 validation yet. Automatic seed rendering is available, but compatibility warnings and repairs require the current renderer.";
+          elements.validation.append(unavailable);
+          return;
+        }
+        if (!validation.valid && !validation.issues.length && !validation.repairs.length) {
+          const invalid = document.createElement("p");
+          invalid.className = "message error";
+          invalid.textContent = "The renderer marked this combination invalid without returning a diagnostic.";
+          elements.validation.append(invalid);
+          return;
+        }
+        if (!validation.issues.length && !validation.repairs.length) {
+          const okay = document.createElement("p");
+          okay.className = "validation-ok";
+          okay.textContent = "This combination passes the V1 budget, compatibility, and safe-zone grammar.";
+          elements.validation.append(okay);
+          return;
+        }
+        const list = document.createElement("ul");
+        list.className = "message-list";
+        for (const issue of validation.issues) {
+          const item = document.createElement("li");
+          const severity = issue?.severity === "error" ? " error" : "";
+          item.className = `message${severity}`;
+          const title = document.createElement("strong");
+          title.textContent = issue?.code || (severity ? "Error" : "Compatibility warning");
+          item.append(title, document.createTextNode(messageText(issue)));
+          list.append(item);
+        }
+        for (const repair of validation.repairs) {
+          const item = document.createElement("li");
+          item.className = "message repair";
+          const title = document.createElement("strong");
+          title.textContent = repair?.code || "Deterministic repair";
+          item.append(title, document.createTextNode(messageText(repair)));
+          list.append(item);
+        }
+        elements.validation.append(list);
+      }
+
+      function scheduleRender() {
+        window.cancelAnimationFrame(state.renderFrame);
+        state.renderFrame = window.requestAnimationFrame(renderCurrent);
+      }
+
+      function renderCurrent() {
+        try {
+          const seed = normalizeSeed(elements.seed.value);
+          const request = currentRequest();
+          elements.seed.value = seed;
+          const resolved = resolveRequest(seed, request);
+          const svg = renderRequest(seed, request, resolved);
+          if (!resolved || !svg) throw new Error("The renderer returned an empty result.");
+          state.resolved = resolved;
+          state.request = request;
+          setPreviewSvg(svg);
+          renderSummary(resolved);
+          renderValidation(validateResolved(resolved));
+          renderPaletteGrid();
+          const forcedCount = Object.keys(request.overrides).length;
+          setApiStatus(categories.length ? "" : "fallback", categories.length ? `V${version} contract ready · ${forcedCount} forced categor${forcedCount === 1 ? "y" : "ies"}` : `Legacy renderer fallback · automatic seed preview only`);
+        } catch (error) {
+          state.resolved = null;
+          setApiStatus("error", error?.message || "The Hex Owl renderer could not produce this request.");
+          elements.validation.replaceChildren();
+          const message = document.createElement("p");
+          message.className = "message error";
+          message.textContent = error?.message || String(error);
+          elements.validation.append(message);
+        }
+      }
+
+      function renderLayerOrder() {
+        elements.layerOrder.replaceChildren();
+        const layers = collection(spec.layerOrder || rawCatalogue.layerOrder || ["background", "aura", "portal rings", "Owl anatomy", "brows", "facial disc", "eyes", "beak", "accessory"]);
+        for (const layer of layers) {
+          const item = document.createElement("li");
+          item.textContent = displayName(layer);
+          elements.layerOrder.append(item);
+        }
+      }
+
+      function paletteData() {
+        let palettes = normaliseOptions(spec.palettes || rawCatalogue.palettes || []);
+        let families = normaliseOptions(spec.paletteFamilies || rawCatalogue.paletteFamilies || []);
+        const paletteCategory = categoryById.get("palette");
+        if (!palettes.length && paletteCategory) palettes = paletteCategory.options;
+        if (!families.length) {
+          const ids = [...new Set(palettes.map(palette => {
+            const family = palette.familyId ?? palette.family ?? palette.group ?? "all";
+            return typeof family === "object" ? optionId(family) : String(family);
+          }))];
+          families = ids.map(id => ({ id, name: id === "all" ? "All palette variants" : id.replace(/[-_]/g, " ").replace(/\b\w/g, letter => letter.toUpperCase()) }));
+        }
+        return { palettes, families };
+      }
+
+      const palettes = paletteData();
+
+      function paletteFamilyId(palette) {
+        const family = palette.familyId ?? palette.family ?? palette.group;
+        if (typeof family === "object") return optionId(family);
+        if (family != null) return String(family);
+        for (const candidate of palettes.families) {
+          const variants = collection(candidate.variants || candidate.palettes).map(optionId);
+          if (variants.includes(palette.id)) return candidate.id;
+        }
+        return palettes.families.length === 1 ? palettes.families[0].id : "all";
+      }
+
+      function variantsForFamily(familyId) {
+        const family = palettes.families.find(item => item.id === familyId);
+        const explicit = collection(family?.variants || family?.palettes);
+        if (explicit.length) {
+          return explicit.map(item => {
+            const id = optionId(item);
+            return palettes.palettes.find(palette => palette.id === id) || normaliseOptions([item])[0];
+          }).filter(Boolean);
+        }
+        const grouped = palettes.palettes.filter(palette => paletteFamilyId(palette) === familyId);
+        return grouped.length ? grouped : (familyId === "all" ? palettes.palettes : []);
+      }
+
+      function paletteColours(palette) {
+        const candidates = palette.tokens || palette.colors || palette.colours || palette.rings || palette.ringColors || [palette.face, palette.shadow || palette.shade, palette.highlight || palette.accent, palette.focal];
+        const values = Array.isArray(candidates) ? candidates : Object.values(candidates || {});
+        return values.filter(value => typeof value === "string" && /^#[0-9a-f]{3,8}$/i.test(value));
+      }
+
+      function renderPaletteFamilyOptions() {
+        elements.paletteFamily.replaceChildren();
+        if (!palettes.families.length) {
+          const option = document.createElement("option");
+          option.textContent = "No palette catalogue";
+          elements.paletteFamily.append(option);
+          elements.paletteFamily.disabled = true;
+          return;
+        }
+        for (const family of palettes.families) {
+          const option = document.createElement("option");
+          option.value = family.id;
+          option.textContent = family.name;
+          elements.paletteFamily.append(option);
+        }
+      }
+
+      function renderPaletteGrid() {
+        elements.paletteGrid.replaceChildren();
+        const familyId = elements.paletteFamily.value;
+        const variants = variantsForFamily(familyId);
+        const family = palettes.families.find(item => item.id === familyId);
+        elements.paletteFamilyNote.textContent = family?.description || (variants.length ? `${variants.length} variant${variants.length === 1 ? "" : "s"}; select one to force it in the main workshop.` : "No variants are registered for this family.");
+        if (!state.resolved || !variants.length) {
+          const empty = document.createElement("p");
+          empty.className = "empty";
+          empty.textContent = palettes.palettes.length ? "Render a valid seed to compare this family." : "The renderer does not expose palette-family metadata.";
+          elements.paletteGrid.append(empty);
+          return;
+        }
+        const seed = elements.seed.value;
+        for (const palette of variants) {
           const button = document.createElement("button");
           button.type = "button";
-          button.title = "Load this Owl key";
+          button.className = "palette-card";
+          button.title = `Force ${palette.name}`;
           const art = document.createElement("div");
-          art.className = "gallery-art";
-          art.innerHTML = HexOwl.renderSvg(seed, 1);
-          const code = document.createElement("code");
-          code.textContent = seed.slice(0, 8).toUpperCase();
-          button.append(art, code);
-          button.addEventListener("click", () => useSeed(seed));
-          gallery.append(button);
+          art.className = "palette-art";
+          const request = currentRequest();
+          request.overrides = { ...request.overrides, palette: palette.id };
+          const rendered = safeCall(() => {
+            const resolved = resolveRequest(seed, request);
+            return renderRequest(seed, request, resolved);
+          }, "");
+          art.innerHTML = rendered;
+          const name = document.createElement("strong");
+          name.textContent = palette.name;
+          const note = document.createElement("span");
+          note.textContent = palette.variantName || palette.variant || palette.id;
+          const swatches = document.createElement("div");
+          swatches.className = "swatches";
+          for (const colour of paletteColours(palette).slice(0, 6)) {
+            const swatch = document.createElement("i");
+            swatch.className = "swatch";
+            swatch.style.setProperty("--swatch", colour);
+            swatch.title = colour;
+            swatches.append(swatch);
+          }
+          button.append(art, name, swatches, note);
+          button.addEventListener("click", () => {
+            const select = traitSelect("palette");
+            if (select && [...select.options].some(option => option.value === palette.id)) {
+              select.value = palette.id;
+              scheduleRender();
+              document.querySelector("#preview-title").scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+          });
+          elements.paletteGrid.append(button);
         }
       }
 
-      seedInput.value = HexOwl.randomSeed();
-      document.querySelector("#render").addEventListener("click", render);
-      document.querySelector("#random").addEventListener("click", () => { seedInput.value = HexOwl.randomSeed(); render(); });
-      document.querySelector("#shuffle").addEventListener("click", fillGallery);
-      nameInput.addEventListener("input", () => { document.querySelector("#your-owl-title").textContent = nameInput.value.trim() || "Unnamed Owl"; });
-      fillGallery();
-      render();
+      function findOption(categoryId, pattern, fallback = "") {
+        const category = categoryById.get(categoryId);
+        return category?.options.find(option => pattern.test(`${option.id} ${option.name}`))?.id || fallback;
+      }
+
+      function cleanOverrides(overrides) {
+        return Object.fromEntries(Object.entries(overrides).filter(([categoryId, value]) => value && categoryById.get(categoryId)?.options.some(option => option.id === value)));
+      }
+
+      function difficultPresets() {
+        const highestRarity = rarities[rarities.length - 1]?.id;
+        const uncommonRarity = rarities.find(item => /uncommon/i.test(`${item.id} ${item.name}`))?.id || rarities[0]?.id;
+        return [
+          {
+            id: "quiet-baseline",
+            name: "Quiet baseline",
+            description: "A calm control sample for silhouette and minimum-size checks.",
+            seed: normalizeSeed("hex-owl-preset-quiet-baseline"),
+            rarity: rarities[0]?.id,
+            overrides: cleanOverrides({
+              ringMode: findOption("ringMode", /single|solid|mono/i),
+              ringStyle: findOption("ringStyle", /^solid|fine/i),
+              brow: findOption("brow", /original|none/i),
+              eyes: findOption("eyes", /original|natural/i),
+              beak: findOption("beak", /original|none/i),
+              marking: findOption("marking", /clean|none/i),
+              aura: findOption("aura", /none|quiet/i)
+            })
+          },
+          {
+            id: "laser-stack",
+            name: "Laser conflict stack",
+            description: "Combines pupil lasers, cheek detail, and a visible aura to exercise focal limits and layering.",
+            seed: normalizeSeed("hex-owl-preset-laser-conflict"),
+            rarity: findOption("rarity", /rare/i, rarities.find(item => /rare/i.test(item.id))?.id),
+            overrides: cleanOverrides({
+              eyes: findOption("eyes", /laser/i),
+              beak: findOption("beak", /prism|diamond|accent/i),
+              marking: findOption("marking", /ray|arc|spark|dust/i),
+              aura: findOption("aura", /ray|glow|star/i)
+            })
+          },
+          {
+            id: "legendary-density",
+            name: "Maximum density",
+            description: "A high-cost legendary request that should demonstrate the density budget.",
+            seed: normalizeSeed("hex-owl-preset-legendary-density"),
+            rarity: highestRarity,
+            overrides: cleanOverrides({
+              ringMode: findOption("ringMode", /multi|gradient|prism|matched/i),
+              brow: findOption("brow", /prism|multi|echo/i),
+              eyes: findOption("eyes", /^pupil-lasers\b/i),
+              beak: findOption("beak", /diamond|chevron|moon/i),
+              marking: findOption("marking", /dust|ember|freckle/i),
+              aura: findOption("aura", /star|glow|ray/i)
+            })
+          },
+          {
+            id: "ring-clearance",
+            name: "Portal clearance",
+            description: "Exercises Double Line, reverse direction, and the tightest portal geometry at 64 px.",
+            seed: normalizeSeed("hex-owl-preset-portal-clearance"),
+            rarity: uncommonRarity,
+            overrides: cleanOverrides({
+              ringMode: findOption("ringMode", /^single\b/i),
+              ringStyle: findOption("ringStyle", /^double-line\b/i),
+              direction: findOption("direction", /^counter-clockwise\b/i),
+              aura: findOption("aura", /^quiet-aura\b/i)
+            })
+          }
+        ];
+      }
+
+      const presets = difficultPresets();
+
+      function applyPreset(preset) {
+        elements.seed.value = preset.seed;
+        elements.rarity.value = preset.rarity && [...elements.rarity.options].some(option => option.value === preset.rarity) ? preset.rarity : "";
+        for (const category of categories) {
+          const select = traitSelect(category.id);
+          if (select) select.value = preset.overrides[category.id] || "";
+        }
+        scheduleRender();
+        document.querySelector("#preview-title").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function renderPresets() {
+        elements.presetGrid.replaceChildren();
+        for (const preset of presets) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "preset-card";
+          const name = document.createElement("strong");
+          name.textContent = preset.name;
+          const description = document.createElement("span");
+          description.textContent = preset.description;
+          const seed = document.createElement("span");
+          seed.className = "preset-seed";
+          seed.textContent = preset.seed.slice(0, 8).toUpperCase();
+          button.append(name, description, seed);
+          button.addEventListener("click", () => applyPreset(preset));
+          elements.presetGrid.append(button);
+        }
+      }
+
+      function autoSvg(seed) {
+        if (typeof api.renderSvg === "function") return api.renderSvg(seed, version);
+        const request = { overrides: {} };
+        const resolved = resolveRequest(seed, request);
+        return renderRequest(seed, request, resolved);
+      }
+
+      function autoRarity(seed) {
+        const traits = safeCall(() => typeof api.selectTraits === "function" ? api.selectTraits(seed, version) : resolveRequest(seed, { overrides: {} }), null);
+        return displayName(traits?.rarity);
+      }
+
+      function renderContactSheet() {
+        elements.contactSheet.replaceChildren();
+        for (let index = 1; index <= 12; index += 1) {
+          const seed = normalizeSeed(`hex-owl-contact-sheet-${String(index).padStart(2, "0")}`);
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "contact-card";
+          button.title = "Load this deterministic sample";
+          const art = document.createElement("div");
+          art.className = "contact-art";
+          art.innerHTML = safeCall(() => autoSvg(seed), "");
+          const rarity = document.createElement("span");
+          rarity.className = "rarity";
+          rarity.textContent = autoRarity(seed);
+          const code = document.createElement("strong");
+          code.className = "seed-code";
+          code.textContent = seed.slice(0, 8).toUpperCase();
+          button.append(art, rarity, code);
+          button.addEventListener("click", () => {
+            elements.seed.value = seed;
+            scheduleRender();
+            document.querySelector("#preview-title").scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+          elements.contactSheet.append(button);
+        }
+      }
+
+      function clearForces() {
+        elements.rarity.value = "";
+        for (const category of categories) {
+          const select = traitSelect(category.id);
+          if (select) select.value = "";
+        }
+        scheduleRender();
+      }
+
+      function rollAll() {
+        elements.seed.value = makeSeed("roll-all");
+        for (const category of categories) {
+          const select = traitSelect(category.id);
+          if (select) select.value = "";
+        }
+        scheduleRender();
+      }
+
+      function rollUnlocked() {
+        if (state.resolved) {
+          for (const category of categories) {
+            const locked = elements.traitControls.querySelector(`[data-trait-lock="${CSS.escape(category.id)}"]`)?.checked;
+            const select = traitSelect(category.id);
+            if (!select) continue;
+            if (locked) {
+              const value = findResolvedOptionId(state.resolved, category);
+              select.value = value && [...select.options].some(option => option.value === value) ? value : select.value;
+            } else {
+              select.value = "";
+            }
+          }
+        }
+        elements.seed.value = makeSeed("roll-unlocked");
+        scheduleRender();
+      }
+
+      function bindEvents() {
+        byId("applySeed").addEventListener("click", scheduleRender);
+        elements.seed.addEventListener("keydown", event => { if (event.key === "Enter") scheduleRender(); });
+        elements.rarity.addEventListener("change", scheduleRender);
+        byId("rollAll").addEventListener("click", rollAll);
+        byId("rollUnlocked").addEventListener("click", rollUnlocked);
+        byId("clearForces").addEventListener("click", clearForces);
+        byId("refreshContact").addEventListener("click", renderContactSheet);
+        elements.paletteFamily.addEventListener("change", renderPaletteGrid);
+        byId("copySeed").addEventListener("click", async event => {
+          const button = event.currentTarget;
+          try {
+            await navigator.clipboard.writeText(elements.seed.value);
+            button.textContent = "Copied";
+          } catch {
+            elements.seed.select();
+            button.textContent = "Seed selected";
+          }
+          window.clearTimeout(state.copyTimer);
+          state.copyTimer = window.setTimeout(() => { button.textContent = "Copy seed"; }, 1600);
+        });
+      }
+
+      function init() {
+        elements.versionBadge.textContent = `Renderer V${version} · ${categories.length || "legacy"} categories`;
+        renderRarities();
+        renderTraitControls();
+        renderLayerOrder();
+        renderPaletteFamilyOptions();
+        renderPresets();
+        bindEvents();
+        const querySeed = new URLSearchParams(window.location.search).get("owlSeed");
+        elements.seed.value = normalizeSeed(querySeed || "hex-owl-playground-v1");
+        safeCall(() => api.mountBase?.());
+        renderCurrent();
+        renderContactSheet();
+      }
+
+      init();
     })();
   </script>
 </body>

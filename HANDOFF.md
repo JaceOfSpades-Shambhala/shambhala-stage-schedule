@@ -1,6 +1,6 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v55**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v57**.
 
 ## What this is
 
@@ -47,7 +47,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (v55 at the time of writing). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (v57 at the time of writing). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
@@ -56,9 +56,9 @@ Every site release bumps ONE version number everywhere (v55 at the time of writi
 
 The sed incantation used for bumps (adjust numbers):
 ```bash
-sed -i 's/?v=54/?v=55/g; s/<!-- v54 -->/<!-- v55 -->/' index.html
-sed -i 's/?v=54/?v=55/g' app.js styles.css manifest.webmanifest
-sed -i 's/stage-schedule-v54/stage-schedule-v55/; s/?v=54/?v=55/g' sw.js
+sed -i 's/?v=56/?v=57/g; s/<!-- v56 -->/<!-- v57 -->/' index.html
+sed -i 's/?v=56/?v=57/g' app.js styles.css manifest.webmanifest
+sed -i 's/stage-schedule-v56/stage-schedule-v57/; s/?v=56/?v=57/g' sw.js
 ```
 
 **Schedule-only edits during the festival do NOT bump `?v=`** — edit `schedule-data.js` and/or `schedule-metadata.js`, change the metadata `SCHEDULE_VERSION` string, and commit. Full instructions are in [UPDATING.md](UPDATING.md). Open PWAs poll every 5 min and show a "tap to refresh" banner for both schedule and app updates.
@@ -108,7 +108,7 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 
 - A set's working end is the next set on the same stage, capped at 90 minutes in the planner. Final-set endpoints are inferred from the printed PDF bars and recorded in `schedule-metadata.js`. General conflicts require at least 15 minutes of overlap; the compact "Now / Up next" grouping uses the intentional 20-minute start window.
 - Claiming is intentionally invisible to the end user: opening a claim URL with no existing identity stores a silent local reservation. The Worker keeps the claim token metadata and lets the earliest local `scannedAt` own the Hexlace, so an accidental later tap cannot steal a tag just because it had signal first. Earlier-scan takeovers close seven days after the first claim, locking ownership.
-- Terminology is strict: **Hexlace** means the physical NFC tag; **Hex Owl** means the generated identity image. The v1 renderer is frozen by seed/version and reuses the exact traced path from the supplied Shambhala Owl reference in `hex-owl-base.svg`. Brow treatments recolour complete chevrons extracted directly from that exact path; facial-disc marks and small festival accessories stay in reserved empty-space zones. Ordinary portal rings use one colour, rare Owls receive sparse sparkles, and multi-colour Pagoda/Aurora/Moon portals are legendary-only. Future art changes must add a renderer version instead of altering v1.
+- Terminology is strict: **Hexlace** means the physical NFC tag; **Hex Owl** means the generated identity image. The v1 renderer is frozen by seed/version and reuses the exact traced path from the supplied Shambhala Owl reference in `hex-owl-base.svg`. Brow treatments recolour complete chevrons extracted directly from that exact path; palette-linked eye fills sit behind the supplied mark so its native pupils stay intact. The first accessory concepts are disabled pending a geometry-led redesign. Ordinary portal rings use one colour, rare Owls can receive visible portal auras, and multi-colour portals are legendary-only. Future art changes must add a renderer version instead of altering v1.
 - Hexadex entry-point options considered were (1) the Friends header, (2) the My Hexlace summary, and (3) beside Now Playing. The Friends header was chosen because collecting is friend-centric, it stays visually quiet until used, and it avoids crowding the live schedule or ownership controls.
 - Global Owl numbers are allocated once per profile by a dedicated low-frequency Durable Object; the random 128-bit seed is generated server-side and stored with renderer version and season. A display-name change never affects the seed. Release retains the Owl in the profile, reclaim restores it, and only trading for another physical Hexlace changes the Owl a user currently owns.
 - Publishing debounces 4s after each planner change; queued offline (`dirty` flag) and flushed on online/foreground/5-min tick. Workers Paid is enabled for write headroom; the Worker still rate-limits writes to protect against retry loops and abuse.
@@ -126,6 +126,6 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 
 ## Version history (condensed)
 
-Latest: v55 adds deterministic numbered Hex Owls, private multi-year Hexadex collection, tap-specific physical URLs, release/reclaim continuity, and mandatory Owl-with-Hexlace trade semantics. v54 added the minimal one-day-at-a-time plan comparison flow. v53 hid unavailable installed-app connection UI and simplified footer copy. v52 redesigned My Hexlace and added release plus reciprocal confirmed physical trades.
+Latest: v57 replaces pinpoint overlays with palette-linked eye-well fills, disables the first accessory concepts, aligns every decorative beak to the supplied Owl apex, and repairs visible Rare/Legendary auras. v56 replaced the pre-festival Hex Owl art grammar with frozen palettes, rarity budgets, measured portal geometry, safe-zone traits, split lasers, and a deterministic playground/test suite. v55 added deterministic numbered Hex Owls, private multi-year Hexadex collection, tap-specific physical URLs, release/reclaim continuity, and mandatory Owl-with-Hexlace trade semantics. v54 added the minimal one-day-at-a-time plan comparison flow. v53 hid unavailable installed-app connection UI and simplified footer copy. v52 redesigned My Hexlace and added release plus reciprocal confirmed physical trades.
 
 v15–16 pre-existing site → v17 SW network-timeout + schedule version stamp + update banner → v18 up-next-from-my-sets, Share button, View Transitions → v19 overlap flagging → v20 planner declutter (live now/next block, collapsible days, 20-min tolerance) → v21 Today-marker fix → v22 periodic background sync + UPDATING.md → v23 Hexlaces (worker + client) → v24 Hexlace panel declutter + `[hidden]` fix → v25 app-release detection in update banner → v26 audit fixes (crash-proof hash, offline-safe claims, 100-set cap, storage guards, ETag checks, worker hardening) → v28 morning-day consistency, collapsed inactive Hexlaces, date-mapping tests, schedule validation, and Worker-side write rate limits → v29 invisible Hexlace claim reservations with earliest-scan ownership → v30 disabled browser View Transitions after intermittent stuck snapshot overlays → v31 cleaner live-status copy and collapsed Hexlace/planner sections by default → v32 fixed Friend's sets panel and changed schedule markers into a time-progress rail → v33 masked timeline markers to remove rail artifacts → v34 switched to segmented timeline rails without marker rings.

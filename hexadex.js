@@ -154,7 +154,7 @@
     elements.ownNumber.setAttribute("aria-label", `${name ? `${name}'s ` : "Your "}${owlLabel(profile.owl)}`);
     if (elements.ownTraits && window.HexOwl) {
       const traits = window.HexOwl.traitNames(profile.owl.seed, profile.owl.version);
-      elements.ownTraits.textContent = `${traits["Eye style"]} eyes · ${traits.Accessory}`;
+      elements.ownTraits.textContent = `${traits["Eye style"]} eyes`;
     }
   }
 
