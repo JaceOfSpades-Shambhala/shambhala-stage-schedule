@@ -1,13 +1,13 @@
 @font-face {
   font-family: "Inter";
-  src: url("fonts/InterVariable.woff2?v=53") format("woff2");
+  src: url("fonts/InterVariable.woff2?v=54") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Inter";
-  src: url("fonts/InterVariable-Italic.woff2?v=53") format("woff2");
+  src: url("fonts/InterVariable-Italic.woff2?v=54") format("woff2");
   font-weight: 100 900;
   font-style: italic;
   font-display: swap;
@@ -183,6 +183,16 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .hexlace-dialog-card label { color: var(--muted); font-size: .74rem; font-weight: 800; }
 .hexlace-dialog-card select { width: 100%; min-height: 2.6rem; padding: .5rem .65rem; border: 1px solid rgba(255, 255, 255, .2); border-radius: .55rem; color: var(--ink); background: #121321; }
 .hexlace-dialog-card .planner-action { min-height: 2.7rem; }
+.hexlace-compare-card { grid-template-rows: auto auto minmax(0, 1fr) auto auto; overflow: hidden; }
+.hexlace-compare-day { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem; align-items: center; gap: .55rem; }
+.hexlace-compare-day strong { text-align: center; font-size: .82rem; letter-spacing: .08em; text-transform: uppercase; }
+.hexlace-day-arrow { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; padding: 0; border: 1px solid rgba(255, 255, 255, .2); border-radius: 50%; color: var(--ink); background: rgba(255, 255, 255, .065); cursor: pointer; font-size: 1.45rem; line-height: 1; }
+.hexlace-day-arrow:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.hexlace-day-arrow:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.hexlace-day-arrow:disabled { opacity: .28; cursor: default; }
+.hexlace-compare-list { max-height: min(48dvh, 25rem); overflow-y: auto; border-top: 1px solid var(--line); }
+.hexlace-compare-set { grid-template-columns: 5.2rem minmax(0, 1fr); }
+.hexlace-compare-empty { padding: 1rem .2rem; text-align: center; }
 .planner-action.is-danger { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 20%, transparent); }
 .hexlace-trade-steps { display: grid; gap: .42rem; padding: .65rem; border: 1px solid var(--line); border-radius: .7rem; background: rgba(0, 0, 0, .17); font-size: .78rem; }
 .hexlace-trade-steps span { display: flex; align-items: center; gap: .5rem; }
@@ -196,6 +206,16 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .planner-day-count { color: var(--muted); font-size: .72rem; font-weight: 650; }
 .planner-day-list { margin: 0; padding: 0; list-style: none; }
 .hexlace-list { display: grid; gap: .3rem; }
+.hexlace-compare-tools { min-height: 2.35rem; }
+.hexlace-compare-start { min-height: 2.35rem; padding: .45rem .75rem; font-size: .76rem; }
+.hexlace-compare-prompt { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 2.35rem; padding: .4rem .1rem; }
+.hexlace-compare-prompt strong { font-size: .82rem; }
+.hexlace-compare-friend { display: grid; gap: .16rem; width: 100%; padding: .78rem .7rem; border: 1px solid rgba(255, 255, 255, .14); border-radius: .7rem; color: var(--ink); background: rgba(255, 255, 255, .045); cursor: pointer; text-align: left; }
+.hexlace-compare-friend:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, rgba(255, 255, 255, .045)); }
+.hexlace-compare-friend:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.hexlace-compare-friend:disabled { opacity: .52; cursor: default; }
+.hexlace-compare-friend strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hexlace-compare-friend span { color: var(--muted); font-size: .72rem; }
 .hexlace-hint { margin: 0; color: var(--muted); font-size: .8rem; }
 .hexlace-sharing-as { margin: 0; font-size: .95rem; }
 .hexlace-name-edit { padding: 0; border: none; background: none; color: var(--ink); cursor: pointer; font: inherit; text-decoration: underline dotted rgba(255, 255, 255, .45); text-underline-offset: .22rem; }

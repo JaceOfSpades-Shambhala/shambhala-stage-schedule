@@ -1,6 +1,6 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v53**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v54**.
 
 ## What this is
 
@@ -47,7 +47,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (v53 at the time of writing). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (v54 at the time of writing). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
@@ -56,9 +56,9 @@ Every site release bumps ONE version number everywhere (v53 at the time of writi
 
 The sed incantation used for bumps (adjust numbers):
 ```bash
-sed -i 's/?v=52/?v=53/g; s/<!-- v52 -->/<!-- v53 -->/' index.html
-sed -i 's/?v=52/?v=53/g' app.js styles.css manifest.webmanifest
-sed -i 's/stage-schedule-v52/stage-schedule-v53/; s/?v=52/?v=53/g' sw.js
+sed -i 's/?v=53/?v=54/g; s/<!-- v53 -->/<!-- v54 -->/' index.html
+sed -i 's/?v=53/?v=54/g' app.js styles.css manifest.webmanifest
+sed -i 's/stage-schedule-v53/stage-schedule-v54/; s/?v=53/?v=54/g' sw.js
 ```
 
 **Schedule-only edits during the festival do NOT bump `?v=`** — edit `schedule-data.js` and/or `schedule-metadata.js`, change the metadata `SCHEDULE_VERSION` string, and commit. Full instructions are in [UPDATING.md](UPDATING.md). Open PWAs poll every 5 min and show a "tap to refresh" banner for both schedule and app updates.
@@ -120,6 +120,6 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 
 ## Version history (condensed)
 
-Latest: v53 hides the installed-app connection section whenever it cannot offer an action, removes the ordinary schedule disclaimer, moves the offline-ready note beside the camp credit, and simplifies the footer privacy copy. v52 redesigned My Hexlace around progressive disclosure, added irreversible release-to-next-scanner, and added an online-only physical trade handshake that requires reciprocal tag taps and confirmation from both owners. v51 fixed stage-switch jitter by giving the panel's stage mark a fixed 150×64 box, only rebuilding the mark image when the stage actually changes (not on every live-status tick), and pre-decoding the other stage marks after startup.
+Latest: v54 adds a minimal client-side plan comparison flow for choosing a collected friend and viewing exact mutually saved sets one festival day at a time, including offline cached data and last-update context. v53 hides the installed-app connection section whenever it cannot offer an action, removes the ordinary schedule disclaimer, moves the offline-ready note beside the camp credit, and simplifies the footer privacy copy. v52 redesigned My Hexlace around progressive disclosure, added irreversible release-to-next-scanner, and added an online-only physical trade handshake that requires reciprocal tag taps and confirmation from both owners.
 
 v15–16 pre-existing site → v17 SW network-timeout + schedule version stamp + update banner → v18 up-next-from-my-sets, Share button, View Transitions → v19 overlap flagging → v20 planner declutter (live now/next block, collapsible days, 20-min tolerance) → v21 Today-marker fix → v22 periodic background sync + UPDATING.md → v23 Hexlaces (worker + client) → v24 Hexlace panel declutter + `[hidden]` fix → v25 app-release detection in update banner → v26 audit fixes (crash-proof hash, offline-safe claims, 100-set cap, storage guards, ETag checks, worker hardening) → v28 morning-day consistency, collapsed inactive Hexlaces, date-mapping tests, schedule validation, and Worker-side write rate limits → v29 invisible Hexlace claim reservations with earliest-scan ownership → v30 disabled browser View Transitions after intermittent stuck snapshot overlays → v31 cleaner live-status copy and collapsed Hexlace/planner sections by default → v32 fixed Friend's sets panel and changed schedule markers into a time-progress rail → v33 masked timeline markers to remove rail artifacts → v34 switched to segmented timeline rails without marker rings.

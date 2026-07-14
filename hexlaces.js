@@ -44,6 +44,18 @@
     count: document.querySelector("#hexlace-count"),
     list: document.querySelector("#hexlace-list"),
     empty: document.querySelector("#hexlace-empty"),
+    compareTools: document.querySelector("#hexlace-compare-tools"),
+    compareStart: document.querySelector("#hexlace-compare-start"),
+    comparePrompt: document.querySelector("#hexlace-compare-prompt"),
+    compareCancel: document.querySelector("#hexlace-compare-cancel"),
+    compareDialog: document.querySelector("#hexlace-compare-dialog"),
+    compareTitle: document.querySelector("#hexlace-compare-title"),
+    compareUpdated: document.querySelector("#hexlace-compare-updated"),
+    comparePrevious: document.querySelector("#hexlace-compare-previous"),
+    compareDay: document.querySelector("#hexlace-compare-day"),
+    compareNext: document.querySelector("#hexlace-compare-next"),
+    compareList: document.querySelector("#hexlace-compare-list"),
+    compareEmpty: document.querySelector("#hexlace-compare-empty"),
     setup: document.querySelector("#hexlace-setup"),
     enable: document.querySelector("#hexlace-enable"),
     bringOver: document.querySelector("#hexlace-bring-over"),
@@ -110,6 +122,9 @@
   let connectCode = "";
   let tradePollTimer = 0;
   let collectedRenderSignature = "";
+  let compareSelecting = false;
+  let comparedReadId = "";
+  let compareDayIndex = 0;
 
   // Unambiguous alphabet (no 0/O/1/l/I), matching the Worker's id style.
   const KEY_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -1009,17 +1024,119 @@
     return card;
   }
 
+  function selectedComparisonDay() {
+    const days = window.HexlaceCompare.DAYS;
+    const selected = new URLSearchParams(location.search).get("day");
+    return days.includes(selected) ? selected : days[0];
+  }
+
+  function comparisonUpdatedCopy(entry) {
+    if (!entry.updated) return entry.pending ? "Waiting for this friend's list to load." : "Friend's list has not loaded yet.";
+    const prefix = entry.missing ? "Cached copy" : "Friend's list";
+    return `${prefix} updated ${timeAgo(entry.updated)}.`;
+  }
+
+  function renderComparison() {
+    if (!comparedReadId) return;
+    const entry = loadCollected().find(item => item.readId === comparedReadId);
+    if (!entry) {
+      elements.compareDialog?.close();
+      comparedReadId = "";
+      return;
+    }
+    const days = window.HexlaceCompare.DAYS;
+    const day = days[compareDayIndex];
+    const mine = mySets();
+    const theirs = Array.isArray(entry.sets) ? entry.sets : [];
+    const shared = window.HexlaceCompare.sharedSets(mine, theirs, day);
+    elements.compareTitle.textContent = `You + ${entry.name || "friend"}`;
+    elements.compareUpdated.textContent = comparisonUpdatedCopy(entry);
+    elements.compareDay.textContent = day;
+    elements.comparePrevious.disabled = compareDayIndex === 0;
+    elements.compareNext.disabled = compareDayIndex === days.length - 1;
+    elements.compareList.innerHTML = "";
+    shared.forEach(item => {
+      const row = document.createElement("li");
+      row.className = "planner-set hexlace-compare-set";
+      const time = document.createElement("span");
+      time.className = "planner-time";
+      time.textContent = item.time || "";
+      const details = document.createElement("span");
+      details.className = "planner-details";
+      const artist = document.createElement("span");
+      artist.className = "planner-artist";
+      artist.textContent = item.artist || "";
+      const meta = document.createElement("span");
+      meta.className = "planner-meta";
+      meta.textContent = stageLabel(item.stageId);
+      details.append(artist, meta);
+      row.append(time, details);
+      elements.compareList.append(row);
+    });
+    elements.compareList.hidden = shared.length === 0;
+    elements.compareEmpty.hidden = shared.length > 0;
+    if (!shared.length) {
+      const mineThatDay = mine.some(item => item?.day === day);
+      const theirsThatDay = theirs.some(item => item?.day === day);
+      if (!mineThatDay) elements.compareEmpty.textContent = `You haven't saved any sets for ${day} yet.`;
+      else if (!theirsThatDay) elements.compareEmpty.textContent = `${entry.name || "Your friend"} hasn't saved any sets for ${day} yet.`;
+      else elements.compareEmpty.textContent = "No shared saved sets this day.";
+    }
+  }
+
+  function setCompareSelecting(selecting) {
+    compareSelecting = Boolean(selecting);
+    collectedRenderSignature = "";
+    renderCollected();
+  }
+
+  function openComparison(entry) {
+    const days = window.HexlaceCompare.DAYS;
+    comparedReadId = entry.readId;
+    compareDayIndex = Math.max(0, days.indexOf(selectedComparisonDay()));
+    compareSelecting = false;
+    collectedRenderSignature = "";
+    renderCollected();
+    renderComparison();
+    showDialog(elements.compareDialog);
+  }
+
+  function appendComparisonChoice(entry) {
+    const sets = Array.isArray(entry.sets) ? entry.sets : [];
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "hexlace-compare-friend";
+    button.disabled = Boolean(entry.pending && !entry.updated && !sets.length);
+    const name = document.createElement("strong");
+    name.textContent = entry.name || "Loading...";
+    const detail = document.createElement("span");
+    detail.textContent = entry.pending && !entry.updated
+      ? "Waiting for signal"
+      : `${sets.length} saved set${sets.length === 1 ? "" : "s"} · ${entry.updated ? `updated ${timeAgo(entry.updated)}` : "not loaded yet"}`;
+    button.append(name, detail);
+    button.addEventListener("click", () => openComparison(entry));
+    elements.list.append(button);
+  }
+
   function renderCollected() {
     const entries = loadCollected();
-    const signature = JSON.stringify([entries, [...friendOpenState], Math.floor(Date.now() / 60000)]);
+    if (!entries.length) compareSelecting = false;
+    const signature = JSON.stringify([entries, [...friendOpenState], compareSelecting, mySets().length, Math.floor(Date.now() / 60000)]);
     if (signature === collectedRenderSignature) return;
     collectedRenderSignature = signature;
     elements.count.textContent = entries.length
       ? `${entries.length} friend${entries.length === 1 ? "" : "s"}`
       : "No friends' sets collected yet";
     elements.empty.hidden = entries.length > 0;
+    elements.compareTools.hidden = entries.length === 0;
+    elements.compareStart.hidden = compareSelecting;
+    elements.comparePrompt.hidden = !compareSelecting;
     elements.list.innerHTML = "";
     entries.forEach(entry => {
+      if (compareSelecting) {
+        appendComparisonChoice(entry);
+        return;
+      }
       const group = document.createElement("details");
       group.className = "planner-day hexlace-friend";
       group.open = friendOpenState.has(entry.readId) ? friendOpenState.get(entry.readId) : false;
@@ -1125,6 +1242,7 @@
 
       elements.list.append(group);
     });
+    if (comparedReadId) renderComparison();
   }
 
   async function fetchEntry(readId) {
@@ -1309,6 +1427,17 @@
   elements.swapCreateButton?.addEventListener("click", startTradeMode);
   elements.swapAcceptButton?.addEventListener("click", confirmTrade);
   elements.swapCancel?.addEventListener("click", cancelTrade);
+  elements.compareStart?.addEventListener("click", () => setCompareSelecting(true));
+  elements.compareCancel?.addEventListener("click", () => setCompareSelecting(false));
+  elements.comparePrevious?.addEventListener("click", () => {
+    compareDayIndex = Math.max(0, compareDayIndex - 1);
+    renderComparison();
+  });
+  elements.compareNext?.addEventListener("click", () => {
+    compareDayIndex = Math.min(window.HexlaceCompare.DAYS.length - 1, compareDayIndex + 1);
+    renderComparison();
+  });
+  elements.compareDialog?.addEventListener("close", () => { comparedReadId = ""; });
   if ("NDEFReader" in window) {
     elements.nfc.hidden = false;
     elements.giveawayNfc.hidden = false;
@@ -1319,7 +1448,11 @@
     elements.giveawayNfc.addEventListener("click", () => { if (giveawayLink) writeTag(giveawayLink); });
   }
 
-  window.addEventListener("setlist-changed", markDirtyAndPublishSoon);
+  window.addEventListener("setlist-changed", () => {
+    markDirtyAndPublishSoon();
+    collectedRenderSignature = "";
+    renderCollected();
+  });
   window.addEventListener("ping-changed", () => markDirtyAndPublishSoon(0));
   window.addEventListener("hexlace-friends-changed", () => markDirtyAndPublishSoon(0));
   window.addEventListener("undo-state-changed", event => {

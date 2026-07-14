@@ -12,18 +12,19 @@ test("release assets and service-worker precache use one version and include bot
   ]);
   const releaseSources = [html, serviceWorker, css, manifest, app];
   const referencedVersions = new Set(releaseSources.flatMap(source => [...source.matchAll(/\?v=(\d+)/g)].map(match => match[1])));
-  assert.deepEqual([...referencedVersions], ["53"], "Every release asset query must use exactly v53.");
-  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "53", "The Pages release marker must be v53.");
-  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "53", "The service-worker cache must be v53.");
-  assert.match(readme, /authoritative deployed version[^\n]*\bv53\b/i);
-  assert.match(handoff, /current release \*\*v53\*\*/i);
-  assert.match(handoff, /release bumps ONE version number everywhere \(v53 at the time of writing\)/);
-  assert.match(serviceWorker, /InterVariable\.woff2\?v=53/);
-  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=53/);
-  assert.match(css, /InterVariable\.woff2\?v=53/);
-  assert.match(css, /InterVariable-Italic\.woff2\?v=53/);
-  assert.match(serviceWorker, /schedule-metadata\.js\?v=53/);
-  assert.match(serviceWorker, /undo\.js\?v=53/);
+  assert.deepEqual([...referencedVersions], ["54"], "Every release asset query must use exactly v54.");
+  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "54", "The Pages release marker must be v54.");
+  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "54", "The service-worker cache must be v54.");
+  assert.match(readme, /authoritative deployed version[^\n]*\bv54\b/i);
+  assert.match(handoff, /current release \*\*v54\*\*/i);
+  assert.match(handoff, /release bumps ONE version number everywhere \(v54 at the time of writing\)/);
+  assert.match(serviceWorker, /InterVariable\.woff2\?v=54/);
+  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=54/);
+  assert.match(css, /InterVariable\.woff2\?v=54/);
+  assert.match(css, /InterVariable-Italic\.woff2\?v=54/);
+  assert.match(serviceWorker, /schedule-metadata\.js\?v=54/);
+  assert.match(serviceWorker, /undo\.js\?v=54/);
+  assert.match(serviceWorker, /hexlace-compare\.js\?v=54/);
 });
 
 test("schedule and overlap policy stay explicit", async () => {
@@ -78,6 +79,12 @@ test("Hexlace coordination and closed-friend rendering safeguards stay enabled",
   assert.match(hexlaces, /elements\.connectSection\.hidden = !canConnectApp/);
   assert.match(hexlaces, /!isStandalone\(\).*navigator\.onLine !== false/);
   assert.match(html, /id="hexlace-bring-over"/);
+  assert.match(html, /id="hexlace-compare-start"/);
+  assert.match(html, /id="hexlace-compare-dialog"/);
+  assert.match(html, /id="hexlace-compare-previous"/);
+  assert.match(html, /id="hexlace-compare-next"/);
+  assert.match(hexlaces, /window\.HexlaceCompare\.sharedSets/);
+  assert.match(hexlaces, /compareDayIndex = Math\.max\(0, days\.indexOf\(selectedComparisonDay\(\)\)\)/);
   assert.match(html, /id="hexlace-swap-open"[^>]*hidden/);
   assert.match(hexlaces, /elements\.swapOpen\.hidden = navigator\.onLine === false/);
   assert.match(coordinator, /trade\.targetReadId !== body\.requesterReadId/);

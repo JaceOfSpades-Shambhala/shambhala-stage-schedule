@@ -7,21 +7,21 @@
   <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
   <title>Shambhala 2026 Stage Set Times</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=53">
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=53">
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=53">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=53">
-  <link rel="stylesheet" href="styles.css?v=53">
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=54">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=54">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=54">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=54">
+  <link rel="stylesheet" href="styles.css?v=54">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Camp Hexadecibel">
   <meta property="og:title" content="Shambhala 2026 Stage Set Times">
   <meta property="og:description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
-  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=53">
+  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=54">
   <meta property="og:url" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/">
   <meta name="twitter:card" content="summary">
 </head>
 <body>
-  <!-- v53 -->
+  <!-- v54 -->
   <a class="skip-link" href="#schedule">Skip to schedule</a>
   <div class="hx-vortex" aria-hidden="true">
     <div class="hx-vortex-glow"></div>
@@ -35,7 +35,7 @@
 
   <main class="shell">
     <header class="hero">
-      <h1 class="hero-mark"><img class="hero-wordmark" src="wordmark.svg?v=53" alt="Shambhala Music Festival 2026 set times" width="800" height="253"></h1>
+      <h1 class="hero-mark"><img class="hero-wordmark" src="wordmark.svg?v=54" alt="Shambhala Music Festival 2026 set times" width="800" height="253"></h1>
       <p class="camp-credit"><span>Made by Camp Hexadecibel</span><span aria-hidden="true"> - </span><a id="camp-location-link" href="https://www.google.com/maps/search/?api=1&query=Shambhala%20Music%20Festival%20Salmo%20BC" target="_blank" rel="noreferrer">Come visit us</a></p>
       <p class="offline-ready">Offline ready after first online load</p>
       <button id="install-button" class="install-button" type="button" hidden>Add to Home Screen</button>
@@ -44,7 +44,7 @@
 
     <section class="live-panel" aria-label="Live stage controls">
       <div id="stage-mark-header" class="stage-mark-header">
-        <img id="stage-mark" class="stage-mark" src="stage-names/amp.png?v=53" alt="AMP" width="150" height="64" data-stage="amp">
+        <img id="stage-mark" class="stage-mark" src="stage-names/amp.png?v=54" alt="AMP" width="150" height="64" data-stage="amp">
       </div>
       <section id="now-playing" class="now-playing" data-status="checking" aria-live="polite" aria-atomic="true">
         <div class="now-playing-topline">
@@ -252,6 +252,23 @@
       </form>
     </dialog>
 
+    <dialog id="hexlace-compare-dialog" class="hexlace-dialog">
+      <form method="dialog" class="hexlace-dialog-card hexlace-compare-card">
+        <div>
+          <h2 id="hexlace-compare-title">Compare plans</h2>
+          <p id="hexlace-compare-updated"></p>
+        </div>
+        <div class="hexlace-compare-day" aria-label="Comparison day">
+          <button id="hexlace-compare-previous" class="hexlace-day-arrow" type="button" aria-label="Previous day">&#8249;</button>
+          <strong id="hexlace-compare-day"></strong>
+          <button id="hexlace-compare-next" class="hexlace-day-arrow" type="button" aria-label="Next day">&#8250;</button>
+        </div>
+        <ol id="hexlace-compare-list" class="planner-day-list hexlace-compare-list"></ol>
+        <p id="hexlace-compare-empty" class="hexlace-compare-empty"></p>
+        <button class="planner-action" value="close">Close</button>
+      </form>
+    </dialog>
+
     <section id="hexlaces" class="planner-panel hexlace-panel" aria-label="Friends' sets collected">
       <div class="planner-heading hexlace-panel-heading">
         <span class="hexlace-summary-copy">
@@ -260,6 +277,13 @@
         </span>
       </div>
       <div class="hexlace-panel-body">
+        <div id="hexlace-compare-tools" class="hexlace-compare-tools" hidden>
+          <button id="hexlace-compare-start" class="planner-action hexlace-compare-start" type="button">Compare plans</button>
+          <div id="hexlace-compare-prompt" class="hexlace-compare-prompt" hidden>
+            <strong>Choose a friend</strong>
+            <button id="hexlace-compare-cancel" class="hexlace-text-action" type="button">Cancel</button>
+          </div>
+        </div>
         <div id="hexlace-list" class="hexlace-list"></div>
         <p id="hexlace-empty" class="planner-empty">No friends' sets collected yet</p>
       </div>
@@ -280,18 +304,19 @@
     <button id="undo-button" type="button">Undo</button>
   </div>
 
-  <script src="camp-location.js?v=53"></script>
-  <script src="schedule-data.js?v=53"></script>
-  <script src="schedule-metadata.js?v=53"></script>
-  <script src="search-normalize.js?v=53"></script>
-  <script src="preview-time.js?v=53"></script>
-  <script src="app.js?v=53"></script>
-  <script src="undo.js?v=53"></script>
-  <script src="planner.js?v=53"></script>
-  <script src="qrcode.js?v=53"></script>
-  <script src="hexlace-api.js?v=53"></script>
-  <script src="hexlace-giveaway.js?v=53"></script>
-  <script src="hexlaces.js?v=53"></script>
-  <script src="install.js?v=53"></script>
+  <script src="camp-location.js?v=54"></script>
+  <script src="schedule-data.js?v=54"></script>
+  <script src="schedule-metadata.js?v=54"></script>
+  <script src="search-normalize.js?v=54"></script>
+  <script src="preview-time.js?v=54"></script>
+  <script src="app.js?v=54"></script>
+  <script src="undo.js?v=54"></script>
+  <script src="planner.js?v=54"></script>
+  <script src="qrcode.js?v=54"></script>
+  <script src="hexlace-api.js?v=54"></script>
+  <script src="hexlace-giveaway.js?v=54"></script>
+  <script src="hexlace-compare.js?v=54"></script>
+  <script src="hexlaces.js?v=54"></script>
+  <script src="install.js?v=54"></script>
 </body>
 </html>
