@@ -54,6 +54,9 @@ test("deployment checks verify the exact Pages marker and deployed Worker revisi
   assert.match(workflow, /wrangler@4 deploy --var BUILD_SHA:\$\{\{ github\.sha \}\}/);
   assert.match(workflow, /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
   assert.match(workflow, /\.build == \$sha/);
+  assert.match(workflow, /for attempt in 1 2 3 4 5 6/);
+  assert.match(workflow, /Worker revision has not propagated yet/);
+  assert.match(workflow, /sleep 5/);
 });
 
 test("schedule filters use ordinary toggle buttons rather than an incomplete tabs pattern", async () => {
