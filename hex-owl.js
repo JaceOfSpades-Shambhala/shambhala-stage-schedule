@@ -9,7 +9,7 @@
 
   const VERSION = 1;
   const HEX_SEED = /^[0-9a-f]{32}$/i;
-  const OWL_ASSET = "./hex-owl-base.svg?v=57";
+  const OWL_ASSET = "./hex-owl-base.svg?v=58";
   const SHARED_MARK_ID = "hex-owl-shared-mark";
   const BROW_MARK_IDS = {
     lower: SHARED_MARK_ID + "-brow-lower",
@@ -882,19 +882,17 @@
       .map(key => traits.selectionIds[key])
       .join("|");
     const idRoot = "hex-owl-" + traits.seed.slice(0, 12) + "-" + hashWords(selectionSignature).slice(0, 8);
-    const ids = { mask: idRoot + "-mask", safe: idRoot + "-safe", glow: idRoot + "-glow" };
+    const ids = { safe: idRoot + "-safe", glow: idRoot + "-glow" };
     const tokens = traits.palette.tokens;
     const definitions =
-      '<defs><mask id="' + ids.mask + '" maskUnits="userSpaceOnUse" x="23.574" y="23.610" width="52.852" height="52.779">' +
-      '<image href="' + OWL_ASSET + '" x="23.574" y="23.610" width="52.852" height="52.779" preserveAspectRatio="none"/>' +
-      '</mask><clipPath id="' + ids.safe + '"><polygon points="' + GEOMETRY.safeZones.innerPortal.points + '"/></clipPath>' +
+      '<defs><clipPath id="' + ids.safe + '"><polygon points="' + GEOMETRY.safeZones.innerPortal.points + '"/></clipPath>' +
       '<radialGradient id="' + ids.glow + '" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="' + tokens.focal + '" stop-opacity="0"/><stop offset=".50" stop-color="' + tokens.focal + '" stop-opacity="0"/><stop offset=".68" stop-color="' + tokens.focal + '" stop-opacity=".30"/><stop offset=".84" stop-color="' + tokens.ring + '" stop-opacity=".42"/><stop offset="1" stop-color="' + tokens.beam + '" stop-opacity="0"/></radialGradient></defs>';
     const backdrop =
       '<ellipse cx="50" cy="53.5" rx="26.7" ry="24.8" fill="#090716"/>' +
       '<path d="M29 50q4-18 21-27 17 9 21 27z" fill="#090716"/>';
-    const base =
-      '<rect x="23.574" y="23.610" width="52.852" height="52.779" fill="' + tokens.face + '" mask="url(#' + ids.mask + ')"/>' +
-      '<use href="#' + SHARED_MARK_ID + '" fill="' + tokens.face + '" transform="' + OWL_TRANSFORM + '"/>';
+    // Keep this vector-only: an external SVG image mask caused zoom-dependent
+    // rectangular raster artifacts in Android Chrome.
+    const base = '<use href="#' + SHARED_MARK_ID + '" fill="' + tokens.face + '" transform="' + OWL_TRANSFORM + '"/>';
     const clipped = ' clip-path="url(#' + ids.safe + ')"';
     const body =
       layer("background", '<rect width="100" height="100" rx="10" fill="#090716"/>') +

@@ -66,7 +66,9 @@ checklist rather than fragile simulated tests.
     Save one set, publish, and confirm exactly one Owl appears. Rename the user,
     reload, transfer into the installed app, and confirm the SVG and number stay
     identical at 48px, 64px, and the full My Hexlace size.
-13. Open `hex-owl-playground.html`, generate at least 24 random Owls, and check
+13. Open the [live Hex Owl playground](https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/hex-owl-playground.html)
+    (or `/hex-owl-playground.html` from a local server), generate at least 24
+    random Owls, and check
     that every variation contains the exact supplied Owl anatomy: the layered
     chevron brow ridge, swept eye sockets, crescent-derived pupils, and rounded
     lower face must remain unchanged beneath accessories and colour overlays.

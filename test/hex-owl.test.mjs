@@ -414,9 +414,25 @@ test("the paused accessory roster preserves the exact Owl anatomy reference", as
     const traits = owl.traitNames(seed, 1);
     assert.equal(traits.Accessory, "None");
     const svg = owl.renderSvg(seed, 1);
-    assert.match(svg, /<image href="\.\/hex-owl-base\.svg\?v=57"/);
+    assert.doesNotMatch(svg, /<mask\b|<image\b/, "The Android-unsafe external-image mask must not return.");
     assert.match(svg, /<use href="#hex-owl-shared-mark" fill="#[0-9a-f]{6}"/);
     assert.doesNotMatch(svg, /M151 270q48-24 96 15/, "The rejected hand-drawn eye socket must not return.");
+  }
+});
+
+test("Android-safe Owl output avoids the external-image mask raster path", async () => {
+  const owl = await renderer();
+  const screenshotSeeds = [
+    "4be7657855805980d45b3e7ec5f5186d",
+    "4ce77cd5739235b416ee93d4222cb208",
+    "4de77c2209ed61095612aa210d887508"
+  ];
+  for (const seed of screenshotSeeds) {
+    const svg = owl.renderSvg(seed, 1);
+    assert.doesNotMatch(svg, /<mask\b/);
+    assert.doesNotMatch(svg, /<image\b/);
+    assert.equal((svg.match(/<use href="#hex-owl-shared-mark"/g) || []).length, 1,
+      `${seed} must draw its base once through the shared vector path.`);
   }
 });
 
@@ -467,7 +483,7 @@ test("portal geometry serializes the frozen measured rotations, radii, and Owl t
   });
   assert.doesNotMatch(svg, /rotate\(-?45\)/);
   assert.match(svg, /translate\(50 50\) scale\(\.0365\) translate\(-724 -723\)/, "The Owl must use the true centre of its source viewBox.");
-  assert.match(svg, /x="23\.574" y="23\.610" width="52\.852" height="52\.779"/);
+  assert.doesNotMatch(svg, /<mask\b|<image\b/, "Portal geometry must not reintroduce a rasterized Owl mask.");
 });
 
 test("laser eyes use beams without drawn pupil circles", async () => {
@@ -613,10 +629,10 @@ test("fixed seeds are byte-stable across fresh renderer contexts", async () => {
 test("representative Common, Uncommon, Rare, and Legendary SVGs have frozen V1 hashes", async () => {
   const owl = await renderer();
   const snapshots = [
-    ["common", "fc67ca6aade4ac02d1627d5933eb6fa7", "0000e2f3bf47a47a0eb4cd93034ea4182b9710fbd91d1767ba1d13988e3fceb7"],
-    ["uncommon", "61c4af676efe9f9ecbcb84dcec8d6b41", "2e9a709b354db3248746e2b745d07f54e2775a1a62be9afb542b79e2fc4bcd41"],
-    ["rare", "f8b765c3f16a5a5cbdad4290599a44b6", "96040bebd59ea88260796dd0b5e295c00a1a1b18933bf54295414b7eb03a2edc"],
-    ["legendary", "281ba93074f6b88a04749fdaf71f916f", "b5fb74d5128df8e2da7aea73859df07709aff922c9c2c5339cd79e9482903807"]
+    ["common", "fc67ca6aade4ac02d1627d5933eb6fa7", "225d954d3a28ff9fafda4326d2a001a50f4c820187b7cf76cb642de2c5df61b3"],
+    ["uncommon", "61c4af676efe9f9ecbcb84dcec8d6b41", "ba5157c61d49644a78e99aef8a9fb47324a2a45c8e8352fe768ad349b9bea96d"],
+    ["rare", "f8b765c3f16a5a5cbdad4290599a44b6", "2a4a2ebb01a421afbf7525e90fdbcd0da7a633200ac49ffaae11e2dd07f1840e"],
+    ["legendary", "281ba93074f6b88a04749fdaf71f916f", "83074c68fbf5214276df6eb369c71b8930aa725ec3b098c35218f2b19745dbfd"]
   ];
   for (const [rarity, seed, expectedHash] of snapshots) {
     const resolved = owl.resolveTraits(seed, { rarity }, 1);
@@ -644,10 +660,10 @@ test("same-seed palette overrides isolate all SVG definition IDs", async () => {
   };
   const firstIds = definitionIds(firstSvg);
   const secondIds = definitionIds(secondSvg);
-  assert.equal(firstIds.length, 3);
-  assert.equal(secondIds.length, 3);
+  assert.equal(firstIds.length, 2);
+  assert.equal(secondIds.length, 2);
   assert.deepEqual(firstIds.filter(id => secondIds.includes(id)), [],
-    "Two same-seed variants must not share mask, clip-path, or glow definition IDs.");
+    "Two same-seed variants must not share clip-path or glow definition IDs.");
 
   const firstGlow = firstIds.find(id => id.endsWith("-glow"));
   const secondGlow = secondIds.find(id => id.endsWith("-glow"));

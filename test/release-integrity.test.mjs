@@ -6,29 +6,32 @@ const root = new URL("../", import.meta.url);
 const read = file => readFile(new URL(file, root), "utf8");
 
 test("release assets and service-worker precache use one version and include both fonts", async () => {
-  const [html, serviceWorker, css, manifest, app, readme, handoff] = await Promise.all([
+  const [html, serviceWorker, css, manifest, app, readme, handoff, hexOwl, playground] = await Promise.all([
     read("index.html"), read("sw.js"), read("styles.css"), read("manifest.webmanifest"),
-    read("app.js"), read("README.md"), read("HANDOFF.md")
+    read("app.js"), read("README.md"), read("HANDOFF.md"), read("hex-owl.js"),
+    read("hex-owl-playground.html")
   ]);
-  const releaseSources = [html, serviceWorker, css, manifest, app];
+  const releaseSources = [html, serviceWorker, css, manifest, app, hexOwl, playground];
   const referencedVersions = new Set(releaseSources.flatMap(source => [...source.matchAll(/\?v=(\d+)/g)].map(match => match[1])));
-  assert.deepEqual([...referencedVersions], ["57"], "Every release asset query must use exactly v57.");
-  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "57", "The Pages release marker must be v57.");
-  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "57", "The service-worker cache must be v57.");
-  assert.match(readme, /authoritative deployed version[^\n]*\bv57\b/i);
-  assert.match(handoff, /current release \*\*v57\*\*/i);
-  assert.match(handoff, /release bumps ONE version number everywhere \(v57 at the time of writing\)/);
-  assert.match(serviceWorker, /InterVariable\.woff2\?v=57/);
-  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=57/);
-  assert.match(css, /InterVariable\.woff2\?v=57/);
-  assert.match(css, /InterVariable-Italic\.woff2\?v=57/);
-  assert.match(serviceWorker, /schedule-metadata\.js\?v=57/);
-  assert.match(serviceWorker, /undo\.js\?v=57/);
-  assert.match(serviceWorker, /hexlace-compare\.js\?v=57/);
-  assert.match(serviceWorker, /hex-owl\.js\?v=57/);
-  assert.match(serviceWorker, /hex-owl-base\.svg\?v=57/);
+  assert.deepEqual([...referencedVersions], ["58"], "Every release asset query must use exactly v58.");
+  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "58", "The Pages release marker must be v58.");
+  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "58", "The service-worker cache must be v58.");
+  assert.match(readme, /authoritative deployed version[^\n]*\bv58\b/i);
+  assert.match(handoff, /current release \*\*v58\*\*/i);
+  assert.match(handoff, /release bumps ONE version number everywhere \(v58 at the time of writing\)/);
+  assert.match(serviceWorker, /InterVariable\.woff2\?v=58/);
+  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=58/);
+  assert.match(css, /InterVariable\.woff2\?v=58/);
+  assert.match(css, /InterVariable-Italic\.woff2\?v=58/);
+  assert.match(serviceWorker, /schedule-metadata\.js\?v=58/);
+  assert.match(serviceWorker, /undo\.js\?v=58/);
+  assert.match(serviceWorker, /hexlace-compare\.js\?v=58/);
+  assert.match(serviceWorker, /hex-owl\.js\?v=58/);
+  assert.match(serviceWorker, /hex-owl-base\.svg\?v=58/);
   assert.match(serviceWorker, /hex-owl-playground\.html/);
-  assert.match(serviceWorker, /hexadex\.js\?v=57/);
+  assert.match(serviceWorker, /hexadex\.js\?v=58/);
+  assert.match(hexOwl, /hex-owl-base\.svg\?v=58/);
+  assert.match(playground, /hex-owl\.js\?v=58/);
 });
 
 test("schedule and overlap policy stay explicit", async () => {

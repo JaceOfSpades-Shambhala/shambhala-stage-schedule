@@ -72,6 +72,10 @@
       border-radius: .65rem;
       background: rgba(255, 255, 255, .055);
     }
+    select option {
+      color: var(--ink);
+      background-color: var(--panel-strong);
+    }
     input { font-weight: 720; }
     .seed-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; }
     .seed-row input { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .74rem; }
@@ -302,7 +306,7 @@
     <footer>Standalone, framework-free, and offline-compatible. The production Hexlace interface remains intentionally minimal.</footer>
   </main>
 
-  <script src="hex-owl.js?v=57"></script>
+  <script src="hex-owl.js?v=58"></script>
   <script>
     (() => {
       "use strict";
