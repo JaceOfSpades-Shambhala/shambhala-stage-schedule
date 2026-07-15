@@ -75,7 +75,11 @@ checklist rather than fragile simulated tests.
     Confirm ordinary portal rings are one colour, ring halos never appear,
     accessories do not touch the Owl edges, rare Owls sparkle, and multi-colour
     portal palettes occur only on legendary Owls. Check both twist directions:
-    the outer ring must be flat-topped and the inner ring vertically sided.
+    the outer ring must be flat-topped and the inner ring vertically sided. On
+    Android Chrome, confirm the badge shows both `Renderer V1` and the current
+    release, then pinch-zoom the 320px preview and contact sheet repeatedly;
+    no rectangular blocks, horizontal strips, or disappearing Owl fragments
+    should appear at any zoom level.
 14. Tap a physical Hexlace and confirm its Owl appears once in the Hexadex with
     name, number, collection date, and only broad `Shambhala 2026` context. Tap
     it again to confirm deduplication. Open the ordinary QR/share URL and confirm

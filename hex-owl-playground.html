@@ -57,7 +57,9 @@
     .workspace { display: grid; grid-template-columns: minmax(290px, 390px) minmax(0, 1fr); gap: 1rem; align-items: start; }
     .sidebar, .content, .stack { display: grid; gap: 1rem; }
     .sidebar { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto; scrollbar-width: thin; }
-    .panel { padding: 1.05rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); backdrop-filter: blur(18px); }
+    /* Keep Owl cards out of a backdrop-filter compositor layer. Android Chrome
+       can corrupt clipped SVG tiles while pinch-zooming that combination. */
+    .panel { padding: 1.05rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); }
     .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .9rem; }
     .panel-head h2, .panel-head h3 { margin-bottom: .18rem; font-size: 1rem; letter-spacing: -.015em; }
     .panel-note { margin: 0; color: var(--muted); font-size: .72rem; font-weight: 650; line-height: 1.45; }
@@ -306,7 +308,7 @@
     <footer>Standalone, framework-free, and offline-compatible. The production Hexlace interface remains intentionally minimal.</footer>
   </main>
 
-  <script src="hex-owl.js?v=58"></script>
+  <script src="hex-owl.js?v=59"></script>
   <script>
     (() => {
       "use strict";
@@ -336,9 +338,16 @@
         catch (error) { return fallback === undefined ? null : fallback; }
       }
 
+      function setSvg(container, svg) {
+        container.innerHTML = svg;
+        void api.hydrate?.(container);
+      }
+
       const spec = api.SPEC && typeof api.SPEC === "object" ? api.SPEC : {};
       const rawCatalogue = safeCall(() => typeof api.catalogue === "function" ? api.catalogue() : spec.catalogue, {}) || {};
       const version = Number(spec.version ?? api.VERSION ?? 1);
+      const rendererScript = Array.from(document.scripts).find(script => /(?:^|\/)hex-owl\.js(?:\?|$)/.test(script.src));
+      const release = rendererScript ? (new URL(rendererScript.src).searchParams.get("v") || "dev") : "dev";
 
       function slug(value) {
         return String(value || "trait").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "trait";
@@ -549,7 +558,7 @@
       }
 
       function setPreviewSvg(svg) {
-        for (const id of previewIds) byId(id).innerHTML = svg;
+        for (const id of previewIds) setSvg(byId(id), svg);
       }
 
       function summaryEntries(resolved) {
@@ -784,7 +793,7 @@
             const resolved = resolveRequest(seed, request);
             return renderRequest(seed, request, resolved);
           }, "");
-          art.innerHTML = rendered;
+          setSvg(art, rendered);
           const name = document.createElement("strong");
           name.textContent = palette.name;
           const note = document.createElement("span");
@@ -938,7 +947,7 @@
           button.title = "Load this deterministic sample";
           const art = document.createElement("div");
           art.className = "contact-art";
-          art.innerHTML = safeCall(() => autoSvg(seed), "");
+          setSvg(art, safeCall(() => autoSvg(seed), ""));
           const rarity = document.createElement("span");
           rarity.className = "rarity";
           rarity.textContent = autoRarity(seed);
@@ -1015,7 +1024,7 @@
       }
 
       function init() {
-        elements.versionBadge.textContent = `Renderer V${version} · ${categories.length || "legacy"} categories`;
+        elements.versionBadge.textContent = `Renderer V${version} · Release v${release} · ${categories.length || "legacy"} categories`;
         renderRarities();
         renderTraitControls();
         renderLayerOrder();

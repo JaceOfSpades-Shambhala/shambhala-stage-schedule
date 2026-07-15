@@ -100,6 +100,7 @@
   function putOwl(container, owl) {
     if (!container || !validOwl(owl) || !window.HexOwl) return;
     container.innerHTML = window.HexOwl.renderSvg(owl.seed, owl.version);
+    void window.HexOwl.hydrate?.(container);
   }
 
   function cachedEntries() {

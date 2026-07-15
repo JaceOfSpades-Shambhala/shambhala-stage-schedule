@@ -9,7 +9,7 @@
 
   const VERSION = 1;
   const HEX_SEED = /^[0-9a-f]{32}$/i;
-  const OWL_ASSET = "./hex-owl-base.svg?v=58";
+  const OWL_ASSET = "./hex-owl-base.svg?v=59";
   const SHARED_MARK_ID = "hex-owl-shared-mark";
   const BROW_MARK_IDS = {
     lower: SHARED_MARK_ID + "-brow-lower",
@@ -750,6 +750,33 @@
     return baseMountPromise;
   }
 
+  function hydrate(root) {
+    const documentRoot = root?.ownerDocument || (root?.createElementNS ? root : globalThis.document);
+    const scope = root?.querySelectorAll ? root : documentRoot;
+    if (!documentRoot || !scope?.querySelectorAll) return Promise.resolve(0);
+    return mountBase(documentRoot).then(mounted => {
+      if (!mounted) return 0;
+      let replacements = 0;
+      const uses = Array.from(scope.querySelectorAll('use[href^="#' + SHARED_MARK_ID + '"]'));
+      uses.forEach(use => {
+        const href = use.getAttribute("href") || "";
+        const source = href.startsWith("#") ? documentRoot.getElementById(href.slice(1)) : null;
+        if (!source || typeof use.replaceWith !== "function") return;
+        const path = documentRoot.importNode(source, true);
+        path.removeAttribute("id");
+        Array.from(use.attributes || []).forEach(attribute => {
+          const name = attribute.name ?? attribute[0];
+          const value = attribute.value ?? attribute[1];
+          if (name && name !== "href") path.setAttribute(name, value);
+        });
+        path.setAttribute("data-hex-owl-inline", href.slice(1));
+        use.replaceWith(path);
+        replacements += 1;
+      });
+      return replacements;
+    });
+  }
+
   function layer(name, contents, attributes) {
     return '<g data-layer="' + name + '"' + (attributes || "") + ">" + (contents || "") + "</g>";
   }
@@ -966,18 +993,20 @@
     renderWithTraits,
     traitNames,
     catalogue,
-    mountBase
+    mountBase,
+    hydrate
   });
   globalThis.HexOwl = API;
   if (typeof window !== "undefined") window.HexOwl = API;
   if (globalThis.window && globalThis.window !== globalThis) globalThis.window.HexOwl = API;
 
   if (globalThis.document) {
+    const hydrateDocument = () => { void hydrate(globalThis.document); };
     if (globalThis.document.readyState === "loading") {
-      globalThis.document.addEventListener("DOMContentLoaded", () => { void mountBase(); }, { once: true });
+      globalThis.document.addEventListener("DOMContentLoaded", hydrateDocument, { once: true });
     } else {
-      void mountBase();
+      hydrateDocument();
     }
-    globalThis.addEventListener?.("online", () => { void mountBase(); });
+    globalThis.addEventListener?.("online", hydrateDocument);
   }
 })();

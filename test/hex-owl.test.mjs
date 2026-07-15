@@ -307,6 +307,7 @@ class FakeSvgElement {
     this.tagName = tagName;
     this.attributes = new Map();
     this.children = [];
+    this.parentNode = null;
     this.style = { cssText: "" };
   }
 
@@ -315,8 +316,33 @@ class FakeSvgElement {
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   removeAttribute(name) { this.attributes.delete(name); }
-  append(...nodes) { this.children.push(...nodes); }
-  prepend(...nodes) { this.children.unshift(...nodes); }
+  append(...nodes) {
+    nodes.forEach(node => { node.parentNode = this; });
+    this.children.push(...nodes);
+  }
+  prepend(...nodes) {
+    nodes.forEach(node => { node.parentNode = this; });
+    this.children.unshift(...nodes);
+  }
+  replaceWith(node) {
+    const index = this.parentNode?.children.indexOf(this) ?? -1;
+    if (index < 0) return;
+    node.parentNode = this.parentNode;
+    this.parentNode.children.splice(index, 1, node);
+    this.parentNode = null;
+  }
+  querySelectorAll(selector) {
+    const results = [];
+    const matches = node => selector === 'use[href^="#hex-owl-shared-mark"]'
+      && node.tagName === "use"
+      && String(node.getAttribute("href") || "").startsWith("#hex-owl-shared-mark");
+    const visit = node => node.children.forEach(child => {
+      if (matches(child)) results.push(child);
+      visit(child);
+    });
+    visit(this);
+    return results;
+  }
   cloneNode(deep = false) {
     const copy = new FakeSvgElement(this.tagName);
     copy.attributes = new Map(this.attributes);
@@ -345,7 +371,7 @@ function fakeMountDocument(asset) {
       };
     }
   }
-  return {
+  const document = {
     body,
     documentElement: root,
     defaultView: { DOMParser: FakeDOMParser },
@@ -354,8 +380,10 @@ function fakeMountDocument(asset) {
       return new FakeSvgElement(tagName);
     },
     importNode(node, deep) { return node.cloneNode(deep); },
-    getElementById(id) { return find(root, id) || null; }
+    getElementById(id) { return find(root, id) || null; },
+    querySelectorAll(selector) { return root.querySelectorAll(selector); }
   };
+  return document;
 }
 
 test("the same seed and version always produce identical traits and SVG", async () => {
@@ -578,7 +606,7 @@ test("retired sticker-like, pinpoint, face-glow, and accessory traits do not ret
 
 test("the versioned public API remains backward compatible and exposes frozen specification data", async () => {
   const owl = await renderer();
-  for (const name of ["normalizeSeed", "randomSeed", "selectTraits", "traitNames", "renderSvg", "mountBase",
+  for (const name of ["normalizeSeed", "randomSeed", "selectTraits", "traitNames", "renderSvg", "mountBase", "hydrate",
     "catalogue", "resolveTraits", "validateTraits", "renderWithTraits"]) {
     assert.equal(typeof owl[name], "function", `HexOwl.${name} must remain public.`);
   }
@@ -1099,6 +1127,28 @@ test("mountBase installs the exact shared path once, mounts all brow subpaths, a
     assert.ok(brow, `Missing exact ${part} brow subpath.`);
     assert.match(brow.getAttribute("d"), /^M\s/);
   }
+
+  const rendered = new FakeSvgElement("div");
+  rendered.ownerDocument = document;
+  const baseUse = new FakeSvgElement("use");
+  baseUse.setAttribute("href", "#hex-owl-shared-mark");
+  baseUse.setAttribute("fill", "#33c7a5");
+  baseUse.setAttribute("transform", "translate(50 50) scale(.0365) translate(-724 -723)");
+  const browUse = new FakeSvgElement("use");
+  browUse.setAttribute("href", "#hex-owl-shared-mark-brow-gem");
+  browUse.setAttribute("fill", "#f5bf4f");
+  rendered.append(baseUse, browUse);
+  document.body.append(rendered);
+  assert.equal(await mounted.hydrate(rendered), 2, "Visible shared marks must be replaced with direct paths.");
+  assert.deepEqual(rendered.children.map(child => child.tagName), ["path", "path"]);
+  assert.equal(rendered.children[0].getAttribute("d"), suppliedPath);
+  assert.equal(rendered.children[0].getAttribute("fill-rule"), "evenodd");
+  assert.equal(rendered.children[0].getAttribute("fill"), "#33c7a5");
+  assert.equal(rendered.children[0].getAttribute("href"), null);
+  assert.equal(rendered.children[0].getAttribute("id"), null);
+  assert.equal(rendered.children[0].getAttribute("data-hex-owl-inline"), "hex-owl-shared-mark");
+  assert.match(rendered.children[1].getAttribute("d"), /^M\s/);
+  assert.equal(await mounted.hydrate(rendered), 0, "Hydration must be idempotent.");
 
   let attempts = 0;
   const retrying = await renderer({ globalThis: {
