@@ -3,13 +3,13 @@
 
   On a phone, edit only the latitude and longitude values below, then commit.
   Example:
-    latitude: "49.123456",
-    longitude: "-117.123456"
+    latitude: "49.106210",
+    longitude: "-117.270188"
 
   If googleMapsUrl is filled in, it wins over latitude/longitude.
 */
 window.CAMP_LOCATION = {
-  latitude: "",
-  longitude: "",
+  latitude: "49.106210",
+  longitude: "-117.270188",
   googleMapsUrl: ""
 };
