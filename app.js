@@ -338,7 +338,7 @@
     const art = document.createElement("img");
     art.id = "stage-mark";
     art.className = "stage-mark";
-    art.src = `stage-names/${appState.stage}.png?v=59`;
+    art.src = `stage-names/${appState.stage}.png?v=60`;
     art.alt = stageLabel;
     art.width = 150;
     art.height = 64;
@@ -479,7 +479,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-metadata.js?v=59";
+  const SCHEDULE_ASSET = "schedule-metadata.js?v=60";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -562,7 +562,7 @@
     STAGES.forEach(stage => {
       if (stage.id === appState.stage) return;
       const img = new Image();
-      img.src = `stage-names/${stage.id}.png?v=59`;
+      img.src = `stage-names/${stage.id}.png?v=60`;
     });
   }, 1500);
   window.setInterval(renderLiveStatus, 30000);
@@ -581,6 +581,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=59").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=60").then(registerPeriodicSync).catch(() => {});
   });
 })();

@@ -62,8 +62,8 @@ const CATEGORY_ALIASES = Object.freeze({
   beak: ["beak", "beaks", "beakTreatment"]
 });
 
-function catalogueValue(owl) {
-  const value = typeof owl.catalogue === "function" ? owl.catalogue() : owl.catalogue;
+function catalogueValue(owl, version = owl.VERSION) {
+  const value = typeof owl.catalogue === "function" ? owl.catalogue(version) : owl.catalogue;
   assert.ok(value && typeof value === "object", "catalogue must return versioned trait data.");
   return value;
 }
@@ -185,8 +185,9 @@ function focalCount(catalogue, resolved) {
   return total;
 }
 
-function renderResolved(owl, seed, resolved) {
-  const svg = owl.renderWithTraits(seed, resolved, owl.VERSION);
+function renderResolved(owl, seed, resolved, version = resolved?.version) {
+  assert.ok(Number.isSafeInteger(Number(version)), "Resolved traits must identify the renderer version.");
+  const svg = owl.renderWithTraits(seed, resolved, Number(version));
   assert.equal(typeof svg, "string");
   assert.match(svg, /^<svg\b/);
   return svg;
@@ -412,7 +413,8 @@ test("version 1 has a frozen snapshot and ignores display-name labels", async ()
     Edition: "2026"
   });
   assert.doesNotMatch(owl.renderSvg(seed, 1), /display name|Night Owl|Alex/);
-  assert.throws(() => owl.renderSvg(seed, 2), /Unsupported Hex Owl version/);
+  assert.match(owl.renderSvg(seed, 2), /data-hex-owl-version="2"/);
+  assert.throws(() => owl.renderSvg(seed, 3), /Unsupported Hex Owl version/);
 });
 
 test("different seeds create useful visible variation", async () => {
@@ -435,7 +437,7 @@ test("the shared base asset is the exact supplied Owl path", async () => {
 
 test("the paused accessory roster preserves the exact Owl anatomy reference", async () => {
   const owl = await renderer();
-  const accessoryIds = categoryOptions(catalogueValue(owl), "accessory").map(rawOptionId);
+  const accessoryIds = categoryOptions(catalogueValue(owl, 1), "accessory").map(rawOptionId);
   assert.deepEqual(plain(accessoryIds), ["no-accessory"], "Accessories stay paused at None until their geometry is redesigned.");
   for (let index = 0; index < 500; index += 1) {
     const seed = (index * 7919).toString(16).padStart(32, "0");
@@ -495,6 +497,7 @@ test("ordinary portals stay one colour while Legendary portals use palette-linke
 
 test("portal geometry serializes the frozen measured rotations, radii, and Owl transform", async () => {
   const owl = await renderer();
+  const spec = owl.spec(1);
   const seed = "00112233445566778899aabbccddeeff";
   const traits = owl.selectTraits(seed, 1);
   const svg = owl.renderWithTraits(seed, traits, 1);
@@ -503,7 +506,7 @@ test("portal geometry serializes the frozen measured rotations, radii, and Owl t
   const sign = traits.direction.id === "counter-clockwise" ? -1 : 1;
   tags.forEach((tag, index) => {
     const attrs = attributes(tag);
-    const ring = owl.SPEC.geometry.rings[index];
+    const ring = spec.geometry.rings[index];
     assert.equal(attrs["data-ring"], ring.id);
     assert.equal(Number(attrs["data-rotation"]), ring.rotation === 0 ? 0 : sign * ring.rotation);
     assert.equal(Number(attrs["data-radius"]), ring.radius);
@@ -529,7 +532,8 @@ test("laser eyes use beams without drawn pupil circles", async () => {
 
 test("eye-well variants colour exact negative space beneath the native pupils", async () => {
   const owl = await renderer();
-  const catalogue = catalogueValue(owl);
+  const spec = owl.spec(1);
+  const catalogue = catalogueValue(owl, 1);
   const eyeOptions = categoryOptions(catalogue, "eyes");
   assert.deepEqual(plain(eyeOptions.map(rawOptionId)), [
     "original-eyes",
@@ -538,7 +542,7 @@ test("eye-well variants colour exact negative space beneath the native pupils", 
     "pupil-lasers"
   ]);
 
-  const zone = owl.SPEC.geometry.safeZones.eyeFields;
+  const zone = spec.geometry.safeZones.eyeFields;
   assert.equal(zone.preserveNativePupils, true);
   assert.deepEqual(plain(zone.bounds), [30.874, 50.7665, 69.0895, 57.9205]);
   assert.deepEqual(plain(zone.regions), [
@@ -570,6 +574,7 @@ test("eye-well variants colour exact negative space beneath the native pupils", 
 
 test("brow treatments recolour complete exact chevrons instead of clipped strips", async () => {
   const owl = await renderer();
+  const spec = owl.spec(1);
   const expectedParts = new Map([
     ["Top-ridge Gem", ["brow-gem"]],
     ["Brow Echo", ["brow-lower", "brow-upper"]],
@@ -591,48 +596,68 @@ test("brow treatments recolour complete exact chevrons instead of clipped strips
     const browLayer = svg.slice(start, svg.indexOf("</g>", start) + 4);
     assert.match(browLayer, /clip-path="url\(#hex-owl-[^"]+-safe\)"/);
     assert.doesNotMatch(browLayer, /<(?:rect|path)\b/, `${name} must use complete exact supplied brow subpaths, not substitute strips.`);
-    assert.ok(svg.includes(`<polygon points="${owl.SPEC.geometry.safeZones.innerPortal.points}"/>`),
+    assert.ok(svg.includes(`<polygon points="${spec.geometry.safeZones.innerPortal.points}"/>`),
       `${name} must be constrained by the exact inner-portal polygon.`);
   }
 });
 
 test("retired sticker-like, pinpoint, face-glow, and accessory traits do not return", async () => {
-  const source = await readFile(new URL("../hex-owl.js", import.meta.url), "utf8");
-  assert.doesNotMatch(source, /LED Totem|Flower Crown|Third Eye|Bandana Dots|Wide Awake|Spiral|Heart/);
-  assert.doesNotMatch(source, /ember-pinpoint|aqua-pinpoint|facial-disc-tint|kandi-arc|double-kandi|integrated-leds/);
-  assert.doesNotMatch(source, /pattern:\s*"(?:halo|pulse|moon)"/);
-  assert.match(source, /function browSvg\(/);
+  const owl = await renderer();
+  const legacyCatalogue = JSON.stringify(plain(catalogueValue(owl, 1)));
+  assert.doesNotMatch(legacyCatalogue, /LED Totem|Flower Crown|Third Eye|Bandana Dots|Wide Awake|Spiral|Heart/);
+  assert.doesNotMatch(legacyCatalogue, /ember-pinpoint|aqua-pinpoint|facial-disc-tint|kandi-arc|double-kandi|integrated-leds/);
+  assert.doesNotMatch(legacyCatalogue, /pattern.*(?:halo|pulse|moon)/);
 });
 
-test("the versioned public API remains backward compatible and exposes frozen specification data", async () => {
+test("the dual-version public API keeps V1 frozen and makes V2 current", async () => {
   const owl = await renderer();
   for (const name of ["normalizeSeed", "randomSeed", "selectTraits", "traitNames", "renderSvg", "mountBase", "hydrate",
-    "catalogue", "resolveTraits", "validateTraits", "renderWithTraits"]) {
+    "spec", "catalogue", "resolveTraits", "validateTraits", "renderWithTraits"]) {
     assert.equal(typeof owl[name], "function", `HexOwl.${name} must remain public.`);
   }
-  assert.equal(owl.VERSION, 1);
-  assert.ok(owl.SPEC && typeof owl.SPEC === "object");
-  assert.equal(owl.SPEC.version, owl.VERSION);
-  for (const key of ["rarities", "paletteFamilies", "palettes", "geometry", "layerOrder", "catalogue"]) {
-    assert.ok(owl.SPEC[key] != null, `SPEC.${key} is required.`);
+  assert.equal(owl.VERSION, 2);
+  assert.deepEqual(Object.keys(owl.SPECS), ["1", "2"]);
+  assert.equal(owl.SPECS[1].id, "hex-owl-v1");
+  assert.equal(owl.SPECS[1].version, 1);
+  assert.equal(owl.SPECS[1].status, "frozen");
+  assert.equal(owl.SPECS[2].id, "hex-owl-v2");
+  assert.equal(owl.SPECS[2].version, 2);
+  assert.equal(owl.SPECS[2].status, "current");
+  assert.equal(owl.SPEC, owl.SPECS[2]);
+  assert.equal(owl.spec(), owl.SPECS[2]);
+  assert.equal(owl.spec(1), owl.SPECS[1]);
+  for (const version of [1, 2]) {
+    const spec = owl.spec(version);
+    for (const key of ["rarities", "paletteFamilies", "palettes", "geometry", "layerOrder", "catalogue"]) {
+      assert.ok(spec[key] != null, `SPECS[${version}].${key} is required.`);
+    }
+    assert.equal(owl.catalogue(version), spec.catalogue);
+    assert.deepEqual(Object.keys(spec.catalogue.categories).sort(),
+      ["accessory", "aura", "beak", "brow", "direction", "eyes", "marking", "palette", "ringMode", "ringStyle"].sort());
   }
-  assert.equal(owl.catalogue(), owl.SPEC.catalogue, "catalogue() must expose the canonical frozen catalogue.");
-  assert.deepEqual(Object.keys(owl.SPEC.catalogue.categories).sort(),
-    ["accessory", "aura", "beak", "brow", "direction", "eyes", "marking", "palette", "ringMode", "ringStyle"].sort());
+  assert.equal(owl.catalogue(), owl.SPECS[2].catalogue, "The unversioned catalogue follows current V2.");
   assertDeepFrozen(owl, "HexOwl");
   assertDeepFrozen(owl.SPEC, "HexOwl.SPEC");
-  assertDeepFrozen(owl.catalogue(), "HexOwl.catalogue()");
+  assertDeepFrozen(owl.SPECS, "HexOwl.SPECS");
+  assertDeepFrozen(owl.catalogue(1), "HexOwl.catalogue(1)");
+  assertDeepFrozen(owl.catalogue(2), "HexOwl.catalogue(2)");
 
   const seed = "00112233445566778899aabbccddeeff";
-  const selected = owl.selectTraits(seed, 1);
-  const resolved = owl.resolveTraits(seed, {}, 1);
-  assertDeepFrozen(selected, "selectTraits result");
-  assertDeepFrozen(resolved, "resolveTraits result");
-  assert.deepEqual(plain(selected), plain(resolved));
-  assert.equal(owl.renderSvg(seed, 1), owl.renderWithTraits(seed, resolved, 1));
-  assert.deepEqual(plain(owl.traitNames(seed, 1)), plain(owl.traitNames(seed, 1)));
-  assert.throws(() => owl.resolveTraits(seed, {}, 2), /Unsupported Hex Owl version/i);
-  assert.throws(() => owl.renderWithTraits(seed, resolved, 2), /Unsupported Hex Owl version/i);
+  for (const version of [1, 2]) {
+    const selected = owl.selectTraits(seed, version);
+    const resolved = owl.resolveTraits(seed, {}, version);
+    assertDeepFrozen(selected, `selectTraits V${version} result`);
+    assertDeepFrozen(resolved, `resolveTraits V${version} result`);
+    assert.deepEqual(plain(selected), plain(resolved));
+    assert.equal(owl.renderSvg(seed, version), owl.renderWithTraits(seed, resolved, version));
+    assert.deepEqual(plain(owl.traitNames(seed, version)), plain(owl.traitNames(seed, version)));
+  }
+  assert.deepEqual(plain(owl.selectTraits(seed)), plain(owl.selectTraits(seed, 2)));
+  assert.equal(owl.renderSvg(seed), owl.renderSvg(seed, 2));
+  assert.notEqual(owl.renderSvg(seed, 1), owl.renderSvg(seed, 2));
+  assert.throws(() => owl.spec(3), /Unsupported Hex Owl version/i);
+  assert.throws(() => owl.resolveTraits(seed, {}, 3), /Unsupported Hex Owl version/i);
+  assert.throws(() => owl.renderWithTraits(seed, { version: 3 }, 3), /Unsupported Hex Owl version/i);
 });
 
 test("fixed seeds are byte-stable across fresh renderer contexts", async () => {
@@ -652,6 +677,13 @@ test("fixed seeds are byte-stable across fresh renderer contexts", async () => {
     assert.equal(firstSvg, secondSvg);
     assert.equal(svgHash(firstSvg), svgHash(secondSvg));
   }
+});
+
+test("64-seed aggregate SVG fixture freezes the complete V1 renderer", async () => {
+  const owl = await renderer();
+  const aggregate = Array.from({ length: 64 }, (_, index) =>
+    owl.renderSvg(`v1-regression-${index}`, 1)).join("\0");
+  assert.equal(svgHash(aggregate), "866426af1aed0eaaddb542a9e15697699a10e8a6f30c35d23ef31fd5c9b0d653");
 });
 
 test("representative Common, Uncommon, Rare, and Legendary SVGs have frozen V1 hashes", async () => {
@@ -705,7 +737,7 @@ test("same-seed palette overrides isolate all SVG definition IDs", async () => {
 
 test("rarity weights are 35/30/25/10 and ordinary rolls never produce camp-only Owls", async () => {
   const owl = await renderer();
-  const rows = rarityRows(owl.SPEC);
+  const rows = rarityRows(owl.spec(1));
   const expected = new Map([
     ["common", { weight: 35, budget: 3 }],
     ["uncommon", { weight: 30, budget: 5 }],
@@ -737,8 +769,8 @@ test("rarity weights are 35/30/25/10 and ordinary rolls never produce camp-only 
 
 test("rarity budgets and focal caps constrain every resolved Owl", async () => {
   const owl = await renderer();
-  const catalogue = catalogueValue(owl);
-  for (const row of rarityRows(owl.SPEC)) {
+  const catalogue = catalogueValue(owl, 1);
+  for (const row of rarityRows(owl.spec(1))) {
     const budget = numberField(row, ["budget", "densityBudget"]);
     const cap = numberField(row, ["focalCap", "maxFocal", "focalLimit"]);
     for (let index = 0; index < 600; index += 1) {
@@ -747,7 +779,7 @@ test("rarity budgets and focal caps constrain every resolved Owl", async () => {
       assert.equal(rarityId(resolved), row.id);
       assert.ok(densityUsed(catalogue, resolved) <= budget, `${row.id} exceeded density budget ${budget}.`);
       assert.ok(focalCount(catalogue, resolved) <= cap, `${row.id} exceeded focal cap ${cap}.`);
-      assert.equal(validationIsValid(owl.validateTraits(resolved)), true, `${row.id} should resolve to a valid combination.`);
+      assert.equal(validationIsValid(owl.validateTraits(resolved, 1)), true, `${row.id} should resolve to a valid combination.`);
     }
   }
 });
@@ -769,7 +801,7 @@ test("category-specific PRNG streams do not perturb unrelated selections", async
 
 test("tier grammar, palette coupling, and conditional chances hold over deterministic samples", async () => {
   const owl = await renderer();
-  const catalogue = catalogueValue(owl);
+  const catalogue = catalogueValue(owl, 1);
   const samples = 4000;
   const counts = {
     common: { colouredBeak: 0 },
@@ -820,7 +852,7 @@ test("tier grammar, palette coupling, and conditional chances hold over determin
 
 test("every active aura is forceable at Rare and Legendary but repaired below Rare", async () => {
   const owl = await renderer();
-  const catalogue = catalogueValue(owl);
+  const catalogue = catalogueValue(owl, 1);
   const auraIds = categoryOptions(catalogue, "aura")
     .filter(option => optionId(option) !== "quietaura" && option.enabled !== false && option.campOnly !== true)
     .map(rawOptionId);
@@ -838,7 +870,7 @@ test("every active aura is forceable at Rare and Legendary but repaired below Ra
         rarity,
         overrides: { aura, eyes: "original-eyes" }
       }, 1);
-      const report = owl.validateTraits(resolved);
+      const report = owl.validateTraits(resolved, 1);
       assert.equal(validationIsValid(report), true, `${rarity}.${aura} must resolve safely.`);
       if (["common", "uncommon"].includes(rarity)) {
         assert.equal(resolved.aura.id, "quiet-aura", `${aura} must remain Rare+.`);
@@ -874,7 +906,7 @@ test("invalid manual overrides are repaired deterministically into production-sa
   const first = owl.resolveTraits(seed, options, 1);
   const second = owl.resolveTraits(seed, options, 1);
   assert.deepEqual(plain(first), plain(second));
-  const report = owl.validateTraits(first);
+  const report = owl.validateTraits(first, 1);
   assert.equal(validationIsValid(report), true, `Resolver returned invalid traits: ${JSON.stringify(validationIssues(report))}`);
   assert.equal(rarityId(first), "common");
   assert.equal(isMulticolour(traitChoice(first, "rings")), false);
@@ -900,6 +932,7 @@ test("renderer source and output avoid nondeterministic or font-dependent primit
 
 test("layer markers follow the versioned order and laser beams start at the exact pupil centres", async () => {
   const owl = await renderer();
+  const spec = owl.spec(1);
   let seed = "";
   let resolved = null;
   for (let index = 0; index < 8000 && !resolved; index += 1) {
@@ -912,7 +945,7 @@ test("layer markers follow the versioned order and laser beams start at the exac
   }
   assert.ok(resolved, "At least one valid Rare combination must retain a forced laser treatment.");
   const svg = renderResolved(owl, seed, resolved);
-  const positions = owl.SPEC.layerOrder.map(layer => {
+  const positions = spec.layerOrder.map(layer => {
     const position = svg.indexOf(`data-layer="${layer}"`);
     assert.notEqual(position, -1, `Missing data-layer marker for ${layer}.`);
     return position;
@@ -937,16 +970,17 @@ test("layer markers follow the versioned order and laser beams start at the exac
 
 test("four portal rings share one centre, clear each other, and preserve measured exact-silhouette clearance", async () => {
   const owl = await renderer();
+  const spec = owl.spec(1);
   const svg = owl.renderWithTraits(owl.normalizeSeed("geometry-containment"), { rarity: "common" }, 1);
   const svgAttributes = attributes(svg.match(/^<svg\b[^>]*>/)?.[0] || "");
-  const viewBox = String(svgAttributes.viewBox || owl.SPEC.geometry.viewBox || "").trim().split(/[ ,]+/).map(Number);
+  const viewBox = String(svgAttributes.viewBox || spec.geometry.viewBox || "").trim().split(/[ ,]+/).map(Number);
   assert.deepEqual(viewBox, [0, 0, 100, 100]);
   let tags = [...svg.matchAll(/<polygon\b[^>]*>/g)].map(match => match[0]);
   const ringTagged = tags.filter(tag => /data-(?:ring|portal)/i.test(tag));
   if (ringTagged.length) tags = ringTagged;
   assert.equal(tags.length, 4, "Every Owl must have exactly four portal hexagon rings.");
   const rings = tags.map(polygonFromTag).sort((first, second) => polygonArea(second.points) - polygonArea(first.points));
-  const centerValue = owl.SPEC.geometry.center;
+  const centerValue = spec.geometry.center;
   const expectedCenter = Array.isArray(centerValue)
     ? centerValue.map(Number)
     : [Number(centerValue?.x ?? 50), Number(centerValue?.y ?? 50)];
@@ -961,7 +995,7 @@ test("four portal rings share one centre, clear each other, and preserve measure
       assert.ok(y + ring.strokeWidth / 2 <= viewBox[1] + viewBox[3] + 1e-7);
     }
   }
-  const ringGap = numberField(owl.SPEC.geometry, ["ringGap", "minimumRingGap", "minRingGap"]);
+  const ringGap = numberField(spec.geometry, ["ringGap", "minimumRingGap", "minRingGap"]);
   assert.ok(Number.isFinite(ringGap) && ringGap > 0, "SPEC.geometry must declare a positive minimum ring gap.");
   for (let index = 0; index < rings.length - 1; index += 1) {
     const outer = rings[index];
@@ -970,7 +1004,7 @@ test("four portal rings share one centre, clear each other, and preserve measure
     const clearDistance = polygonDistance(outer.points, inner.points) - (outer.strokeWidth + inner.strokeWidth) / 2;
     assert.ok(clearDistance >= ringGap - 1e-6, `Rings ${index + 1}/${index + 2} clear by ${clearDistance}, expected ${ringGap}.`);
   }
-  const owlBounds = normalizedBounds(owl.SPEC.geometry.owlBounds ?? owl.SPEC.geometry.transformedOwlBounds);
+  const owlBounds = normalizedBounds(spec.geometry.owlBounds ?? spec.geometry.transformedOwlBounds);
   assert.ok(owlBounds, "SPEC.geometry must expose the exact transformed Owl bounds.");
   assert.deepEqual(owlBounds, {
     minX: 23.598301,
@@ -978,17 +1012,17 @@ test("four portal rings share one centre, clear each other, and preserve measure
     maxX: 76.408828,
     maxY: 76.36719
   });
-  const owlGap = numberField(owl.SPEC.geometry, ["owlGap", "safetyGap", "innerGap"]);
+  const owlGap = numberField(spec.geometry, ["owlGap", "safetyGap", "innerGap"]);
   assert.ok(Number.isFinite(owlGap) && owlGap > 0, "SPEC.geometry must declare the Owl safety gap.");
   assert.equal(owlGap, 1.64207, "The frozen V1 gap must be the measured exact-silhouette clearance, not an AABB approximation.");
   const innermost = rings.at(-1);
-  const foregroundPolygon = String(owl.SPEC.geometry.safeZones.innerPortal.points).split(/\s+/).map(pair => pair.split(",").map(Number));
+  const foregroundPolygon = String(spec.geometry.safeZones.innerPortal.points).split(/\s+/).map(pair => pair.split(",").map(Number));
   assert.equal(foregroundPolygon.every(point => pointInPolygon(point, innermost.points)), true,
     "The exact foreground containment polygon must stay inside the rendered inner ring.");
   const safeDefinition = svg.match(/<clipPath id="([^"]+-safe)">([\s\S]*?)<\/clipPath>/);
   assert.ok(safeDefinition, "The renderer must serialize a foreground containment clip path.");
   assert.match(safeDefinition[1], new RegExp(`^hex-owl-${owl.normalizeSeed("geometry-containment").slice(0, 12)}-[0-9a-f]+-safe$`));
-  assert.equal(safeDefinition[2], `<polygon points="${owl.SPEC.geometry.safeZones.innerPortal.points}"/>`,
+  assert.equal(safeDefinition[2], `<polygon points="${spec.geometry.safeZones.innerPortal.points}"/>`,
     "The renderer must serialize the frozen exact foreground containment polygon.");
   const asset = await readFile(new URL("../hex-owl-base.svg", import.meta.url), "utf8");
   const suppliedPath = asset.match(/\sd="([^"]+)"/)?.[1];
@@ -999,7 +1033,7 @@ test("four portal rings share one centre, clear each other, and preserve measure
 
 test("every added beak shares the natural 60.5116 lower alignment point", async () => {
   const owl = await renderer();
-  const beaks = categoryOptions(catalogueValue(owl), "beak");
+  const beaks = categoryOptions(catalogueValue(owl, 1), "beak");
   const naturalBottom = 60.5116;
   const original = beaks.find(option => rawOptionId(option) === "original-beak");
   assert.deepEqual(plain(original?.bounds), [49.9944, naturalBottom, 49.9944, naturalBottom]);
@@ -1034,8 +1068,8 @@ test("every added beak shares the natural 60.5116 lower alignment point", async 
 
 test("ordinary negative-space treatments stay inside their declared safe zones", async () => {
   const owl = await renderer();
-  const catalogue = catalogueValue(owl);
-  const zones = owl.SPEC.geometry.safeZones;
+  const catalogue = catalogueValue(owl, 1);
+  const zones = owl.spec(1).geometry.safeZones;
   assert.ok(zones && typeof zones === "object" && Object.keys(zones).length > 0, "Safe zones must be versioned geometry data.");
   assert.equal(zones.eyeFields.preserveNativePupils, true);
   assert.equal(zones.eyeFields.regions.length, 2);
@@ -1063,7 +1097,7 @@ test("ordinary negative-space treatments stay inside their declared safe zones",
 
 test("every ordinary catalogue option can be forced, validated, and rendered without changing other API contracts", async () => {
   const owl = await renderer();
-  const catalogue = catalogueValue(owl);
+  const catalogue = catalogueValue(owl, 1);
   const traitCategory = {
     palette: "face",
     ringMode: "rings",
@@ -1089,7 +1123,7 @@ test("every ordinary catalogue option can be forced, validated, and rendered wit
       const resolved = owl.resolveTraits(seed, { rarity, overrides: { [category]: overrideId } }, 1);
       const selected = traitRoot(resolved)?.[category] ?? traitChoice(resolved, traitName);
       assert.equal(optionId(selected), id, `${category}.${id} was unexpectedly repaired away.`);
-      const report = owl.validateTraits(resolved);
+      const report = owl.validateTraits(resolved, 1);
       assert.equal(validationIsValid(report), true, `${category}.${id}: ${JSON.stringify(validationIssues(report))}`);
       const svg = renderResolved(owl, seed, resolved);
       assert.equal(svg, renderResolved(owl, seed, resolved), `${category}.${id} must serialize byte-identically.`);
@@ -1097,6 +1131,485 @@ test("every ordinary catalogue option can be forced, validated, and rendered wit
     }
   }
   assert.ok(forced >= 35, "The public catalogue should expose a substantial stable-ID trait roster.");
+});
+
+test("V2 exposes the exact rarity and trait tables from the handoff", async () => {
+  const owl = await renderer();
+  const spec = owl.spec(2);
+  const catalogue = catalogueValue(owl, 2);
+  const rows = (category, fields) => categoryOptions(catalogue, category).map(option => [
+    rawOptionId(option),
+    optionLabel(option),
+    ...fields.map(field => field === "hero" || field === "focal" || field === "multicolor"
+      ? Boolean(option[field])
+      : option[field])
+  ]);
+
+  assert.deepEqual(plain(spec.rarities.map(rarity => [
+    rarity.id, rarity.name, rarity.weight, rarity.budget, rarity.focalCap,
+    rarity.level, rarity.supportCap, rarity.treatmentCap
+  ])), [
+    ["common", "Common", 50, 3, 0, 0, 3, 3],
+    ["rare", "Rare", 30, 7, 1, 1, 2, 3],
+    ["legendary", "Legendary", 20, 9, 1, 2, 1, 3]
+  ]);
+  assert.deepEqual(plain(spec.rarityWeights), { common: 50, rare: 30, legendary: 20 });
+  assert.deepEqual(plain(spec.budgets), { common: 3, rare: 7, legendary: 9 });
+
+  assert.deepEqual(plain(rows("rings", ["weight", "cost", "minRarity", "hero", "multicolor"])), [
+    ["single", "Coordinated Single Colour", 100, 0, "common", false, false],
+    ["festival-prism", "Palette-linked Festival Prism", 0, 2, "legendary", false, true]
+  ]);
+  assert.deepEqual(plain(rows("ringStyle", ["weight", "cost", "minRarity", "widthFactor", "dash", "linecap"])), [
+    ["solid", "Solid Portal", 28, 0, "common", 1, "", "round"],
+    ["fine", "Fine Lines", 16, 1, "common", 0.56, "", "round"],
+    ["beat-dash", "Beat Dash", 22, 1, "common", 0.72, "2.20 1.10", "round"],
+    ["dotted", "Dotted Signal", 14, 1, "common", 0.72, "0.01 2.10", "round"],
+    ["double-line", "Double Line", 10, 2, "common", 0.96, "", "round"],
+    ["comet-dash", "Comet Dash", 10, 1, "common", 0.72, "3.60 1.20 0.70 1.20", "round"]
+  ]);
+  assert.deepEqual(plain(categoryOptions(catalogue, "ringStyle")
+    .find(option => rawOptionId(option) === "double-line")?.excludes), ["festival-prism"]);
+  assert.deepEqual(plain(rows("ringDirection", ["weight", "cost", "minRarity"])), [
+    ["clockwise", "Clockwise", 50, 0, "common"],
+    ["counter-clockwise", "Counter-clockwise", 50, 0, "common"]
+  ]);
+
+  assert.deepEqual(plain(rows("brow", ["weight", "cost", "minRarity", "focal", "hero"])), [
+    ["original-crown", "Original Crown", 1, 0, "common", false, false],
+    ["crown-gem", "Top-ridge Gem", 20, 1, "common", false, false],
+    ["brow-echo", "Brow Echo", 18, 1, "common", false, false],
+    ["brow-tint", "Festival Brow Tint", 16, 1, "common", false, false],
+    ["moonstone-crest", "Moonstone Crest", 14, 2, "common", false, false],
+    ["twin-gems", "Twin Gems", 14, 1, "common", false, false],
+    ["dusk-fade", "Dusk Fade Crown", 14, 1, "common", false, false],
+    ["third-eye", "Third Eye", 12, 1, "rare", false, false],
+    ["three-band-prism", "Three-band Prism", 0, 2, "rare", true, true]
+  ]);
+  assert.deepEqual(plain(rows("eyes", ["weight", "cost", "minRarity", "focal", "hero"])), [
+    ["original-eyes", "Original Shambhala", 26, 0, "common", false, false],
+    ["festival-eye-wells", "Festival Eye Wells", 22, 1, "common", false, false],
+    ["electric-eye-wells", "Electric Eye Wells", 20, 1, "common", false, false],
+    ["midnight-eye-wells", "Midnight Eye Wells", 18, 1, "common", false, false],
+    ["sleepy-lids", "Sleepy Lids", 14, 1, "common", false, false],
+    ["heterochroma-wells", "Heterochroma Wells", 8, 2, "rare", false, false],
+    ["pupil-lasers", "Pupil Lasers", 0, 3, "rare", true, true],
+    ["radiant-gaze", "Radiant Gaze", 0, 3, "rare", true, true]
+  ]);
+  assert.deepEqual(plain(rows("beak", ["weight", "cost", "minRarity"])), [
+    ["original-beak", "Original Mark", 1, 0, "common"],
+    ["amber-shard", "Amber Shard", 28, 1, "common"],
+    ["moonstone-facet", "Moonstone Facet", 24, 1, "common"],
+    ["bold-chevron", "Bold Chevron", 30, 1, "common"],
+    ["ember-tip", "Ember Tip", 18, 1, "common"]
+  ]);
+  assert.deepEqual(plain(rows("marking", ["weight", "cost", "minRarity"])), [
+    ["clean-face", "Clean Face", 1, 0, "common"],
+    ["moon-freckles", "Moon Freckles", 22, 1, "common"],
+    ["ember-comet", "Ember Comet", 20, 1, "common"],
+    ["diamond-dust", "Diamond Dust", 20, 1, "common"],
+    ["festival-stripes", "Festival Stripes", 16, 1, "common"],
+    ["hex-studs", "Hex Studs", 12, 1, "common"],
+    ["cheek-crescents", "Cheek Crescents", 10, 1, "common"]
+  ]);
+  assert.deepEqual(plain(rows("accessory", ["weight", "cost", "minRarity"])), [
+    ["no-accessory", "None", 1, 0, "common"]
+  ]);
+  assert.deepEqual(plain(rows("aura", ["weight", "cost", "minRarity", "focal", "hero"])), [
+    ["quiet-aura", "Quiet", 1, 0, "common", false, false],
+    ["radial-glow", "Portal Halo", 24, 2, "rare", true, true],
+    ["portal-rays", "Restrained Portal Rays", 22, 2, "rare", true, true],
+    ["sound-waves", "Sound Waves", 20, 2, "rare", true, true],
+    ["stardust", "Stardust", 18, 2, "rare", true, true],
+    ["shooting-star", "Shooting Star", 16, 2, "rare", true, true]
+  ]);
+  assert.deepEqual(plain(categoryOptions(catalogue, "aura")
+    .find(option => rawOptionId(option) === "sound-waves")?.bounds), [1, 6, 99, 94],
+    "Sound Waves metadata must contain the outer radius-48.5 arcs and stroke.");
+
+  assert.deepEqual(plain(spec.geometry.safeZones.eyeFields.bounds), [30, 49.8, 70, 58.5]);
+  assert.deepEqual(plain(spec.geometry.safeZones.eyeFields.regions), [[30, 49.8, 41, 58.5], [59, 49.8, 70, 58.5]]);
+  assert.deepEqual(plain(spec.geometry.safeZones.cheeks.bounds), [36.2, 62.2, 63.8, 69]);
+});
+
+test("Blacklight remains catalogue-only and Vortex Echo remains parked in V2", async () => {
+  const owl = await renderer();
+  const catalogue = catalogueValue(owl, 2);
+  const palettes = categoryOptions(catalogue, "face");
+  const blacklight = palettes.find(option => rawOptionId(option) === "blacklight");
+  assert.ok(blacklight);
+  assert.equal(blacklight.name, "Blacklight");
+  assert.equal(blacklight.campOnly, true);
+  assert.equal(blacklight.enabled, false);
+  assert.equal(blacklight.weight, 0);
+  assert.deepEqual(plain(blacklight.tokens), {
+    face: "#29e07d",
+    shadow: "#0a5c33",
+    highlight: "#eafff2",
+    focal: "#c8ff3d",
+    ring: "#35f58c",
+    beam: "#52ffa1"
+  });
+  assert.deepEqual(plain(palettes.filter(option => option.enabled !== false && !option.campOnly).map(rawOptionId)),
+    plain(categoryOptions(catalogueValue(owl, 1), "face").map(rawOptionId)),
+    "V2 must preserve every live V1 public palette while keeping Blacklight disabled.");
+  assert.doesNotMatch(JSON.stringify(plain(catalogue)), /vortex-echo|Vortex Echo/i);
+
+  const forced = owl.resolveTraits("blacklight-cannot-be-forced", {
+    rarity: "common",
+    overrides: { palette: "blacklight" }
+  }, 2);
+  assert.notEqual(forced.palette.id, "blacklight");
+  assert.ok(forced.repairs.some(message => /camp provenance/i.test(message)));
+  for (let index = 0; index < 4000; index += 1) {
+    const resolved = owl.selectTraits(`v2-public-palette-${index}`, 2);
+    assert.notEqual(resolved.palette.id, "blacklight");
+    assert.doesNotMatch(owl.renderWithTraits(resolved.seed, resolved, 2), /vortex/i);
+  }
+});
+
+test("V2 eye wells use exact ellipses, approved tokens, lids, rims, and radiant gradients", async () => {
+  const owl = await renderer();
+  const renderEyes = (id, rarity = "common") => {
+    const overrides = { palette: "amp-daylight", eyes: id };
+    if (rarity === "rare" && id === "heterochroma-wells") overrides.aura = "radial-glow";
+    const seed = `v2-eye-art-${id}`;
+    const resolved = owl.resolveTraits(seed, { rarity, overrides }, 2);
+    assert.equal(resolved.eyes.id, id);
+    assert.equal(validationIsValid(owl.validateTraits(resolved, 2)), true);
+    const svg = owl.renderWithTraits(seed, resolved, 2);
+    const start = svg.indexOf(`data-layer="eyes"`);
+    const end = svg.indexOf(`data-layer="owl-base"`);
+    assert.ok(start >= 0 && end > start);
+    return { resolved, svg, layer: svg.slice(start, end) };
+  };
+  const baseWell = (cx, fill) => `<ellipse cx="${cx}" cy="54.15" rx="5.5" ry="4.35" fill="${fill}"/>`;
+
+  const festival = renderEyes("festival-eye-wells");
+  assert.ok(festival.layer.includes(baseWell("35.5", festival.resolved.palette.tokens.focal)));
+  assert.ok(festival.layer.includes(baseWell("64.5", festival.resolved.palette.tokens.focal)));
+
+  const electric = renderEyes("electric-eye-wells");
+  assert.ok(electric.layer.includes(baseWell("35.5", electric.resolved.palette.tokens.highlight)));
+  assert.ok(electric.layer.includes(baseWell("64.5", electric.resolved.palette.tokens.highlight)));
+  assert.equal(electric.layer.includes(electric.resolved.palette.tokens.beam), false,
+    "Electric wells must use highlight, never the same-hue beam token.");
+
+  const midnight = renderEyes("midnight-eye-wells");
+  assert.ok(midnight.layer.includes(baseWell("35.5", midnight.resolved.palette.tokens.shadow)));
+  assert.ok(midnight.layer.includes(baseWell("64.5", midnight.resolved.palette.tokens.shadow)));
+  assert.match(midnight.layer, new RegExp(`<g fill="none" stroke="${midnight.resolved.palette.tokens.highlight}" stroke-width="\\.5">`));
+  assert.match(midnight.layer, /<ellipse cx="35\.5" cy="54\.15" rx="5\.1" ry="3\.95"\/><ellipse cx="64\.5" cy="54\.15" rx="5\.1" ry="3\.95"\/>/);
+
+  const sleepy = renderEyes("sleepy-lids");
+  assert.ok(sleepy.layer.includes(baseWell("35.5", sleepy.resolved.palette.tokens.focal)));
+  assert.ok(sleepy.layer.includes(baseWell("64.5", sleepy.resolved.palette.tokens.focal)));
+  assert.ok(sleepy.layer.includes('<path d="M30.27 52.8 A5.5 4.35 0 0 1 40.73 52.8 Z M59.27 52.8 A5.5 4.35 0 0 1 69.73 52.8 Z" ' +
+    `fill="${sleepy.resolved.palette.tokens.shadow}"/>`));
+
+  const heterochroma = renderEyes("heterochroma-wells", "rare");
+  assert.ok(heterochroma.layer.includes(baseWell("35.5", heterochroma.resolved.palette.tokens.focal)));
+  assert.ok(heterochroma.layer.includes(baseWell("64.5", heterochroma.resolved.palette.tokens.highlight)));
+
+  const radiant = renderEyes("radiant-gaze", "rare");
+  const gradientIds = [...radiant.svg.matchAll(/<radialGradient id="([^"]+-gaze-(?:left|right))">([\s\S]*?)<\/radialGradient>/g)];
+  assert.equal(gradientIds.length, 2);
+  for (const [, id, stops] of gradientIds) {
+    assert.equal(stops,
+      `<stop offset="0" stop-color="${radiant.resolved.palette.tokens.highlight}"/>` +
+      `<stop offset=".45" stop-color="${radiant.resolved.palette.tokens.focal}"/>` +
+      `<stop offset="1" stop-color="${radiant.resolved.palette.tokens.focal}" stop-opacity=".12"/>`);
+    assert.ok(radiant.layer.includes(`fill="url(#${id})"`));
+  }
+
+  for (const sample of [festival, electric, midnight, sleepy, heterochroma, radiant]) {
+    assert.doesNotMatch(sample.layer, /<rect\b/, "V2 wells must never flood the rectangular V1 eye field.");
+    assert.doesNotMatch(sample.layer, /<circle\b[^>]*cx="(?:34\.8890|65\.1840)"/,
+      "The supplied Owl's native pupils remain the only pupil anatomy.");
+  }
+});
+
+test("V2 serializes the exact approved ring, brow, beak, marking, and aura art", async () => {
+  const owl = await renderer();
+  const renderTrait = (category, id, rarity = "common", companion = {}) => {
+    const overrides = { palette: "amp-daylight", ...companion, [category]: id };
+    if (rarity !== "common" && !Object.values(overrides).some(value => [
+      "three-band-prism", "pupil-lasers", "radiant-gaze", "radial-glow", "portal-rays",
+      "sound-waves", "stardust", "shooting-star"
+    ].includes(value))) overrides.aura = "radial-glow";
+    const seed = `v2-art-${category}-${id}`;
+    const resolved = owl.resolveTraits(seed, { rarity, overrides }, 2);
+    assert.equal(resolved.selectionIds[category], id, `${category}.${id} must stay forced.`);
+    assert.equal(validationIsValid(owl.validateTraits(resolved, 2)), true);
+    return { resolved, svg: owl.renderWithTraits(seed, resolved, 2) };
+  };
+  const between = (svg, startLayer, endLayer) => {
+    const start = svg.indexOf(`data-layer="${startLayer}"`);
+    const end = svg.indexOf(`data-layer="${endLayer}"`);
+    assert.ok(start >= 0 && end > start, `${startLayer} must precede ${endLayer}.`);
+    return svg.slice(start, end);
+  };
+
+  const cometDash = renderTrait("ringStyle", "comet-dash");
+  const cometRings = between(cometDash.svg, "portal-rings", "owl-backdrop");
+  assert.equal((cometRings.match(/stroke-dasharray="3\.60 1\.20 0\.70 1\.20"/g) || []).length, 4);
+
+  const browEcho = renderTrait("brow", "brow-echo");
+  const echoLayer = between(browEcho.svg, "brows", "facial-details");
+  assert.match(echoLayer, new RegExp(`brow-lower" fill="${browEcho.resolved.palette.tokens.shadow}" opacity="1"`));
+  assert.match(echoLayer, new RegExp(`brow-upper" fill="${browEcho.resolved.palette.tokens.highlight}" opacity="\\.94"`));
+
+  const paleCrest = renderTrait("brow", "moonstone-crest", "common", { palette: "gold-daylight" });
+  const crestLayer = between(paleCrest.svg, "brows", "facial-details");
+  assert.match(crestLayer, new RegExp(`brow-upper" fill="${paleCrest.resolved.palette.tokens.shadow}"`));
+  assert.match(crestLayer, /brow-gem" fill="#fefdf0"/);
+
+  const twinGems = renderTrait("brow", "twin-gems");
+  assert.ok(between(twinGems.svg, "brows", "facial-details").includes(
+    `<path d="M31 42.9 L32.15 44.05 L31 45.2 L29.85 44.05 Z"/><path d="M69 42.9 L70.15 44.05 L69 45.2 L67.85 44.05 Z"/>`));
+  const duskFade = renderTrait("brow", "dusk-fade");
+  const duskLayer = between(duskFade.svg, "brows", "facial-details");
+  assert.match(duskLayer, new RegExp(`brow-upper" fill="${duskFade.resolved.palette.tokens.highlight}" opacity="1"`));
+  assert.match(duskLayer, new RegExp(`brow-lower" fill="${duskFade.resolved.palette.tokens.shadow}" opacity="\\.85"`));
+  const thirdEye = renderTrait("brow", "third-eye", "rare");
+  const thirdEyeLayer = between(thirdEye.svg, "brows", "facial-details");
+  assert.match(thirdEyeLayer, /<polygon points="50\.00,44\.70 48\.35,45\.65 48\.35,47\.55 50\.00,48\.50 51\.65,47\.55 51\.65,45\.65" fill="none"/);
+  assert.match(thirdEyeLayer, /<circle cx="50" cy="46\.6" r="\.6"/);
+
+  const amber = renderTrait("beak", "amber-shard");
+  assert.match(between(amber.svg, "beak", "accessories"), /M48\.8 60\.55L50 64\.75l1\.2-4\.2L50 59\.85z" fill="#ffce58"/);
+  const moonstone = renderTrait("beak", "moonstone-facet");
+  const moonstoneLayer = between(moonstone.svg, "beak", "accessories");
+  assert.ok(moonstoneLayer.includes('<path d="M48.6 61.1 L50 60.2 L51.4 61.1 L50 64.75 z"'));
+  assert.ok(moonstoneLayer.includes('<path d="M48.6 61.1 L51.4 61.1 M50 60.2 v.9"'));
+  const chevron = renderTrait("beak", "bold-chevron");
+  assert.ok(between(chevron.svg, "beak", "accessories").includes(
+    '<path d="M48.7 60.5 L50 61.7 L51.3 60.5 M48.95 62.4 L50 64.5 L51.05 62.4" fill="none"'));
+  const emberTip = renderTrait("beak", "ember-tip");
+  const emberTipLayer = between(emberTip.svg, "beak", "accessories");
+  assert.match(emberTipLayer, /<path d="M50 60\.1 v1\.6"[^>]*stroke-width="\.5"/);
+  assert.match(emberTipLayer, /<circle cx="50" cy="63\.35" r="1\.35"[^>]*opacity="\.28"/);
+  assert.match(emberTipLayer, /<circle cx="50" cy="63\.35" r="\.85"/);
+
+  const freckles = renderTrait("marking", "moon-freckles");
+  assert.match(between(freckles.svg, "facial-details", "beak"), /r="\.78"[\s\S]*r="\.66"[\s\S]*r="\.54"/);
+  const emberComet = renderTrait("marking", "ember-comet");
+  assert.match(between(emberComet.svg, "facial-details", "beak"), /cx="38\.6" cy="63\.7" r="\.8"[\s\S]*cx="61\.4" cy="63\.7" r="\.8"/);
+  const stripes = renderTrait("marking", "festival-stripes");
+  const stripesLayer = between(stripes.svg, "facial-details", "beak");
+  assert.match(stripesLayer, /M36\.6 62\.9 l4\.8 \.9 M63\.4 62\.9 l-4\.8 \.9/);
+  assert.match(stripesLayer, /M36\.9 64\.7 l4\.6 \.85 M63\.1 64\.7 l-4\.6 \.85/);
+  assert.match(stripesLayer, /M37\.2 66\.5 l4\.4 \.8 M62\.8 66\.5 l-4\.4 \.8/);
+  const studs = renderTrait("marking", "hex-studs");
+  const studLayer = between(studs.svg, "facial-details", "beak");
+  assert.match(studLayer, /39\.80,64\.15 38\.89,64\.67 38\.89,65\.73 39\.80,66\.25 40\.71,65\.73 40\.71,64\.67/);
+  assert.match(studLayer, /60\.20,64\.15 59\.29,64\.67 59\.29,65\.73 60\.20,66\.25 61\.11,65\.73 61\.11,64\.67/);
+  const crescents = renderTrait("marking", "cheek-crescents");
+  assert.match(between(crescents.svg, "facial-details", "beak"), /M37\.4 63\.8 q2\.4 2\.0 4\.8 0 M57\.8 63\.8 q2\.4 2\.0 4\.8 0/);
+
+  const halo = renderTrait("aura", "radial-glow", "rare");
+  assert.match(halo.svg, /<stop offset="0"[^>]*stop-opacity="0"\/><stop offset="\.52"[^>]*stop-opacity="0"\/><stop offset="\.70"[^>]*stop-opacity="\.50"\/><stop offset="\.85"[^>]*stop-opacity="\.62"\/><stop offset="1"[^>]*stop-opacity="0"\/>/);
+  assert.match(between(halo.svg, "aura", "laser-outer"), /<circle cx="50" cy="50" r="47" fill="url\(#[^"]+-glow\)"\/>/);
+  const waves = renderTrait("aura", "sound-waves", "rare");
+  const waveLayer = between(waves.svg, "aura", "laser-outer");
+  assert.match(waveLayer, /M88\.51 67\.98 A42\.5 42\.5 0 0 0 88\.51 32\.02 M11\.49 67\.98 A42\.5 42\.5 0 0 1 11\.49 32\.02/);
+  assert.match(waveLayer, /stroke-width="1"[^>]*opacity="1"[\s\S]*stroke-width="0\.8"[^>]*opacity="0\.65"[\s\S]*stroke-width="0\.6"[^>]*opacity="0\.38"/);
+  const shootingStar = renderTrait("aura", "shooting-star", "rare");
+  const starLayer = between(shootingStar.svg, "aura", "laser-outer");
+  assert.match(starLayer, /<path d="M68 24 L87 9"[^>]*stroke-width="3" opacity="\.2"/);
+  assert.match(starLayer, /<path d="M68 24 L87 9"[^>]*stroke-width="1\.1"/);
+  assert.match(starLayer, /<circle cx="87" cy="9" r="2\.6"[^>]*opacity="\.3"/);
+  assert.match(starLayer, /M13 76l\.95 2\.2 2\.2\.95-2\.2\.95L13 83l-.95-2\.2-2\.2-.95 2\.2-.95z/);
+});
+
+test("V2 ordinary rarity rolls follow 50/30/20 over ten thousand seeds", async () => {
+  const owl = await renderer();
+  const expected = new Map([["common", 0.50], ["rare", 0.30], ["legendary", 0.20]]);
+  const counts = Object.fromEntries([...expected.keys()].map(id => [id, 0]));
+  const samples = 10000;
+  for (let index = 0; index < samples; index += 1) {
+    const resolved = owl.selectTraits(`v2-rarity-distribution-${index}`, 2);
+    assert.ok(Object.hasOwn(counts, resolved.rarity.id), `Unexpected V2 rarity ${resolved.rarity.id}.`);
+    assert.notEqual(resolved.palette.id, "blacklight");
+    counts[resolved.rarity.id] += 1;
+  }
+  for (const [id, target] of expected) {
+    const actual = counts[id] / samples;
+    assert.ok(Math.abs(actual - target) <= 0.02,
+      `${id} was ${(actual * 100).toFixed(2)}%, expected ${(target * 100).toFixed(0)}% ±2%.`);
+  }
+});
+
+test("V2 enforces exact hero grammar plus support and treatment caps", async () => {
+  const owl = await renderer();
+  const rows = new Map(owl.spec(2).rarities.map(row => [row.id, row]));
+  const supportKeys = ["ringStyle", "brow", "eyes", "beak", "marking"];
+  for (const rarity of ["common", "rare", "legendary"]) {
+    const row = rows.get(rarity);
+    for (let index = 0; index < 1500; index += 1) {
+      const seed = `v2-composition-${rarity}-${index}`;
+      const resolved = owl.resolveTraits(seed, { rarity }, 2);
+      const chosen = [resolved.ringMode, resolved.ringStyle, resolved.direction, resolved.brow,
+        resolved.eyes, resolved.beak, resolved.marking, resolved.accessory, resolved.aura];
+      const heroes = chosen.filter(option => option.hero === true).length;
+      const supports = supportKeys.filter(category => {
+        const option = resolved[category];
+        return Number(option.cost || 0) > 0 && option.hero !== true;
+      }).length;
+      const treatments = Number(resolved.ringMode.cost || 0) > 0 ? 1 + heroes + supports : heroes + supports;
+
+      assert.equal(resolved.rarity.id, rarity);
+      assert.equal(heroes, rarity === "common" ? 0 : 1, `${rarity} must have the exact hero count.`);
+      assert.equal(resolved.heroCount, heroes);
+      assert.equal(resolved.supportCount, supports);
+      assert.equal(resolved.treatmentCount, treatments);
+      assert.ok(resolved.cost <= row.budget, `${rarity} exceeded budget ${row.budget}.`);
+      assert.ok(supports <= row.supportCap, `${rarity} exceeded support cap ${row.supportCap}.`);
+      assert.ok(treatments <= row.treatmentCap, `${rarity} exceeded treatment cap ${row.treatmentCap}.`);
+      assert.equal(resolved.ringMode.id === "festival-prism", rarity === "legendary");
+      assert.equal(validationIsValid(owl.validateTraits(resolved, 2)), true,
+        `${rarity}: ${JSON.stringify(validationIssues(owl.validateTraits(resolved, 2)))}`);
+    }
+  }
+});
+
+test("V2 hero and aura selections track their exact configured weights", async () => {
+  const owl = await renderer();
+  const expectedHeroes = new Map([
+    ["three-band-prism", 0.35],
+    ["pupil-lasers", 0.15],
+    ["radiant-gaze", 0.15],
+    ["aura", 0.35]
+  ]);
+  const expectedAuras = new Map([
+    ["radial-glow", 0.24],
+    ["portal-rays", 0.22],
+    ["sound-waves", 0.20],
+    ["stardust", 0.18],
+    ["shooting-star", 0.16]
+  ]);
+  const samples = 12000;
+  for (const rarity of ["rare", "legendary"]) {
+    const heroes = Object.fromEntries([...expectedHeroes.keys()].map(id => [id, 0]));
+    const auras = Object.fromEntries([...expectedAuras.keys()].map(id => [id, 0]));
+    let auraTotal = 0;
+    for (let index = 0; index < samples; index += 1) {
+      const resolved = owl.resolveTraits(`v2-hero-weight-${rarity}-${index}`, { rarity }, 2);
+      let hero = "";
+      if (resolved.brow.hero) hero = resolved.brow.id;
+      if (resolved.eyes.hero) hero = resolved.eyes.id;
+      if (resolved.aura.hero) hero = "aura";
+      assert.ok(Object.hasOwn(heroes, hero), `${rarity} produced unknown hero ${hero}.`);
+      heroes[hero] += 1;
+      if (hero === "aura") {
+        assert.ok(Object.hasOwn(auras, resolved.aura.id), `Unknown aura hero ${resolved.aura.id}.`);
+        auras[resolved.aura.id] += 1;
+        auraTotal += 1;
+      }
+    }
+    for (const [id, target] of expectedHeroes) {
+      const actual = heroes[id] / samples;
+      assert.ok(Math.abs(actual - target) <= 0.03,
+        `${rarity}.${id} was ${(actual * 100).toFixed(2)}%, expected ${(target * 100).toFixed(0)}% ±3%.`);
+    }
+    for (const [id, target] of expectedAuras) {
+      const actual = auras[id] / auraTotal;
+      assert.ok(Math.abs(actual - target) <= 0.04,
+        `${rarity}.${id} aura share was ${(actual * 100).toFixed(2)}%, expected ${(target * 100).toFixed(0)}% ±4%.`);
+    }
+  }
+});
+
+test("V2 reaches all 24 deterministic prism permutations with coherent brow and ring colours", async () => {
+  const owl = await renderer();
+  const second = await renderer();
+  const permute = values => values.length === 1
+    ? [values]
+    : values.flatMap((value, index) => permute(values.filter((_, at) => at !== index))
+      .map(tail => [value, ...tail]));
+  const permutations = permute(["highlight", "beam", "focal", "ring"]);
+  assert.equal(permutations.length, 24);
+  const seen = new Set();
+  const browParts = ["upper", "lower", "middle", "gem"];
+
+  for (let index = 0; index < 12000 && seen.size < 24; index += 1) {
+    const seed = `v2-prism-permutation-${index}`;
+    const options = {
+      rarity: "legendary",
+      overrides: { palette: "amp-daylight", brow: "three-band-prism", ringStyle: "solid" }
+    };
+    const resolved = owl.resolveTraits(seed, options, 2);
+    const repeated = second.resolveTraits(seed, options, 2);
+    assert.equal(resolved.ringMode.id, "festival-prism");
+    assert.equal(resolved.brow.id, "three-band-prism");
+    assert.deepEqual(plain(resolved.prismOrder), permutations[resolved.prismPermutation]);
+    assert.deepEqual(plain(repeated.prismOrder), plain(resolved.prismOrder));
+    assert.equal(repeated.prismPermutation, resolved.prismPermutation);
+    const colours = resolved.prismOrder.map(token => resolved.palette.tokens[token]);
+    assert.deepEqual(plain(resolved.rings.colors), plain(colours));
+
+    if (seen.has(resolved.prismPermutation)) continue;
+    seen.add(resolved.prismPermutation);
+    const svg = owl.renderWithTraits(seed, resolved, 2);
+    assert.match(svg, new RegExp(`data-prism-permutation="${resolved.prismPermutation}"`));
+    const ringLayer = svg.slice(svg.indexOf('data-layer="portal-rings"'), svg.indexOf('data-layer="owl-backdrop"'));
+    const ringColours = [...ringLayer.matchAll(/<polygon data-ring="[^"]+"[^>]* stroke="([^"]+)"/g)].map(match => match[1]);
+    assert.deepEqual(ringColours, plain(colours));
+    const browLayer = svg.slice(svg.indexOf('data-layer="brows"'), svg.indexOf('data-layer="facial-details"'));
+    browParts.forEach((part, at) => {
+      assert.match(browLayer, new RegExp(`brow-${part}" fill="${colours[at]}"`),
+        `Permutation ${resolved.prismPermutation} must map ${resolved.prismOrder[at]} coherently to brow-${part}.`);
+    });
+    assert.equal(svg, second.renderWithTraits(seed, repeated, 2));
+  }
+  assert.deepEqual([...seen].sort((a, b) => a - b), Array.from({ length: 24 }, (_, index) => index));
+});
+
+test("every enabled V2 catalogue option can be forced, validated, and rendered deterministically", async () => {
+  const owl = await renderer();
+  const catalogue = catalogueValue(owl, 2);
+  const categories = ["palette", "ringMode", "ringStyle", "direction", "brow", "eyes", "beak", "marking", "accessory", "aura"];
+  let forced = 0;
+  let expected = 0;
+  for (const category of categories) {
+    for (const option of categoryOptions(catalogue, category)) {
+      if (option.enabled === false || option.campOnly === true) continue;
+      expected += 1;
+      const id = rawOptionId(option);
+      const minimum = rawOptionId(option.minRarity);
+      const rarity = minimum === "legendary" ? "legendary" : (minimum === "rare" || option.hero === true ? "rare" : "common");
+      const overrides = { [category]: id };
+      if (rarity !== "common" && option.hero !== true) overrides.aura = "radial-glow";
+      const seed = `v2-force-${category}-${id}`;
+      const resolved = owl.resolveTraits(seed, { rarity, overrides }, 2);
+      assert.equal(resolved.selectionIds[category], id, `${category}.${id} was repaired away.`);
+      const report = owl.validateTraits(resolved, 2);
+      assert.equal(validationIsValid(report), true,
+        `${category}.${id}: ${JSON.stringify(validationIssues(report))}`);
+      const first = owl.renderWithTraits(seed, resolved, 2);
+      const second = owl.renderWithTraits(seed, resolved, 2);
+      assert.match(first, /^<svg\b[^>]*data-hex-owl-version="2"/);
+      assert.equal(first, second, `${category}.${id} must serialize byte-identically.`);
+      forced += 1;
+    }
+  }
+  assert.equal(forced, expected);
+  assert.ok(forced >= 80, `Expected the complete V2 public catalogue, forced only ${forced} options.`);
+});
+
+test("same-seed V1 and V2 SVG definition IDs cannot collide", async () => {
+  const owl = await renderer();
+  const seed = "cross-version-definition-isolation";
+  const v1 = owl.renderSvg(seed, 1);
+  const v2 = owl.renderSvg(seed, 2);
+  const ids = svg => [...(svg.match(/<defs>([\s\S]*?)<\/defs>/)?.[1] || "")
+    .matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+  const v1Ids = ids(v1);
+  const v2Ids = ids(v2);
+  assert.ok(v1Ids.length > 0 && v2Ids.length > 0);
+  assert.deepEqual(v1Ids.filter(id => v2Ids.includes(id)), []);
+  assert.equal(v1Ids.some(id => id.startsWith("hex-owl-v2-")), false);
+  assert.equal(v2Ids.every(id => id.startsWith("hex-owl-v2-")), true);
 });
 
 test("mountBase installs the exact shared path once, mounts all brow subpaths, and retries after failure", async () => {

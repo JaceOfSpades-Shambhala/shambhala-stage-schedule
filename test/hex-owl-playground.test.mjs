@@ -34,3 +34,25 @@ test("Hex Owl browser mounts avoid Android compositor-sensitive sprite reuse", a
   assert.match(hexadex, /HexOwl\.hydrate\?\.\(container\)/);
   assert.match(playground, /Renderer V\$\{version\} .* Release v\$\{release\}/);
 });
+
+test("Hex Owl playground follows the current renderer without Uncommon or V1 assumptions", async () => {
+  const playground = await readFile(playgroundUrl, "utf8");
+
+  assert.doesNotMatch(playground, /uncommon/i);
+  assert.doesNotMatch(playground, /\bV1\b|hex-owl-playground-v1/i);
+  assert.match(playground, /const spec = api\.SPEC/);
+  assert.match(playground, /const version = Number\(spec\.version \?\? api\.VERSION \?\? 1\)/);
+  assert.match(playground, /api\.resolveTraits\(seed, request, version\)/);
+  assert.match(playground, /api\.validateTraits\(resolved, version\)/);
+  assert.match(playground, /api\.traitNames\(elements\.seed\.value, version\)/);
+});
+
+test("Hex Owl playground synchronizes the exact same SVG through the 40 px review preview", async () => {
+  const playground = await readFile(playgroundUrl, "utf8");
+
+  assert.match(playground, /\.art-40\s*\{[^}]*width:\s*40px;[^}]*height:\s*40px;/);
+  assert.match(playground, /<div id="preview40" class="art-frame art-40"><\/div><div class="size-label">40 px · minimum mark<\/div>/);
+  assert.match(playground, /const previewIds = \["preview40", "preview64", "preview128", "preview320", "preview512"\];/);
+  assert.match(playground, /function setPreviewSvg\(svg\)\s*\{\s*for \(const id of previewIds\) setSvg\(byId\(id\), svg\);\s*\}/);
+  assert.match(playground, /setPreviewSvg\(svg\)/);
+});

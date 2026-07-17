@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#090a12">
-  <title>Hex Owl V1 Playground</title>
+  <title>Hex Owl V2 Playground</title>
   <style>
     :root {
       color-scheme: dark;
@@ -131,6 +131,7 @@
     .size-label { color: var(--muted); font-size: .64rem; font-weight: 850; letter-spacing: .07em; text-align: center; text-transform: uppercase; }
     .scale-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; align-items: start; }
     .scale-card { display: grid; gap: .38rem; justify-items: center; min-width: 0; padding: .65rem; border: 1px solid var(--line); border-radius: .75rem; background: rgba(255, 255, 255, .025); }
+    .art-40 { width: 40px; height: 40px; }
     .art-64 { width: 64px; height: 64px; }
     .art-128 { width: 128px; height: 128px; max-width: 100%; }
     .scale-card.wide { grid-column: 1 / -1; }
@@ -260,7 +261,8 @@
               <div class="size-label">512 px · detail and edge clearance</div>
             </div>
             <div class="scale-grid">
-              <div class="scale-card"><div id="preview64" class="art-frame art-64"></div><div class="size-label">64 px · minimum</div></div>
+              <div class="scale-card"><div id="preview40" class="art-frame art-40"></div><div class="size-label">40 px · minimum mark</div></div>
+              <div class="scale-card"><div id="preview64" class="art-frame art-64"></div><div class="size-label">64 px · compact</div></div>
               <div class="scale-card"><div id="preview128" class="art-frame art-128"></div><div class="size-label">128 px · card</div></div>
               <div class="scale-card wide"><div id="preview320" class="art-frame art-320"></div><div class="size-label">320 px · profile</div></div>
             </div>
@@ -308,7 +310,7 @@
     <footer>Standalone, framework-free, and offline-compatible. The production Hexlace interface remains intentionally minimal.</footer>
   </main>
 
-  <script src="hex-owl.js?v=59"></script>
+  <script src="hex-owl.js?v=60"></script>
   <script>
     (() => {
       "use strict";
@@ -330,7 +332,7 @@
         apiStatus: byId("apiStatus"),
         versionBadge: byId("versionBadge")
       };
-      const previewIds = ["preview64", "preview128", "preview320", "preview512"];
+      const previewIds = ["preview40", "preview64", "preview128", "preview320", "preview512"];
       const state = { resolved: null, request: null, renderFrame: 0, copyTimer: 0 };
 
       function safeCall(callback, fallback) {
@@ -426,7 +428,7 @@
         if (!categories.length) {
           const empty = document.createElement("p");
           empty.className = "empty";
-          empty.textContent = "This cached renderer does not expose the frozen V1 catalogue yet. Seeded automatic previews still work; refresh after the new renderer is available to force and lock traits.";
+          empty.textContent = "This cached renderer does not expose the current catalogue yet. Seeded automatic previews still work; refresh after the new renderer is available to force and lock traits.";
           elements.traitControls.append(empty);
           return;
         }
@@ -620,7 +622,7 @@
         if (!validation.available) {
           const unavailable = document.createElement("p");
           unavailable.className = "message";
-          unavailable.textContent = "The cached renderer does not expose frozen V1 validation yet. Automatic seed rendering is available, but compatibility warnings and repairs require the current renderer.";
+          unavailable.textContent = "The cached renderer does not expose current validation yet. Automatic seed rendering is available, but compatibility warnings and repairs require the current renderer.";
           elements.validation.append(unavailable);
           return;
         }
@@ -634,7 +636,7 @@
         if (!validation.issues.length && !validation.repairs.length) {
           const okay = document.createElement("p");
           okay.className = "validation-ok";
-          okay.textContent = "This combination passes the V1 budget, compatibility, and safe-zone grammar.";
+          okay.textContent = `This combination passes the V${version} budget, compatibility, and safe-zone grammar.`;
           elements.validation.append(okay);
           return;
         }
@@ -831,7 +833,7 @@
 
       function difficultPresets() {
         const highestRarity = rarities[rarities.length - 1]?.id;
-        const uncommonRarity = rarities.find(item => /uncommon/i.test(`${item.id} ${item.name}`))?.id || rarities[0]?.id;
+        const commonRarity = rarities.find(item => /common/i.test(`${item.id} ${item.name}`))?.id || rarities[0]?.id;
         return [
           {
             id: "quiet-baseline",
@@ -857,7 +859,7 @@
             rarity: findOption("rarity", /rare/i, rarities.find(item => /rare/i.test(item.id))?.id),
             overrides: cleanOverrides({
               eyes: findOption("eyes", /laser/i),
-              beak: findOption("beak", /prism|diamond|accent/i),
+              beak: findOption("beak", /facet|chevron|ember|amber/i),
               marking: findOption("marking", /ray|arc|spark|dust/i),
               aura: findOption("aura", /ray|glow|star/i)
             })
@@ -882,7 +884,7 @@
             name: "Portal clearance",
             description: "Exercises Double Line, reverse direction, and the tightest portal geometry at 64 px.",
             seed: normalizeSeed("hex-owl-preset-portal-clearance"),
-            rarity: uncommonRarity,
+            rarity: commonRarity,
             overrides: cleanOverrides({
               ringMode: findOption("ringMode", /^single\b/i),
               ringStyle: findOption("ringStyle", /^double-line\b/i),
@@ -1032,7 +1034,7 @@
         renderPresets();
         bindEvents();
         const querySeed = new URLSearchParams(window.location.search).get("owlSeed");
-        elements.seed.value = normalizeSeed(querySeed || "hex-owl-playground-v1");
+        elements.seed.value = normalizeSeed(querySeed || "hex-owl-playground-v2");
         safeCall(() => api.mountBase?.());
         renderCurrent();
         renderContactSheet();

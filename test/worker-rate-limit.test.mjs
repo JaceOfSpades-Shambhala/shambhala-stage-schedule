@@ -811,6 +811,7 @@ test("a Hex Owl is assigned once only after a named profile saves a set", async 
   assert.equal(qualified.status, 200, await qualified.clone().text());
   const qualifiedBody = await qualified.json();
   assert.match(qualifiedBody.owl.seed, /^[0-9a-f]{32}$/);
+  assert.equal(qualifiedBody.owl.version, 2);
   assert.equal(qualifiedBody.owl.number, 1);
 
   const renamed = await worker.fetch(makeRequest(`/lists/${identity.readId}`, {
