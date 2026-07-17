@@ -17,11 +17,15 @@ const TIME_PATTERN = /^(1[0-2]|[1-9]):([0-5]\d)\s(AM|PM)$/;
 function loadSchedule() {
   const context = { window: {} };
   vm.runInNewContext(fs.readFileSync("schedule-data.js", "utf8"), context);
+  const dataVersion = context.window.SCHEDULE_VERSION;
   vm.runInNewContext(fs.readFileSync("schedule-metadata.js", "utf8"), context);
   assert.ok(context.window.SCHEDULE_VERSION, "SCHEDULE_VERSION is required.");
+  assert.equal(context.window.SCHEDULE_VERSION, dataVersion, "schedule-data.js and schedule-metadata.js must use the same SCHEDULE_VERSION.");
   assert.ok(context.window.SCHEDULE_DATA, "SCHEDULE_DATA is required.");
   assert.ok(context.window.SCHEDULE_SOURCE, "SCHEDULE_SOURCE is required.");
   assert.ok(context.window.SCHEDULE_FINAL_END_TIMES, "SCHEDULE_FINAL_END_TIMES is required.");
+  assert.ok(Array.isArray(context.window.SCHEDULE_CANCELLATIONS), "SCHEDULE_CANCELLATIONS must be an array.");
+  assert.equal(typeof context.window.ScheduleStatus?.isCancelled, "function", "ScheduleStatus.isCancelled is required.");
   return context.window;
 }
 
@@ -36,7 +40,7 @@ function parseMinutes(time) {
   return hour * 60 + minute;
 }
 
-function validateSchedule({ SCHEDULE_DATA: data, SCHEDULE_FINAL_END_TIMES: finalEndTimes, SCHEDULE_SOURCE: source }) {
+function validateSchedule({ SCHEDULE_DATA: data, SCHEDULE_FINAL_END_TIMES: finalEndTimes, SCHEDULE_SOURCE: source, SCHEDULE_CANCELLATIONS: cancellations, ScheduleStatus: status }) {
   assert.match(source.kind, /official downloadable schedule/i, "Schedule provenance must identify the source.");
   const dayKeys = Object.keys(data);
   assert.deepEqual(dayKeys, DAYS, `Schedule days must be exactly: ${DAYS.join(", ")}.`);
@@ -91,6 +95,37 @@ function validateSchedule({ SCHEDULE_DATA: data, SCHEDULE_FINAL_END_TIMES: final
   }
 
   assert.deepEqual(Array.from(data.Sunday.amp[0]), ["4:30 PM", "AFTERNOON SALOON W/ MARIN PATENAUDE"], "Sunday AMP afternoon set must stay at 4:30 PM.");
+  assert.deepEqual(
+    Array.from(data.Sunday.grove.slice(4, 8), entry => Array.from(entry)),
+    [
+      ["9:00 PM", "EVA LAZARUS"],
+      ["10:00 PM", "CIRCUS ACTS INSOMNIACS"],
+      ["10:15 PM", "DRAMA"],
+      ["11:30 PM", "TYCHO"]
+    ],
+    "Sunday Grove must preserve the Eva Lazarus, circus, DRAMA, and TYCHO sequence."
+  );
+  assert.equal(
+    data.Sunday["living-room"].some(([time, artist]) => time === "8:15 PM" && artist === "INTERMISSION DJ"),
+    false,
+    "The unnamed Sunday Living Room intermission DJ should remain omitted."
+  );
+
+  const cancellationKeys = new Set();
+  for (const record of cancellations) {
+    assert.ok(record && typeof record === "object" && !Array.isArray(record), "Each cancellation must be an object.");
+    assert.ok(DAYS.includes(record.day), `Cancellation has unknown day "${record.day}".`);
+    assert.ok(STAGES.has(record.stageId), `Cancellation has unknown stage "${record.stageId}".`);
+    parseMinutes(record.time);
+    assert.ok(typeof record.artist === "string" && record.artist.trim(), "Cancellation artist is required.");
+    assert.doesNotThrow(() => new URL(record.source), `Cancellation source must be a valid URL for ${record.artist}.`);
+    const key = [record.day, record.stageId, record.time, record.artist].join("|");
+    assert.ok(!cancellationKeys.has(key), `Duplicate cancellation record: ${key}.`);
+    cancellationKeys.add(key);
+    const matches = data[record.day]?.[record.stageId]?.filter(([time, artist]) => time === record.time && artist === record.artist) || [];
+    assert.equal(matches.length, 1, `Cancellation must match exactly one schedule row: ${key}.`);
+    assert.equal(status.isCancelled(record), true, `Cancellation lookup failed for ${key}.`);
+  }
 }
 
 validateSchedule(loadSchedule());

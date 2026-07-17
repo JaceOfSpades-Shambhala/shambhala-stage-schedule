@@ -12,6 +12,7 @@
   const FESTIVAL_TIME_ZONE = "America/Vancouver";
   const FESTIVAL_DATES = { Thursday: "2026-07-23", Friday: "2026-07-24", Saturday: "2026-07-25", Sunday: "2026-07-26" };
   const data = window.SCHEDULE_DATA || {};
+  const isCancelledSet = item => Boolean(window.ScheduleStatus?.isCancelled(item));
   const elements = {
     stageTabs: document.querySelector("#stage-tabs"),
     dayTabs: document.querySelector("#day-tabs"),
@@ -110,7 +111,8 @@
         if (previousMinutes !== -1 && minutes < previousMinutes) rolloverDays += 1;
         previousMinutes = minutes;
         const date = addDays(baseDate, rolloverDays);
-        timeline.push({ day, stageId, date, time, artist, minutes, key: dateToSerial(date) * 1440 + minutes });
+        const entry = { day, stageId, date, time, artist, minutes, key: dateToSerial(date) * 1440 + minutes };
+        timeline.push({ ...entry, cancelled: isCancelledSet(entry) });
       });
     });
     return timeline.sort((a, b) => a.key - b.key);
@@ -146,11 +148,13 @@
     const nextIndex = timeline.findIndex(item => item.key > nowKey);
     const previousIndex = nextIndex === -1 ? timeline.length - 1 : nextIndex - 1;
     const previous = timeline[previousIndex];
-    const next = nextIndex === -1 ? null : timeline[nextIndex];
+    const nextBoundary = nextIndex === -1 ? null : timeline[nextIndex];
+    const next = nextIndex === -1 ? null : timeline.slice(nextIndex).find(item => !item.cancelled) || null;
     if (previous && previous.key <= nowKey) {
       const end = scheduledEnd(previous, timeline, previousIndex);
       if (end && nowKey < end.key) {
-        if (next && previous.day === next.day) return { type: "active", current: previous, next, end, now, minutesUntilNext: next.key - nowKey };
+        if (previous.cancelled) return { type: "cancelled", cancelled: previous, next, end, now, minutesUntilNext: next ? next.key - nowKey : null };
+        if (nextBoundary?.day === previous.day && next?.day === previous.day) return { type: "active", current: previous, next, end, now, minutesUntilNext: next.key - nowKey };
         return { type: "final", current: previous, next, end, now };
       }
     }
@@ -260,15 +264,17 @@
     Object.entries(data).forEach(([day, stages]) => Object.entries(stages || {}).forEach(([stageId, entries]) => {
       const stage = titleCaseStage(stageId);
       (entries || []).forEach(([time, artist]) => {
-        if (normaliseForSearch(artist).includes(query)) matches.push({ day, stage, time, artist });
+        const entry = { day, stageId, time, artist };
+        if (normaliseForSearch(artist).includes(query)) matches.push({ ...entry, stage, cancelled: isCancelledSet(entry) });
       });
     }));
     return matches;
   }
 
-  function appendSet({ time, artist, day, stage, isCurrent = false, state = "", sub = "", progress = null }) {
+  function appendSet({ time, artist, day, stage, cancelled = false, isCurrent = false, state = "", sub = "", progress = null }) {
     const item = document.createElement("li");
     item.className = "set";
+    item.classList.toggle("set-cancelled", cancelled);
     if (isCurrent) item.setAttribute("aria-current", "true");
     if (state) item.classList.add(`set-${state}`);
     // A timeline node is drawn only in the day/stage view (which passes a
@@ -288,6 +294,12 @@
     artistElement.className = "set-artist";
     artistElement.textContent = artist;
     details.append(artistElement);
+    if (cancelled) {
+      const badge = document.createElement("span");
+      badge.className = "cancelled-badge";
+      badge.textContent = "Cancelled";
+      details.append(badge);
+    }
     if (sub) {
       const subElement = document.createElement("span");
       subElement.className = "set-sub";
@@ -338,7 +350,7 @@
     const art = document.createElement("img");
     art.id = "stage-mark";
     art.className = "stage-mark";
-    art.src = `stage-names/${appState.stage}.png?v=61`;
+    art.src = `stage-names/${appState.stage}.png?v=62`;
     art.alt = stageLabel;
     art.width = 150;
     art.height = 64;
@@ -387,14 +399,18 @@
     elements.noResults.hidden = entries.length !== 0;
     elements.setList.classList.add("timeline");
     entries.forEach(([time, artist]) => {
-      const isCurrent = Boolean(current && current.day === appState.day && current.time === time && current.artist === artist);
+      const entry = { day: appState.day, stageId: appState.stage, time, artist };
+      const cancelled = isCancelledSet(entry);
+      const isCurrent = Boolean(!cancelled && current && current.day === appState.day && current.time === time && current.artist === artist);
       const isNext = Boolean(next && next.day === appState.day && next.time === time && next.artist === artist);
       const index = timeline.findIndex(entry => entry.day === appState.day && entry.time === time && entry.artist === artist);
       const key = index === -1 ? null : timeline[index].key;
       let state = "up";
       let sub = "";
       let progress = null;
-      if (isCurrent) {
+      if (cancelled) {
+        state = "cancelled";
+      } else if (isCurrent) {
         state = "now";
         const endEntry = index === -1 ? null : scheduledEnd(timeline[index], timeline, index);
         if (endEntry) {
@@ -410,7 +426,7 @@
       } else if (key !== null && key <= nowKey) {
         state = "done";
       }
-      appendSet({ time, artist, isCurrent, state, sub, progress });
+      appendSet({ time, artist, cancelled, isCurrent, state, sub, progress });
     });
   }
 
@@ -440,6 +456,16 @@
       elements.nowPlayingLabel.textContent = "FINAL LISTED SET";
       elements.nowPlayingTitle.textContent = status.current.artist;
       setNowPlayingDetails([`Started at ${status.current.time} - ends ${status.end.time} (inferred from the printed schedule).`]);
+      return;
+    }
+    if (status.type === "cancelled") {
+      elements.nowPlayingLabel.textContent = "CANCELLED";
+      elements.nowPlayingTitle.textContent = status.cancelled.artist;
+      if (status.next) {
+        setNowPlayingDetails(["No replacement is listed. Next: ", { tag: "strong", className: "now-playing-next", text: status.next.artist }, ` at ${status.next.time}.`]);
+      } else {
+        setNowPlayingDetails(["No replacement or later set is currently listed."]);
+      }
       return;
     }
     if (status.type === "upcoming") {
@@ -479,7 +505,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-metadata.js?v=61";
+  const SCHEDULE_ASSET = "schedule-metadata.js?v=62";
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
 
@@ -562,7 +588,7 @@
     STAGES.forEach(stage => {
       if (stage.id === appState.stage) return;
       const img = new Image();
-      img.src = `stage-names/${stage.id}.png?v=61`;
+      img.src = `stage-names/${stage.id}.png?v=62`;
     });
   }, 1500);
   window.setInterval(renderLiveStatus, 30000);
@@ -581,6 +607,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=61").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=62").then(registerPeriodicSync).catch(() => {});
   });
 })();

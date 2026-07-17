@@ -22,6 +22,7 @@
     vendors: { label: "Vendors", status: "At the vendors" }
   };
   const data = window.SCHEDULE_DATA || {};
+  const isCancelledSet = item => Boolean(window.ScheduleStatus?.isCancelled(item));
   const elements = {
     panel: document.querySelector("#planner"),
     scheduleList: document.querySelector("#set-list"),
@@ -135,7 +136,8 @@
         if (previousMinutes !== -1 && minutes < previousMinutes) rolloverDays += 1;
         previousMinutes = minutes;
         const date = addDays(baseDate, rolloverDays);
-        timeline.push({ day, stageId, date, time, artist, key: dateToSerial(date) * 1440 + minutes });
+        const entry = { day, stageId, date, time, artist, key: dateToSerial(date) * 1440 + minutes };
+        timeline.push({ ...entry, cancelled: isCancelledSet(entry) });
       });
     });
     return timeline.sort((a, b) => a.key - b.key);
@@ -195,6 +197,10 @@
       if (!Number.isSafeInteger(ping.startKey) || !Number.isSafeInteger(ping.endKey) || ping.endKey <= ping.startKey) return null;
       if (ping.endKey <= festivalNowKey()) return null;
       if (ping.type === "set" && (!ping.day || !ping.stageId || !ping.time || !ping.artist)) return null;
+      if (ping.type === "set" && isCancelledSet(ping)) {
+        localStorage.removeItem(PING_KEY);
+        return null;
+      }
       return ping;
     } catch {
       return null;
@@ -236,6 +242,7 @@
   function pingEndKey(match) { return setEndKey(match); }
 
   function setSetPing(item) {
+    if (isCancelledSet(item)) { setFeedback("That set was cancelled."); return; }
     const match = timelineMatch(item);
     if (!match) { setFeedback("That set couldn't be matched to the schedule."); return; }
     const endKey = pingEndKey(match);
@@ -274,7 +281,7 @@
   function savedTimeline() {
     return loadSets()
       .map(item => ({ item, match: timelineMatch(item) }))
-      .filter(entry => entry.match)
+      .filter(entry => entry.match && !entry.match.cancelled)
       .map(entry => ({ ...entry, end: setEndKey(entry.match) }))
       .sort((a, b) => a.match.key - b.match.key || titleCaseStage(a.item.stageId).localeCompare(titleCaseStage(b.item.stageId)));
   }
@@ -382,6 +389,7 @@
       row.querySelector(".planner-add")?.remove();
       const item = itemFromRow(row);
       if (!item) return;
+      if (isCancelledSet(item) && !hasSet(item)) return;
       const button = document.createElement("button");
       button.type = "button";
       button.className = "planner-add";
@@ -641,12 +649,14 @@
 
   function buildSetRow(item, current, conflicts, rowIndex, activePing, nowKey) {
     const itemKey = setId(item);
+    const cancelled = isCancelledSet(item);
     const isExpanded = expandedKey === itemKey && conflicts.length > 0;
     const timelineId = `planner-overlap-${rowIndex}`;
     const wrap = document.createElement("li");
     wrap.className = "planner-set-wrap";
     const row = document.createElement("div");
     row.className = "planner-set";
+    row.classList.toggle("planner-set-cancelled", cancelled);
     const time = document.createElement("span");
     time.className = "planner-time";
     time.textContent = item.time;
@@ -663,6 +673,12 @@
     stage.className = "planner-stage";
     stage.textContent = titleCaseStage(item.stageId);
     meta.append(stage);
+    if (cancelled) {
+      const badge = document.createElement("span");
+      badge.className = "cancelled-badge";
+      badge.textContent = "Cancelled";
+      meta.append(badge);
+    }
     if (conflicts.length) {
       const badge = document.createElement("span");
       badge.className = "overlap-badge";
@@ -771,7 +787,8 @@
     if (!sets.length) return "";
     return ["My Shambhala 2026 Set List", "", ...sets.map(item => {
       const match = timelineMatch(item);
-      return `${match ? formatDate(match.date) : item.day} ${item.time} - ${item.artist} (${titleCaseStage(item.stageId)})`;
+      const status = isCancelledSet(item) ? " - CANCELLED" : "";
+      return `${match ? formatDate(match.date) : item.day} ${item.time} - ${item.artist}${status} (${titleCaseStage(item.stageId)})`;
     })].join("\n");
   }
 

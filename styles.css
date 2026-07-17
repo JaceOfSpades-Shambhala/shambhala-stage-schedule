@@ -1,13 +1,13 @@
 @font-face {
   font-family: "Inter";
-  src: url("fonts/InterVariable.woff2?v=61") format("woff2");
+  src: url("fonts/InterVariable.woff2?v=62") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Inter";
-  src: url("fonts/InterVariable-Italic.woff2?v=61") format("woff2");
+  src: url("fonts/InterVariable-Italic.woff2?v=62") format("woff2");
   font-weight: 100 900;
   font-style: italic;
   font-display: swap;
@@ -68,6 +68,7 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .now-playing[data-status="active"] .status-dot { background: var(--green); box-shadow: 0 0 10px var(--green); animation: status-pulse 1.8s ease-in-out infinite; }
 .now-playing[data-status="final"] .status-dot { background: var(--accent); }
 .now-playing[data-status="upcoming"] .status-dot { background: var(--amber); }
+.now-playing[data-status="cancelled"] .status-dot { background: var(--danger); box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 72%, transparent); }
 .now-playing-label { margin: 0; color: var(--muted); font-size: .68rem; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; }
 .now-playing-title { margin: .35rem 0 .22rem; font-size: clamp(1.25rem, 5vw, 1.72rem); font-weight: 850; line-height: 1.08; letter-spacing: -.025em; }
 .now-playing-details { margin: 0; color: var(--muted); font-size: .86rem; }
@@ -325,6 +326,8 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .planner-details { min-width: 0; display: grid; gap: 2px; }
 .planner-artist { overflow: hidden; color: var(--ink); font-size: .92rem; font-weight: 800; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
 .planner-meta { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--muted); font-size: .76rem; font-weight: 650; }
+.planner-set-cancelled { background: color-mix(in srgb, var(--danger) 6%, transparent); }
+.planner-set-cancelled .planner-artist { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .planner-stage { white-space: nowrap; }
 .overlap-badge { display: inline-flex; flex: none; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; color: #161120; background: var(--amber); font-size: .6rem; font-weight: 950; letter-spacing: .08em; line-height: 1.45; text-transform: uppercase; }
 .overlap-chevron { display: inline-block; font-size: .68rem; line-height: 1; transition: transform .2s ease; }
@@ -368,6 +371,9 @@ h2 { margin-bottom: 0; font-size: clamp(1.4rem, 5.6vw, 2rem); letter-spacing: -.
 .set-details { min-width: 0; display: grid; gap: .16rem; }
 .set-artist { overflow-wrap: anywhere; font-size: 1rem; font-weight: 800; letter-spacing: -.02em; }
 .set-meta { color: var(--muted); font-size: .78rem; font-weight: 650; }
+.cancelled-badge { display: inline-flex; width: max-content; align-items: center; padding: .12rem .45rem; border: 1px solid color-mix(in srgb, var(--danger) 58%, transparent); border-radius: 999px; color: #fff; background: color-mix(in srgb, var(--danger) 22%, transparent); font-size: .62rem; font-weight: 950; letter-spacing: .08em; line-height: 1.35; text-transform: uppercase; }
+.set-cancelled { background: color-mix(in srgb, var(--danger) 6%, transparent); }
+.set-cancelled .set-artist { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .planner-add { min-width: 2.7rem; min-height: 2.15rem; padding: .32rem .78rem; border-radius: 999px; font-size: .78rem; white-space: nowrap; }
 .planner-add.is-added { color: var(--green); background: color-mix(in srgb, var(--green) 20%, transparent); border-color: color-mix(in srgb, var(--green) 55%, transparent); }
 .now-badge { width: max-content; padding: .12rem .42rem; border-radius: 999px; color: #161120; background: var(--accent); font-size: .66rem; font-weight: 950; letter-spacing: .08em; }
@@ -384,6 +390,7 @@ h2 { margin-bottom: 0; font-size: clamp(1.4rem, 5.6vw, 2rem); letter-spacing: -.
 .set-done { opacity: .42; }
 .set-list.timeline .set-done { --timeline-line-before: var(--accent); --timeline-line-after: var(--accent); --timeline-node-bg: var(--accent); --timeline-node-border: var(--accent); }
 .set-list.timeline .set-now { --timeline-line-before: var(--accent); --timeline-node-bg: var(--accent); --timeline-node-border: rgba(255, 255, 255, .92); --timeline-node-size: 1.22rem; --timeline-node-clearance: .82rem; }
+.set-list.timeline .set-cancelled { --timeline-node-bg: color-mix(in srgb, var(--danger) 35%, #111321); --timeline-node-border: var(--danger); }
 .set-sub { color: var(--accent); font-size: .64rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 .set-next .set-sub { color: var(--amber); }
 .set-progress { display: block; height: 4px; margin-top: .12rem; border-radius: 999px; background: rgba(255, 255, 255, .13); overflow: hidden; }

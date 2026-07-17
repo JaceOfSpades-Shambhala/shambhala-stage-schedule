@@ -69,9 +69,20 @@
       && Number.isSafeInteger(owl.number) && owl.number > 0);
   }
 
+  function regenerateV1Owl(owl) {
+    if (!validOwl(owl)) return null;
+    return owl.version === 1 ? { ...owl, version: 2 } : owl;
+  }
+
   function loadProfile() {
     const profile = readJson(PROFILE_KEY, null);
-    return profile && typeof profile.profileId === "string" && typeof profile.profileKey === "string" ? profile : null;
+    if (!profile || typeof profile.profileId !== "string" || typeof profile.profileKey !== "string") return null;
+    const owl = regenerateV1Owl(profile.owl);
+    if (owl !== profile.owl) {
+      profile.owl = owl;
+      writeJson(PROFILE_KEY, profile);
+    }
+    return profile;
   }
 
   function saveFromResponse(data) {
@@ -81,7 +92,7 @@
       current.profileId = data.profileId;
       current.profileKey = data.profileKey;
     }
-    if (validOwl(data.owl)) current.owl = data.owl;
+    if (validOwl(data.owl)) current.owl = regenerateV1Owl(data.owl);
     if (!current.profileId || !current.profileKey) return null;
     writeJson(PROFILE_KEY, current);
     renderOwn();
@@ -93,7 +104,7 @@
     if (!validOwl(owl)) return loadProfile();
     const current = loadProfile();
     if (!current) return null;
-    current.owl = owl;
+    current.owl = regenerateV1Owl(owl);
     writeJson(PROFILE_KEY, current);
     renderOwn();
     return current;
@@ -134,11 +145,23 @@
 
   function cachedEntries() {
     const entries = readJson(CACHE_KEY, []);
-    return Array.isArray(entries) ? entries.filter(entry => entry && validOwl(entry.owl)) : [];
+    if (!Array.isArray(entries)) return [];
+    let changed = false;
+    const migrated = entries.filter(entry => entry && validOwl(entry.owl)).map(entry => {
+      const owl = regenerateV1Owl(entry.owl);
+      if (owl !== entry.owl) {
+        changed = true;
+        return { ...entry, owl };
+      }
+      return entry;
+    });
+    if (changed) writeJson(CACHE_KEY, migrated);
+    return migrated;
   }
 
   function mergeEntry(entry) {
     if (!entry || !validOwl(entry.owl)) return false;
+    entry = { ...entry, owl: regenerateV1Owl(entry.owl) };
     const entries = cachedEntries();
     const index = entries.findIndex(item => item.owl.number === entry.owl.number);
     if (index >= 0) entries[index] = { ...entries[index], ...entry, firstCollectedAt: entries[index].firstCollectedAt || entry.firstCollectedAt };

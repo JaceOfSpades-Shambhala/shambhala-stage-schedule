@@ -152,6 +152,19 @@
     return STAGES.find(stage => stage.id === stageId)?.label || stageId;
   }
 
+  function isCancelledSet(item) {
+    return Boolean(window.ScheduleStatus?.isCancelled(item));
+  }
+
+  function appendCancellationBadge(row, meta, item) {
+    if (!isCancelledSet(item)) return;
+    row.classList.add("planner-set-cancelled");
+    const badge = document.createElement("span");
+    badge.className = "cancelled-badge";
+    badge.textContent = "Cancelled";
+    meta.append(badge);
+  }
+
   function isPingLocation(value) {
     return Object.prototype.hasOwnProperty.call(PING_LOCATIONS, value);
   }
@@ -276,7 +289,8 @@
   function myPing() {
     try {
       const ping = JSON.parse(localStorage.getItem(PING_KEY) || "null");
-      return ping && (ping.type === "set" || isPingLocation(ping.type)) && Number.isSafeInteger(ping.endKey) && ping.endKey > festivalNowKey() ? ping : null;
+      if (!ping || !(ping.type === "set" || isPingLocation(ping.type)) || !Number.isSafeInteger(ping.endKey) || ping.endKey <= festivalNowKey()) return null;
+      return ping.type === "set" && isCancelledSet(ping) ? null : ping;
     } catch {
       return null;
     }
@@ -391,7 +405,8 @@
       }
     }
     const localPing = myPing();
-    const mergedPing = localPing || body.ping || null;
+    const remotePing = body.ping?.type === "set" && isCancelledSet(body.ping) ? null : body.ping || null;
+    const mergedPing = localPing || remotePing;
     const remoteFriendIds = Array.isArray(body.friends) ? body.friends : [];
     const mergedFriendIds = [...new Set([...remoteFriendIds, ...friendIds()])];
     if (!storeJson(SETS_KEY, mergedSets)) return false;
@@ -801,7 +816,8 @@
         return true;
       }
       if (!storeJson(SETS_KEY, Array.isArray(result.body.sets) ? result.body.sets : [])) return false;
-      if (!storeJson(PING_KEY, result.body.ping || null)) return false;
+      const remotePing = result.body.ping?.type === "set" && isCancelledSet(result.body.ping) ? null : result.body.ping || null;
+      if (!storeJson(PING_KEY, remotePing)) return false;
       if (!restoreFriendIds(result.body.friends)) return false;
       identity.name = result.body.name || identity.name;
       identity.revision = remoteRevision;
@@ -1066,6 +1082,7 @@
 
   function buildFriendPing(ping) {
     if (!ping || !Number.isSafeInteger(ping.startKey) || !Number.isSafeInteger(ping.endKey)) return null;
+    if (ping.type === "set" && isCancelledSet(ping)) return null;
     const nowKey = festivalNowKey();
     if (ping.endKey <= nowKey) return null;
     const card = document.createElement("span");
@@ -1139,6 +1156,7 @@
       const meta = document.createElement("span");
       meta.className = "planner-meta";
       meta.textContent = stageLabel(item.stageId);
+      appendCancellationBadge(row, meta, item);
       details.append(artist, meta);
       row.append(time, details);
       elements.compareList.append(row);
@@ -1263,6 +1281,7 @@
           const meta = document.createElement("span");
           meta.className = "planner-meta";
           meta.textContent = `${item.day || ""} - ${stageLabel(item.stageId)}`;
+          appendCancellationBadge(row, meta, item);
           details.append(artist, meta);
           row.append(time, details);
           list.append(row);

@@ -55,6 +55,14 @@ function validOwl(value) {
     && Number.isSafeInteger(value.season) && value.season >= 2026;
 }
 
+// V1 used the same durable identity fields as V2. Upgrading the recorded
+// renderer version therefore gives every existing Owl its V2 trait roll while
+// preserving the seed, global number, mint time, and festival season.
+function upgradeV1Owl(value) {
+  if (!validOwl(value) || value.version !== 1) return value;
+  return { ...value, version: OWL_VERSION };
+}
+
 function randomHex(byteLength) {
   const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
   return [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
@@ -146,6 +154,11 @@ export class HexlaceCoordinator {
       this.record.profileKey ||= null;
       this.record.owl ||= null;
       this.record.tapToken ||= null;
+      const upgradedOwl = upgradeV1Owl(this.record.owl);
+      if (upgradedOwl !== this.record.owl) {
+        this.record.owl = upgradedOwl;
+        upgradedLegacyRecord = true;
+      }
       // Durable Object records created before virtual Hex Owl profiles existed
       // represented written NFC tags. A missing field must therefore stay
       // physical even when the tag was assigned directly rather than claimed.
@@ -154,7 +167,7 @@ export class HexlaceCoordinator {
         upgradedLegacyRecord = true;
       }
       if (!Object.prototype.hasOwnProperty.call(this.record, "trade")) this.record.trade = null;
-      if (upgradedLegacyRecord) await this.ctx.storage.put("record", this.record);
+      if (upgradedLegacyRecord) await this.commit();
     }
     this.sweepExpiredHandoffs();
 
@@ -694,6 +707,7 @@ export class HexOwlProfile {
     if (url.pathname === "/initialize") return this.initialize(body);
     if (!this.record) return json({ error: "Profile not found." }, 404);
     if (!(await this.authorized(body.profileKey))) return json({ error: "Invalid profile key." }, 403);
+    await this.migrateV1Owls();
     if (url.pathname === "/qualify") return this.qualify(body);
     if (url.pathname === "/adopt") return this.adopt(body);
     if (url.pathname === "/release") return this.release(body);
@@ -726,6 +740,40 @@ export class HexOwlProfile {
     return json({ ok: true, owl: null }, 201);
   }
 
+  async migrateV1Owls() {
+    let changed = false;
+    const upgradedOwnOwl = upgradeV1Owl(this.record.owl);
+    if (upgradedOwnOwl !== this.record.owl) {
+      this.record.owl = upgradedOwnOwl;
+      changed = true;
+    }
+
+    let cursor = "";
+    do {
+      const records = await this.ctx.storage.list({
+        prefix: "hexadex:",
+        ...(cursor ? { startAfter: cursor } : {}),
+        limit: 128
+      });
+      const updates = {};
+      for (const [key, entry] of records) {
+        const upgradedOwl = upgradeV1Owl(entry?.owl);
+        if (upgradedOwl !== entry?.owl) {
+          updates[key] = { ...entry, owl: upgradedOwl, festivalYear: upgradedOwl.season, context: `Shambhala ${upgradedOwl.season}` };
+          changed = true;
+        }
+      }
+      if (Object.keys(updates).length) await this.ctx.storage.put(updates);
+      const entries = [...records];
+      cursor = entries.length === 128 ? entries[entries.length - 1][0] : "";
+    } while (cursor);
+
+    if (changed) {
+      this.record.updatedAt = nowMs(this.env);
+      await this.ctx.storage.put("profile", this.record);
+    }
+  }
+
   async qualify(body) {
     if (!this.record.owl && body.eligible === true) {
       if (!this.env?.OWL_NUMBERS) return json({ error: "Hex Owl numbering is unavailable." }, 503);
@@ -754,15 +802,16 @@ export class HexOwlProfile {
     if (!validOwl(body.owl) || typeof body.claimedReadId !== "string" || body.claimedReadId.length !== 8) {
       return json({ error: "Invalid Hex Owl assignment." }, 400);
     }
+    const owl = upgradeV1Owl(body.owl);
     if (body.tradeId && body.tradeId === this.record.lastTradeId && this.record.claimedReadId === body.claimedReadId) {
       return json({ ok: true, owl: this.record.owl });
     }
     if (!body.tradeId && this.record.claimedReadId === body.claimedReadId
-      && validOwl(this.record.owl) && this.record.owl.seed === body.owl.seed
-      && this.record.owl.version === body.owl.version && this.record.owl.number === body.owl.number) {
+      && validOwl(this.record.owl) && this.record.owl.seed === owl.seed
+      && this.record.owl.version === owl.version && this.record.owl.number === owl.number) {
       return json({ ok: true, owl: this.record.owl });
     }
-    this.record.owl = body.owl;
+    this.record.owl = owl;
     this.record.claimedReadId = body.claimedReadId;
     this.record.lastTradeId = typeof body.tradeId === "string" ? body.tradeId.slice(0, 80) : "";
     this.record.updatedAt = nowMs(this.env);
@@ -772,7 +821,7 @@ export class HexOwlProfile {
 
   async release(body) {
     if (body.owl != null && !validOwl(body.owl)) return json({ error: "Invalid Hex Owl." }, 400);
-    if (validOwl(body.owl)) this.record.owl = body.owl;
+    if (validOwl(body.owl)) this.record.owl = upgradeV1Owl(body.owl);
     if (!body.readId || this.record.claimedReadId === body.readId) this.record.claimedReadId = null;
     this.record.updatedAt = nowMs(this.env);
     await this.ctx.storage.put("profile", this.record);
@@ -794,14 +843,15 @@ export class HexOwlProfile {
     const indexKey = `hexadex-owl:${source.owl.number}`;
     const priorKey = await this.ctx.storage.get(indexKey);
     const prior = priorKey ? await this.ctx.storage.get(priorKey) : null;
+    const owl = upgradeV1Owl(source.owl);
     const firstCollectedAt = prior?.firstCollectedAt || (Number.isSafeInteger(source.firstCollectedAt) && source.firstCollectedAt > 0 ? source.firstCollectedAt : nowMs(this.env));
     const entry = {
       readId: source.readId,
       name: typeof source.name === "string" ? source.name.trim().slice(0, 60) : "",
-      owl: source.owl,
+      owl,
       firstCollectedAt,
-      context: typeof source.context === "string" ? source.context.slice(0, 80) : `Shambhala ${source.owl.season}`,
-      festivalYear: Number.isSafeInteger(source.festivalYear) ? source.festivalYear : source.owl.season,
+      context: typeof source.context === "string" ? source.context.slice(0, 80) : `Shambhala ${owl.season}`,
+      festivalYear: Number.isSafeInteger(source.festivalYear) ? source.festivalYear : owl.season,
       lastSyncedAt: nowMs(this.env)
     };
     const entryKey = priorKey || `hexadex:${String(Number.MAX_SAFE_INTEGER - Math.min(firstCollectedAt, Number.MAX_SAFE_INTEGER)).padStart(16, "0")}:${source.owl.number}`;

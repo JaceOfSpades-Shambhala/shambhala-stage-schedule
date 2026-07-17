@@ -148,7 +148,10 @@ function cleanOwl(value) {
   if (!/^[0-9a-f]{32}$/.test(seed) || !Number.isSafeInteger(version) || version < 1
     || !Number.isSafeInteger(number) || number < 1 || !Number.isSafeInteger(createdAt) || createdAt < 1
     || !Number.isSafeInteger(season) || season < 2026) return null;
-  return { seed, version, number, createdAt, season };
+  // Public reads must never send an old renderer version back to a client.
+  // V1 and V2 share the same immutable identity fields, so V2 regenerates the
+  // Owl deterministically from this unchanged seed and number.
+  return { seed, version: version === 1 ? 2 : version, number, createdAt, season };
 }
 
 async function callOwlProfile(env, profileId, path, body = {}) {

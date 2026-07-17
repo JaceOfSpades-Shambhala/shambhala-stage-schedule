@@ -834,6 +834,55 @@ test("a Hex Owl is assigned once only after a named profile saves a set", async 
   assert.equal(Object.hasOwn(publicBody, "hexadex"), false);
 });
 
+test("V1 Owls regenerate as V2 across profile, Hexadex, physical tag, and public reads", async () => {
+  const env = makeOwlEnv();
+  const identity = await worker.fetch(makeRequest("/lists", {
+    method: "POST", body: JSON.stringify({ name: "Migration Owl", sets: [QUALIFYING_SET], physical: true })
+  }), env).then(response => response.json());
+  const v1Owl = { ...identity.owl, version: 1 };
+
+  const profileStorage = env.HEX_OWL_PROFILES.instances.get(identity.profileId).ctx.storage;
+  const profile = await profileStorage.get("profile");
+  profile.owl = v1Owl;
+  await profileStorage.put("profile", profile);
+  env.HEX_OWL_PROFILES.instances.get(identity.profileId).instance.record = structuredClone(profile);
+  await profileStorage.put("hexadex:legacy", {
+    readId: "ABCDEFGH",
+    name: "Legacy friend",
+    owl: v1Owl,
+    firstCollectedAt: env.NOW_MS - 1,
+    context: "Shambhala 2026",
+    festivalYear: 2026,
+    lastSyncedAt: env.NOW_MS - 1
+  });
+
+  const tagStorage = env.HEXLACES.instances.get(identity.readId).ctx.storage;
+  const tag = await tagStorage.get("record");
+  tag.owl = v1Owl;
+  tag.list.owl = v1Owl;
+  await tagStorage.put("record", tag);
+  env.HEXLACES.instances.get(identity.readId).instance.record = structuredClone(tag);
+  await env.LISTS.put(`list:${identity.readId}`, JSON.stringify({ ...tag.list, owl: v1Owl }));
+
+  const publicOwl = await worker.fetch(makeRequest(`/lists/${identity.readId}`), env).then(response => response.json()).then(body => body.owl);
+  assert.equal(publicOwl.version, 2);
+  assert.equal(publicOwl.seed, v1Owl.seed);
+  assert.equal(publicOwl.number, v1Owl.number);
+
+  await worker.fetch(makeRequest(`/lists/${identity.readId}/owner`, {
+    headers: { "X-Write-Key": identity.writeKey }
+  }), env);
+
+  const page = await worker.fetch(makeRequest(`/profiles/${identity.profileId}/hexadex`, {
+    headers: { "X-Profile-Key": identity.profileKey }
+  }), env).then(response => response.json());
+  assert.equal(page.owl.version, 2);
+  assert.equal(page.entries[0].owl.version, 2);
+  assert.equal((await profileStorage.get("profile")).owl.version, 2);
+  assert.equal((await profileStorage.get("hexadex:legacy")).owl.version, 2);
+  assert.equal((await tagStorage.get("record")).owl.version, 2);
+});
+
 test("concurrent qualification allocates one stable Owl number and seed", async () => {
   const env = makeOwlEnv();
   const identity = await worker.fetch(makeRequest("/lists", {

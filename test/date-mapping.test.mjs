@@ -23,7 +23,9 @@ const FINAL_SET_WINDOW_MINUTES = 180;
 
 const context = { window: {} };
 vm.runInNewContext(fs.readFileSync("schedule-data.js", "utf8"), context);
+vm.runInNewContext(fs.readFileSync("schedule-metadata.js", "utf8"), context);
 const data = context.window.SCHEDULE_DATA;
+const isCancelledSet = item => context.window.ScheduleStatus.isCancelled(item);
 
 function isAvailable(day, stage) {
   return Array.isArray(data[day]?.[stage]) && data[day][stage].length > 0;
@@ -66,7 +68,8 @@ function buildStageTimeline(stageId) {
       if (previousMinutes !== -1 && minutes < previousMinutes) rolloverDays += 1;
       previousMinutes = minutes;
       const date = addDays(baseDate, rolloverDays);
-      timeline.push({ day, date, time, artist, key: dateToSerial(date) * 1440 + minutes });
+      const entry = { day, stageId, date, time, artist, key: dateToSerial(date) * 1440 + minutes };
+      timeline.push({ ...entry, cancelled: isCancelledSet(entry) });
     });
   });
   return timeline.sort((a, b) => a.key - b.key);
@@ -77,9 +80,11 @@ function getNowPlayingStatus(stageId, now) {
   const timeline = buildStageTimeline(stageId);
   const nextIndex = timeline.findIndex(item => item.key > nowKey);
   const previous = nextIndex === -1 ? timeline.at(-1) : timeline[nextIndex - 1];
-  const next = nextIndex === -1 ? null : timeline[nextIndex];
+  const nextBoundary = nextIndex === -1 ? null : timeline[nextIndex];
+  const next = nextIndex === -1 ? null : timeline.slice(nextIndex).find(item => !item.cancelled) || null;
   if (previous && previous.key <= nowKey) {
-    if (next && previous.day === next.day) return { type: "active", current: previous, next, now };
+    if (previous.cancelled && nextBoundary) return { type: "cancelled", cancelled: previous, next, now };
+    if (nextBoundary?.day === previous.day && next?.day === previous.day) return { type: "active", current: previous, next, now };
     if (nowKey - previous.key <= FINAL_SET_WINDOW_MINUTES) return { type: "final", current: previous, next, now };
   }
   if (next) return { type: "upcoming", next, now };
@@ -150,4 +155,24 @@ test("Monday morning remains Sunday until 10 AM", () => {
   assert.equal(getCurrentFestivalDay(mondayMorning), "Sunday");
   assert.equal(getCurrentScheduleDay("fractal-forest", mondayMorning), "Sunday");
   assert.equal(getCurrentScheduleDay("living-room", mondayMorning), "Sunday");
+});
+
+test("Rusko's cancelled slot is a gap with Truth next", () => {
+  const status = getNowPlayingStatus("amp", now("2026-07-25", "00:15"));
+  assert.equal(status.type, "cancelled");
+  assert.equal(status.cancelled.artist, "RUSKO");
+  assert.equal(status.next.artist, "TRUTH B2B PAV4N");
+});
+
+test("Whethan's cancelled slot is a gap with JKYL & HYDE next", () => {
+  const status = getNowPlayingStatus("amp", now("2026-07-26", "01:45"));
+  assert.equal(status.type, "cancelled");
+  assert.equal(status.cancelled.artist, "WHETHAN");
+  assert.equal(status.next.artist, "JKYL & HYDE");
+});
+
+test("Sunday Grove switches from the circus acts to DRAMA at 10:15 PM", () => {
+  assert.equal(getNowPlayingStatus("grove", now("2026-07-26", "22:00")).current.artist, "CIRCUS ACTS INSOMNIACS");
+  assert.equal(getNowPlayingStatus("grove", now("2026-07-26", "22:14")).current.artist, "CIRCUS ACTS INSOMNIACS");
+  assert.equal(getNowPlayingStatus("grove", now("2026-07-26", "22:15")).current.artist, "DRAMA");
 });
