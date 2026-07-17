@@ -12,18 +12,38 @@
     own: document.querySelector("#hex-owl-card"),
     ownImage: document.querySelector("#hex-owl-image"),
     ownNumber: document.querySelector("#hex-owl-number"),
-    ownTraits: document.querySelector("#hex-owl-traits"),
+    ownRarity: document.querySelector("#hex-owl-rarity"),
     open: document.querySelector("#hexadex-open"),
+    openAvatar: document.querySelector("#hexadex-avatar"),
     count: document.querySelector("#hexadex-count"),
     dialog: document.querySelector("#hexadex-dialog"),
     grid: document.querySelector("#hexadex-grid"),
     empty: document.querySelector("#hexadex-empty"),
     status: document.querySelector("#hexadex-status"),
+    detail: document.querySelector("#hexadex-detail-dialog"),
+    detailEyebrow: document.querySelector("#hexadex-detail-eyebrow"),
+    detailArt: document.querySelector("#hexadex-detail-art"),
+    detailNumber: document.querySelector("#hexadex-detail-number"),
+    detailRarity: document.querySelector("#hexadex-detail-rarity"),
+    detailTraits: document.querySelector("#hexadex-detail-traits"),
+    detailFooter: document.querySelector("#hexadex-detail-footer"),
     reveal: document.querySelector("#hexadex-reveal-dialog"),
     revealImage: document.querySelector("#hexadex-reveal-image"),
     revealName: document.querySelector("#hexadex-reveal-name"),
     revealNumber: document.querySelector("#hexadex-reveal-number")
   };
+
+  const DETAIL_TRAITS = [
+    "Owl colour",
+    "Portal rings",
+    "Ring finish",
+    "Ring twist",
+    "Brow treatment",
+    "Eye style",
+    "Beak",
+    "Facial disc",
+    "Aura"
+  ];
 
   function readJson(key, fallback) {
     try {
@@ -103,6 +123,15 @@
     void window.HexOwl.hydrate?.(container);
   }
 
+  function traitsFor(owl) {
+    if (!validOwl(owl) || !window.HexOwl) return {};
+    try {
+      return window.HexOwl.traitNames(owl.seed, owl.version) || {};
+    } catch {
+      return {};
+    }
+  }
+
   function cachedEntries() {
     const entries = readJson(CACHE_KEY, []);
     return Array.isArray(entries) ? entries.filter(entry => entry && validOwl(entry.owl)) : [];
@@ -145,42 +174,114 @@
     else dialog.setAttribute("open", "");
   }
 
+  function openDetail({ owl, name = "", firstCollectedAt, context, isOwn = false }) {
+    if (!validOwl(owl) || !elements.detail) return;
+    const traits = traitsFor(owl);
+    const rarity = traits.Rarity || "Unknown rarity";
+    const displayName = name || "Festival friend";
+    elements.detailEyebrow.textContent = isOwn ? "Your Hex Owl" : `Hex Owl - ${displayName}`;
+    putOwl(elements.detailArt, owl);
+    elements.detailNumber.textContent = owlLabel(owl);
+    elements.detailRarity.textContent = `${rarity} - 2026 edition`;
+    elements.detailTraits.replaceChildren();
+    for (const trait of DETAIL_TRAITS) {
+      const row = document.createElement("div");
+      row.className = "hexadex-detail-trait";
+      const label = document.createElement("span");
+      label.className = "hexadex-detail-trait-label";
+      label.textContent = trait;
+      const value = document.createElement("span");
+      value.className = "hexadex-detail-trait-value";
+      value.textContent = traits[trait] || "Unknown";
+      row.append(label, value);
+      elements.detailTraits.append(row);
+    }
+    elements.detailFooter.textContent = isOwn
+      ? "Travels with your physical Hexlace, always."
+      : `Collected ${formatCollected({ owl, firstCollectedAt, context })}`;
+    showDialog(elements.detail);
+  }
+
   function renderOwn(name = "") {
     if (!elements.own) return;
     const profile = loadProfile();
-    elements.own.hidden = !validOwl(profile?.owl);
-    if (!validOwl(profile?.owl)) return;
-    putOwl(elements.ownImage, profile.owl);
-    elements.ownNumber.textContent = owlLabel(profile.owl);
-    elements.ownNumber.setAttribute("aria-label", `${name ? `${name}'s ` : "Your "}${owlLabel(profile.owl)}`);
-    if (elements.ownTraits && window.HexOwl) {
-      const traits = window.HexOwl.traitNames(profile.owl.seed, profile.owl.version);
-      elements.ownTraits.textContent = `${traits["Eye style"]} eyes`;
+    const hasOwnOwl = validOwl(profile?.owl);
+    elements.own.hidden = !hasOwnOwl;
+    if (elements.openAvatar) elements.openAvatar.hidden = !hasOwnOwl;
+    if (!hasOwnOwl) {
+      elements.own.removeAttribute("aria-label");
+      renderCount();
+      return;
     }
+    const traits = traitsFor(profile.owl);
+    const rarity = traits.Rarity || "Unknown rarity";
+    putOwl(elements.ownImage, profile.owl);
+    putOwl(elements.openAvatar, profile.owl);
+    elements.ownNumber.textContent = owlLabel(profile.owl);
+    elements.ownRarity.textContent = rarity;
+    elements.own.setAttribute("aria-label", `Your Hex Owl, ${owlLabel(profile.owl)}, ${rarity}. Show details.`);
+    renderCount();
   }
 
   function renderCount() {
-    const total = cachedEntries().length;
     const profile = loadProfile();
+    const total = cachedEntries().length + (validOwl(profile?.owl) ? 1 : 0);
     if (elements.open) elements.open.hidden = !validOwl(profile?.owl) && total === 0;
     if (elements.count) elements.count.textContent = String(total);
+  }
+
+  function ghostSlot(rotated = false) {
+    const slot = document.createElement("div");
+    slot.className = `hexadex-ghost${rotated ? " is-rotated" : ""}`;
+    slot.setAttribute("aria-hidden", "true");
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 100 100");
+    const hexagon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    hexagon.setAttribute("points", "50,4 89.8,27 89.8,73 50,96 10.2,73 10.2,27");
+    hexagon.setAttribute("fill", "none");
+    hexagon.setAttribute("stroke", "var(--accent)");
+    hexagon.setAttribute("stroke-width", "2.5");
+    svg.append(hexagon);
+    slot.append(svg);
+    return slot;
   }
 
   function renderGrid() {
     if (!elements.grid) return;
     const entries = cachedEntries();
+    const profile = loadProfile();
     elements.grid.replaceChildren();
+    elements.grid.classList.toggle("is-empty", entries.length === 0);
     elements.empty.hidden = entries.length > 0;
+    if (validOwl(profile?.owl)) {
+      const own = document.createElement("button");
+      own.className = "hexadex-own-slot";
+      own.type = "button";
+      own.setAttribute("aria-label", `Your Hex Owl, ${owlLabel(profile.owl)}. Show details.`);
+      const art = document.createElement("span");
+      art.className = "hexadex-own-art";
+      putOwl(art, profile.owl);
+      const label = document.createElement("span");
+      label.className = "hexadex-own-label";
+      label.textContent = "Yours";
+      own.append(art, label);
+      own.addEventListener("click", () => openDetail({ owl: profile.owl, isOwn: true }));
+      elements.grid.append(own);
+    }
+    if (entries.length === 0) elements.grid.append(ghostSlot(), ghostSlot(true));
     for (const entry of entries) {
-      const card = document.createElement("article");
+      const card = document.createElement("button");
       card.className = "hexadex-entry";
-      const art = document.createElement("div");
+      card.type = "button";
+      const displayName = entry.name || "Festival friend";
+      card.setAttribute("aria-label", `Hex Owl - ${displayName}, ${owlLabel(entry.owl)}. Show details.`);
+      const art = document.createElement("span");
       art.className = "hexadex-entry-art";
       putOwl(art, entry.owl);
-      const copy = document.createElement("div");
+      const copy = document.createElement("span");
       copy.className = "hexadex-entry-copy";
       const name = document.createElement("strong");
-      name.textContent = entry.name || "Festival friend";
+      name.textContent = displayName;
       const number = document.createElement("span");
       number.className = "hexadex-entry-number";
       number.textContent = owlLabel(entry.owl);
@@ -188,6 +289,12 @@
       collected.textContent = formatCollected(entry);
       copy.append(name, number, collected);
       card.append(art, copy);
+      card.addEventListener("click", () => openDetail({
+        owl: entry.owl,
+        name: displayName,
+        firstCollectedAt: entry.firstCollectedAt,
+        context: entry.context
+      }));
       elements.grid.append(card);
     }
   }
@@ -298,7 +405,14 @@
     renderGrid();
   }
 
+  elements.own?.addEventListener("click", () => {
+    const profile = loadProfile();
+    if (validOwl(profile?.owl)) openDetail({ owl: profile.owl, isOwn: true });
+  });
   elements.open?.addEventListener("click", open);
+  elements.detail?.addEventListener("click", event => {
+    if (event.target === elements.detail) elements.detail.close?.();
+  });
   window.addEventListener("online", syncPending);
   renderOwn();
   renderCount();

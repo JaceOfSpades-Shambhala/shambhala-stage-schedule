@@ -1194,9 +1194,7 @@
     const signature = JSON.stringify([entries, [...friendOpenState], compareSelecting, mySets().length, Math.floor(Date.now() / 60000)]);
     if (signature === collectedRenderSignature) return;
     collectedRenderSignature = signature;
-    elements.count.textContent = entries.length
-      ? `${entries.length} friend${entries.length === 1 ? "" : "s"}`
-      : "No friends' sets collected yet";
+    elements.count.textContent = `${entries.length} Friend${entries.length === 1 ? "" : "s"}`;
     elements.empty.hidden = entries.length > 0;
     elements.compareTools.hidden = entries.length === 0;
     elements.compareStart.hidden = compareSelecting;

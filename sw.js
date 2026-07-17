@@ -1,4 +1,4 @@
-const CACHE_NAME = "stage-schedule-v60";
+const CACHE_NAME = "stage-schedule-v61";
 const CACHE_PREFIX = "stage-schedule-v";
 const NETWORK_TIMEOUT_MS = 3500;
 const OPTIONAL_CACHE_TIMEOUT_MS = 5000;
@@ -6,47 +6,47 @@ const CORE_ASSETS = [
   "./",
   "./index.html",
   "./hex-owl-playground.html",
-  "./styles.css?v=60",
-  "./camp-location.js?v=60",
-  "./schedule-data.js?v=60",
-  "./schedule-metadata.js?v=60",
-  "./search-normalize.js?v=60",
-  "./preview-time.js?v=60",
-  "./app.js?v=60",
-  "./undo.js?v=60",
-  "./planner.js?v=60",
-  "./qrcode.js?v=60",
-  "./hexlace-api.js?v=60",
-  "./hexlace-giveaway.js?v=60",
-  "./hexlace-compare.js?v=60",
-  "./hex-owl.js?v=60",
-  "./hex-owl-base.svg?v=60",
-  "./hexadex.js?v=60",
-  "./hexlaces.js?v=60",
-  "./install.js?v=60",
-  "./fonts/InterVariable.woff2?v=60",
-  "./fonts/InterVariable-Italic.woff2?v=60"
+  "./styles.css?v=61",
+  "./camp-location.js?v=61",
+  "./schedule-data.js?v=61",
+  "./schedule-metadata.js?v=61",
+  "./search-normalize.js?v=61",
+  "./preview-time.js?v=61",
+  "./app.js?v=61",
+  "./undo.js?v=61",
+  "./planner.js?v=61",
+  "./qrcode.js?v=61",
+  "./hexlace-api.js?v=61",
+  "./hexlace-giveaway.js?v=61",
+  "./hexlace-compare.js?v=61",
+  "./hex-owl.js?v=61",
+  "./hex-owl-base.svg?v=61",
+  "./hexadex.js?v=61",
+  "./hexlaces.js?v=61",
+  "./install.js?v=61",
+  "./fonts/InterVariable.woff2?v=61",
+  "./fonts/InterVariable-Italic.woff2?v=61"
 ];
 
 // These enhance the shell but are not needed to navigate a saved schedule.
 // Cache them opportunistically so one transient image failure cannot prevent
 // the whole offline app from installing.
 const OPTIONAL_ASSETS = [
-  "./wordmark.svg?v=60",
-  "./stage-names/amp.png?v=60",
-  "./stage-names/fractal-forest.png?v=60",
-  "./stage-names/grove.png?v=60",
-  "./stage-names/living-room.png?v=60",
-  "./stage-names/pagoda.png?v=60",
-  "./stage-names/secret-garden.png?v=60",
-  "./stage-names/village.png?v=60",
+  "./wordmark.svg?v=61",
+  "./stage-names/amp.png?v=61",
+  "./stage-names/fractal-forest.png?v=61",
+  "./stage-names/grove.png?v=61",
+  "./stage-names/living-room.png?v=61",
+  "./stage-names/pagoda.png?v=61",
+  "./stage-names/secret-garden.png?v=61",
+  "./stage-names/village.png?v=61",
   "./manifest.webmanifest",
-  "./favicon.ico?v=60",
-  "./favicon-32.png?v=60",
-  "./favicon-16.png?v=60",
-  "./apple-touch-icon.png?v=60",
-  "./icon-192.png?v=60",
-  "./icon-512.png?v=60"
+  "./favicon.ico?v=61",
+  "./favicon-32.png?v=61",
+  "./favicon-16.png?v=61",
+  "./apple-touch-icon.png?v=61",
+  "./icon-192.png?v=61",
+  "./icon-512.png?v=61"
 ];
 const ASSETS = [...CORE_ASSETS, ...OPTIONAL_ASSETS];
 
@@ -75,7 +75,7 @@ self.addEventListener("activate", event => {
 // the app a background window, refresh the schedule so the cache is already
 // fresh next time it opens - even if it opens offline. Only the small text/data
 // files are refreshed; the icons are skipped to spare festival bandwidth.
-const REFRESH_ASSETS = ["./schedule-data.js?v=60", "./schedule-metadata.js?v=60"];
+const REFRESH_ASSETS = ["./schedule-data.js?v=61", "./schedule-metadata.js?v=61"];
 
 async function refreshSchedule() {
   const cache = await caches.open(CACHE_NAME);

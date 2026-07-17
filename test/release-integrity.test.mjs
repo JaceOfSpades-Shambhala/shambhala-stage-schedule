@@ -13,25 +13,25 @@ test("release assets and service-worker precache use one version and include bot
   ]);
   const releaseSources = [html, serviceWorker, css, manifest, app, hexOwl, playground];
   const referencedVersions = new Set(releaseSources.flatMap(source => [...source.matchAll(/\?v=(\d+)/g)].map(match => match[1])));
-  assert.deepEqual([...referencedVersions], ["60"], "Every release asset query must use exactly v60.");
-  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "60", "The Pages release marker must be v60.");
-  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "60", "The service-worker cache must be v60.");
-  assert.match(readme, /authoritative deployed version[^\n]*\bv60\b/i);
-  assert.match(handoff, /current release \*\*v60\*\*/i);
-  assert.match(handoff, /release bumps ONE version number everywhere \(v60 at the time of writing\)/);
-  assert.match(serviceWorker, /InterVariable\.woff2\?v=60/);
-  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=60/);
-  assert.match(css, /InterVariable\.woff2\?v=60/);
-  assert.match(css, /InterVariable-Italic\.woff2\?v=60/);
-  assert.match(serviceWorker, /schedule-metadata\.js\?v=60/);
-  assert.match(serviceWorker, /undo\.js\?v=60/);
-  assert.match(serviceWorker, /hexlace-compare\.js\?v=60/);
-  assert.match(serviceWorker, /hex-owl\.js\?v=60/);
-  assert.match(serviceWorker, /hex-owl-base\.svg\?v=60/);
+  assert.deepEqual([...referencedVersions], ["61"], "Every release asset query must use exactly v61.");
+  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "61", "The Pages release marker must be v61.");
+  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "61", "The service-worker cache must be v61.");
+  assert.match(readme, /authoritative deployed version[^\n]*\bv61\b/i);
+  assert.match(handoff, /current release \*\*v61\*\*/i);
+  assert.match(handoff, /release bumps ONE version number everywhere \(v61 at the time of writing\)/);
+  assert.match(serviceWorker, /InterVariable\.woff2\?v=61/);
+  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=61/);
+  assert.match(css, /InterVariable\.woff2\?v=61/);
+  assert.match(css, /InterVariable-Italic\.woff2\?v=61/);
+  assert.match(serviceWorker, /schedule-metadata\.js\?v=61/);
+  assert.match(serviceWorker, /undo\.js\?v=61/);
+  assert.match(serviceWorker, /hexlace-compare\.js\?v=61/);
+  assert.match(serviceWorker, /hex-owl\.js\?v=61/);
+  assert.match(serviceWorker, /hex-owl-base\.svg\?v=61/);
   assert.match(serviceWorker, /hex-owl-playground\.html/);
-  assert.match(serviceWorker, /hexadex\.js\?v=60/);
-  assert.match(hexOwl, /hex-owl-base\.svg\?v=60/);
-  assert.match(playground, /hex-owl\.js\?v=60/);
+  assert.match(serviceWorker, /hexadex\.js\?v=61/);
+  assert.match(hexOwl, /hex-owl-base\.svg\?v=61/);
+  assert.match(playground, /hex-owl\.js\?v=61/);
 });
 
 test("schedule and overlap policy stay explicit", async () => {
@@ -114,11 +114,35 @@ test("Hexlace coordination and closed-friend rendering safeguards stay enabled",
 
 test("ordinary schedule and footer copy stay concise", async () => {
   const [html, app] = await Promise.all([read("index.html"), read("app.js")]);
+  const footer = html.match(/<footer>[\s\S]*?<\/footer>/)?.[0] || "";
   assert.doesNotMatch(html, /Unofficial guide|Made as a fan project|coarse location ping/);
   assert.doesNotMatch(app, /Unofficial guide/);
   assert.match(html, /class="offline-ready">Offline ready after first online load</);
   assert.match(html, /A fan project for Shambhala 2026/);
-  assert.match(html, /Hexlace and setlist sharing uses your display name, saved sets, and optional pings/);
-  assert.match(html, /<strong>It does not collect precise location\.<\/strong>/);
+  assert.match(html, /<section class="planner-ping"[\s\S]*?<\/section>\s*<p class="planner-ping-footer">Friends and setlist sharing use your display name, saved sets, and optional pings\. <strong>It does not collect precise location\.<\/strong><\/p>/);
+  assert.doesNotMatch(html, /planner-ping-privacy/);
+  assert.doesNotMatch(footer, /setlist sharing|precise location/);
   assert.match(app, /elements\.scheduleNote\.hidden = true/);
+});
+
+test("Hex Owl and Hexadex discovery UI stays wired to the chosen handoff", async () => {
+  const [html, css, hexadex, hexlaces] = await Promise.all([
+    read("index.html"), read("styles.css"), read("hexadex.js"), read("hexlaces.js")
+  ]);
+  assert.match(html, /<button id="hex-owl-card"[^>]*type="button"/);
+  assert.match(html, /id="hex-owl-rarity"/);
+  assert.match(html, /id="hexadex-avatar"/);
+  assert.match(html, /<span class="control-label">Friends<\/span>[\s\S]*id="hexlace-count"[^>]*>0 Friends<\/span>/);
+  assert.match(html, /<summary><strong>Share with friends<\/strong><\/summary>[\s\S]*class="hexlace-section-subheading">QR, link, display name/);
+  assert.doesNotMatch(html, /<summary><span><strong>(?:Share with friends|Connect the installed app|Manage Hexlace|Admin options)/);
+  assert.match(html, /<h2 id="hexadex-dialog-title">Hexadex<\/h2>/);
+  assert.match(html, /Gotta scan em all/);
+  assert.match(html, /id="hexadex-detail-dialog"/);
+  assert.match(hexlaces, /`\$\{entries\.length\} Friend\$\{entries\.length === 1 \? "" : "s"\}`/);
+  assert.match(hexadex, /const DETAIL_TRAITS = \[[\s\S]*"Owl colour"[\s\S]*"Aura"/);
+  assert.match(hexadex, /function openDetail\(\{ owl, name = "", firstCollectedAt, context, isOwn = false \}\)/);
+  assert.match(hexadex, /elements\.grid\.append\(ghostSlot\(\), ghostSlot\(true\)\)/);
+  assert.match(hexadex, /Travels with your physical Hexlace, always\./);
+  assert.match(css, /\.hexadex-detail-art \{[^}]*width: min\(15rem, 70vw\)[^}]*border-radius: 1rem/);
+  assert.match(css, /body \{[^}]*background: radial-gradient\(circle at 30% -8%, color-mix\(in srgb, var\(--accent\) 15%, #14152a\) 0, #111321 46%, #090a12 100%\)/);
 });
