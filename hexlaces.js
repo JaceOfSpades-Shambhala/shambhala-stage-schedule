@@ -33,6 +33,7 @@
     vendors: "At the vendors"
   };
   const PUBLISH_DEBOUNCE_MS = 4000;
+  const FRIEND_SYNC_RETRY_MS = 2000;
   const OWNER_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
   const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
   const REFRESH_MIN_AGE_MS = 60 * 1000;
@@ -113,6 +114,9 @@
   const friendOpenState = new Map();
   let editorMode = "";
   let publishTimer = 0;
+  let friendSyncTimer = 0;
+  let friendSyncPending = false;
+  let syncingFriends = false;
   let giveawayLink = "";
   let giveawayTapLink = "";
   let renderedQrUrl = "";
@@ -584,6 +588,12 @@
     publishTimer = window.setTimeout(publish, delay);
   }
 
+  function queueFriendCollectionSync(delay = 0) {
+    friendSyncPending = true;
+    window.clearTimeout(friendSyncTimer);
+    friendSyncTimer = window.setTimeout(syncFriendCollection, delay);
+  }
+
   async function createSharingIdentity(name) {
     const credentials = owlRequestCredentials();
     const result = await api("/lists", {
@@ -619,9 +629,18 @@
         identity.lastPublished = Date.now();
       } else if (result.status === 409 && result.body?.currentRevision) {
         identity.dirty = true;
-        identity.conflict = true;
-        identity.conflictRevision = result.body.currentRevision;
-        feedback("This Hexlace changed in another app. Choose which copy to keep.");
+        if (options.backgroundFriendSync) {
+          // A scan only changes this device's collected-friends list. It must
+          // never turn a harmless scan into an ownership-choice prompt.
+          identity.dirty = false;
+          identity.conflict = false;
+          delete identity.conflictRevision;
+          queueFriendCollectionSync(FRIEND_SYNC_RETRY_MS);
+        } else {
+          identity.conflict = true;
+          identity.conflictRevision = result.body.currentRevision;
+          feedback("This Hexlace changed in another app. Choose which copy to keep.");
+        }
       } else if (result.status === 403 || result.status === 404) {
         if (options.fallbackToNew && identity.claimScannedAt) {
           const created = await createSharingIdentity(identity.name);
@@ -833,6 +852,50 @@
       return false;
     } finally {
       pullingOwner = false;
+    }
+  }
+
+  async function syncFriendCollection() {
+    if (!friendSyncPending || syncingFriends) return false;
+    const identity = loadIdentity();
+    if (!identity || identity.pendingClaim || identity.dirty || navigator.onLine === false) return false;
+    syncingFriends = true;
+    try {
+      const localFriends = friendIds();
+      const result = await api(`/lists/${identity.readId}/owner`, {
+        cache: "no-store",
+        headers: { "X-Write-Key": identity.writeKey }
+      });
+      if (!result.ok) return false;
+      const remoteRevision = Number(result.body?.revision);
+      if (!Number.isSafeInteger(remoteRevision) || remoteRevision < 1) return false;
+
+      // This path runs only when the owner state was clean before a friend
+      // scan. Refresh it first, then retain the just-scanned friend locally.
+      if (remoteRevision > (identity.revision || 1)) {
+        if (!storeJson(SETS_KEY, Array.isArray(result.body.sets) ? result.body.sets : [])) return false;
+        if (!storeJson(PING_KEY, result.body.ping || null)) return false;
+        identity.name = result.body.name || identity.name;
+        identity.revision = remoteRevision;
+        identity.lastPublished = Number(result.body.updated) || identity.lastPublished;
+        window.dispatchEvent(new CustomEvent("setlist-restored"));
+        window.dispatchEvent(new CustomEvent("ping-restored"));
+      }
+      if (!restoreFriendIds([...(Array.isArray(result.body.friends) ? result.body.friends : []), ...localFriends])) return false;
+      identity.invalid = false;
+      identity.conflict = false;
+      delete identity.conflictRevision;
+      identity.dirty = true;
+      if (!saveIdentity(identity)) return false;
+      renderMine();
+
+      const published = await publish({ backgroundFriendSync: true });
+      if (published) friendSyncPending = false;
+      return published;
+    } catch {
+      return false;
+    } finally {
+      syncingFriends = false;
     }
   }
 
@@ -1066,6 +1129,7 @@
       return;
     }
     if (identity.pendingClaim) await flushPendingClaim({ fallbackToNew: Boolean(identity.claimScannedAt) });
+    else if (friendSyncPending && !identity.dirty) await syncFriendCollection();
     else if (!window.Hexadex?.loadProfile?.() && mySets().length > 0 && navigator.onLine !== false) {
       identity.dirty = true;
       saveIdentity(identity);
@@ -1572,7 +1636,12 @@
     renderCollected();
   });
   window.addEventListener("ping-changed", () => markDirtyAndPublishSoon(0));
-  window.addEventListener("hexlace-friends-changed", () => markDirtyAndPublishSoon(0));
+  window.addEventListener("hexlace-friends-changed", () => {
+    // A scan is a read/collection action, not an ownership change. If another
+    // edit is already queued, its normal publish will include these friends.
+    if (loadIdentity()?.dirty) markDirtyAndPublishSoon(0);
+    else queueFriendCollectionSync();
+  });
   window.addEventListener("undo-state-changed", event => {
     if (!event.detail?.active && loadIdentity()?.dirty) markDirtyAndPublishSoon(0);
   });
