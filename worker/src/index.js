@@ -49,6 +49,7 @@ const PROFILE_ID_LENGTH = 16;
 const VALID_DAYS = new Set(["Thursday", "Friday", "Saturday", "Sunday"]);
 const VALID_STAGE_IDS = new Set(["amp", "fractal-forest", "grove", "living-room", "pagoda", "secret-garden", "village"]);
 const CAMP_ROLES = new Set(["member", "admin"]);
+const MEMBER_OWL_TRAIT_KEYS = new Set(["rarity", "palette", "ringMode", "ringStyle", "direction", "brow", "eyes", "beak", "marking", "accessory", "aura"]);
 const TIME_PATTERN = /^(1[0-2]|[1-9]):[0-5]\d\s(?:AM|PM)$/;
 // Per-IP limits are sized for festival reality: a whole camp can sit behind
 // one carrier-NAT/hotspot IP, so bursts of legitimate traffic share a bucket.
@@ -163,6 +164,11 @@ function cleanAdminTraits(value) {
     clean[key] = traitValue;
   }
   return clean;
+}
+
+function memberOwlTraits(value) {
+  const clean = cleanAdminTraits(value);
+  return Object.fromEntries(Object.entries(clean).filter(([key]) => MEMBER_OWL_TRAIT_KEYS.has(key)));
 }
 
 function cleanOwl(value) {
@@ -519,7 +525,7 @@ export default {
           if (authorized.error) return authorized.error;
           const body = await readJson(request);
           // v64 clients sent no body because their access-only pass was always
-          // admin. Keep that safe default during the v65 rolling deployment.
+          // admin. Keep that safe default for older access-only clients.
           const role = body?.role === undefined ? "admin" : body.role;
           if (role !== "member" && role !== "admin") return json({ error: "Choose member or admin access." }, 400);
           const pairingToken = randomId(24);
@@ -612,24 +618,33 @@ export default {
         return json({ readId, writeKey, name: list.name || "", sets: Array.isArray(list.sets) ? list.sets : [], ping: list.ping || null, friends: Array.isArray(privateList.friends) ? privateList.friends : [], revision: Number.isSafeInteger(list.revision) ? list.revision : 1 });
       }
 
-      // Admin-only Owl parameters live on the existing private Owl profile.
-      // Values are generic until the visual trait catalogue is finalized.
+      // Camp members and admins can customize only the Owl belonging to the
+      // private profile key supplied with this request.
       if (parts[0] === "profiles" && parts.length === 3 && parts[2] === "owl-admin-traits") {
         if (!hasOwlInfrastructure(env)) return json({ error: "Hex Owl profiles are temporarily unavailable." }, 503);
-        const authorized = await campAuthorization(request, env, "admin");
+        const authorized = await campAuthorization(request, env);
         if (authorized.error) return authorized.error;
         const profileId = parts[1];
         const profileKey = request.headers.get("X-Profile-Key") || "";
         if (!validProfileCredentials(profileId, profileKey)) return json({ error: "Not found." }, 404);
         if (request.method === "GET") {
           const response = await callOwlProfile(env, profileId, "/admin-traits/read", { profileKey });
-          return relayInternal(response);
+          return relayInternal(response, data => authorized.access.role === "admin"
+            ? data
+            : { ...data, traits: memberOwlTraits(data?.traits) });
         }
         if (request.method === "PUT") {
           const limited = await enforceRateLimit(request, env, "updateIp");
           if (limited) return limited;
           const body = await readJson(request);
-          const response = await callOwlProfile(env, profileId, "/admin-traits/write", { profileKey, traits: body?.traits });
+          const traitKeys = body?.traits && typeof body.traits === "object" && !Array.isArray(body.traits)
+            ? Object.keys(body.traits)
+            : [];
+          if (authorized.access.role !== "admin" && traitKeys.some(key => !MEMBER_OWL_TRAIT_KEYS.has(key))) {
+            return json({ error: "Admin access is required for one or more of these Owl traits." }, 403);
+          }
+          const path = authorized.access.role === "admin" ? "/admin-traits/write" : "/admin-traits/write-member";
+          const response = await callOwlProfile(env, profileId, path, { profileKey, traits: body?.traits });
           return relayInternal(response);
         }
       }
@@ -691,8 +706,9 @@ export default {
         if (body.claimable === true && hasCampAccess(env)) {
           const authorized = await campAuthorization(request, env, "admin");
           if (authorized.error) return authorized.error;
-          campRole = typeof body.campRole === "string" ? body.campRole : "member";
-          if (!CAMP_ROLES.has(campRole)) return json({ error: "Camp role must be member or admin." }, 400);
+          const requestedCampRole = typeof body.campRole === "string" ? body.campRole : "";
+          if (requestedCampRole && !CAMP_ROLES.has(requestedCampRole)) return json({ error: "Camp role must be member, admin, or omitted." }, 400);
+          campRole = requestedCampRole || null;
         }
         const payload = cleanPayload(body);
         const blob = serialize(payload, 1, env);

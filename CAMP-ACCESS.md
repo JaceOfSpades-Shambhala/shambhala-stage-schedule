@@ -1,13 +1,14 @@
-# Camp access and admin Hex Owls
+# Camp access and customizable Hex Owls
 
-Camp access is accountless. A privileged physical Hexlace grants either a `member` or `admin` role when it is claimed. The receiving browser/app generates its own random bearer key; the Worker stores only a SHA-256 hash in the `CampAccessRegistry` Durable Object. Releasing a tag or an admin revocation invalidates its grants and device keys.
+Camp access is accountless. A privileged physical Hexlace or a one-use QR grants either a `member` or `admin` role. The receiving browser/app generates its own random bearer key; the Worker stores only a SHA-256 hash in the `CampAccessRegistry` Durable Object. Releasing a privileged tag or an admin revocation invalidates its grants and device keys.
 
 ## What is protected
 
 - The complete **Admin options** panel is hidden until `GET /camp/access` confirms an active admin credential.
-- Claimable camp-tag creation is rejected by the Worker unless the caller is an admin.
-- Admin Hex Owl trait reads and writes require both admin camp access and the owner's private Owl profile key.
-- `member` access is available to future camp-only features but does not reveal or authorize admin controls.
+- Creating any new claimable tag is rejected by the Worker unless the caller is an admin. The default is a regular tag with no camp access.
+- The Hex Owl customizer is visible to verified `member` and `admin` devices that have an Owl.
+- Hex Owl trait reads and writes require camp access plus the Owl owner's private profile key, so a person can edit only their own Owl.
+- `member` access does not reveal or authorize the Admin options panel.
 
 ## One-time first-admin bootstrap
 
@@ -29,36 +30,31 @@ The endpoint also verifies the private Hexlace write key. The registry refuses a
 wrangler.cmd secret delete CAMP_BOOTSTRAP_KEY
 ```
 
-## Issuing access
+## Creating new tags
 
-An admin opens **My Hexlace → Admin options**, chooses **Camp member** or **Camp admin**, and creates the claimable tag. Its claim URL contains two unrelated opaque values:
+An admin opens **My Hexlace -> Admin options** and chooses the access for the new claimable tag. **No camp access** is the default and creates an ordinary Hexlace. Choosing **Camp member** or **Camp admin** creates a privileged tag whose claim URL contains two unrelated opaque values:
 
 - `claim` transfers ordinary Hexlace ownership through the existing seven-day contention flow.
 - `camp` registers the claimant device's locally generated camp-access key with the selected role.
 
 The role is not encoded in either token. Admins can revoke a tag through `POST /camp/access/revoke`; a management control can be added later without changing the storage model.
 
-Camp access belongs to the claimant, not to the Owl: the existing physical-tag trade flow swaps Hexlaces and Owls but does not silently swap member/admin roles. Releasing a privileged Hexlace revokes its access; a newly issued privileged claim is required for the next owner.
+For most people, grant camp access with the one-use QR flow below and keep their NFC tag ordinary. Camp access belongs to the recipient device, not to the Owl: the existing physical-tag trade flow swaps Hexlaces and Owls but does not silently swap member/admin roles. Releasing a privileged Hexlace revokes its access; a newly issued privileged claim is required for the next owner.
 
 ## Adding access to an existing phone
 
-Do not use the Hexlace profile handoff or rewrite anyone's NFC tag for this. On an already-authorized admin device, open **My Hexlace → Admin options**, choose **Camp member** or **Camp admin**, and create a one-use access QR. Have the recipient scan that QR in person with the phone that should receive access.
+Do not use the Hexlace profile handoff or rewrite anyone's NFC tag for this. On an already-authorized admin device, open **My Hexlace -> Admin options**, choose **Camp member** or **Camp admin**, and create a one-use access QR. Have the recipient scan that QR in person with the phone that should receive access.
 
-The receiving phone generates its own private bearer key and redeems the pass automatically. The regular page contains no camp-access menu, code field, or status, so visitors without verified admin access see the same interface as before. Only a phone arriving from an access QR sees the temporary redemption result.
+The receiving phone generates its own private bearer key and redeems the pass automatically. The regular page contains no camp-access menu, code field, or status, so visitors without verified access see the same interface as before. Only a phone arriving from an access QR sees the temporary redemption result.
 
 This flow calls only `POST /camp/pairings` and `POST /camp/pairings/redeem`. It never reads, returns, or writes the receiving device's Hexlace identity, Owl profile, saved sets, friends, pings, or NFC tag. A QR expires after 10 minutes, can be redeemed by only one device key, and may be retried by that same key after a dropped response. The UI intentionally provides no copy, share, or NFC-write action so an access pass is less likely to be forwarded or overwrite a set-list tag.
 
-## Admin Owl trait framework
+## Camp Hex Owl customizer
 
-Admin Owl overrides are bounded simple values stored on the existing private Hex Owl profile. Saved overrides are republished with the Owl and rendered through the renderer's validated override path. No visual parameters are registered yet.
+Verified camp members and admins see **Customize my Hex Owl** inside My Hexlace. The page builds one dropdown for every editable, enabled trait in that Owl renderer version, including rarity, colours, portal treatment, face treatments, eyes, beak, markings, and aura. Categories with only one possible value stay out of the form.
 
-Future trait controls register themselves without changing authorization, storage, or API routes:
+The editor shows the immutable original Owl beside a live preview. **Use original traits** clears every override; it does not change the Owl seed or number. The renderer still validates combinations and may adjust an incompatible choice.
 
-```js
-CampAccess.registerOwlTraits([
-  { key: "palette", label: "Owl colour", type: "select", options: ["auto", "future-admin-palette"] },
-  { key: "aura", label: "Aura", type: "toggle", defaultValue: false }
-]);
-```
+Saved choices are bounded simple values stored on the existing private Hex Owl profile, republished with that Owl, and rendered through the renderer's validated override path. The existing `/owl-admin-traits` route name remains for storage compatibility even though both camp roles may now use it. The Worker accepts at most 24 values with bounded keys and scalar string, number, boolean, or null values.
 
-Supported control types are `select`, `range`, `color`, `toggle`, and `text`. The Worker accepts at most 24 values with bounded keys and scalar string, number, boolean, or null values.
+The framework also keeps an admin-only extension point for future parameters. `CampAccess.registerOwlTraits(...)` can add future dropdown definitions for admins without exposing them to members. The Worker separately limits member writes to the current renderer trait keys, so hiding a future admin control in the page is not the only protection.

@@ -1,13 +1,13 @@
 @font-face {
   font-family: "Inter";
-  src: url("fonts/InterVariable.woff2?v=65") format("woff2");
+  src: url("fonts/InterVariable.woff2?v=66") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Inter";
-  src: url("fonts/InterVariable-Italic.woff2?v=65") format("woff2");
+  src: url("fonts/InterVariable-Italic.woff2?v=66") format("woff2");
   font-weight: 100 900;
   font-style: italic;
   font-display: swap;
@@ -189,12 +189,19 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .hexlace-admin-section > summary { color: var(--muted); }
 .hexlace-admin-label { width: max-content; padding: .12rem .42rem; border: 1px solid rgba(255, 255, 255, .22); border-radius: 999px; font-size: .55rem !important; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
 .hexlace-admin-divider { height: 1px; background: rgba(255, 255, 255, .07); }
-.hexlace-admin-role, .hex-owl-admin-customizer, .hex-owl-admin-trait-controls { display: grid; gap: .55rem; }
+.hexlace-admin-role { display: grid; gap: .55rem; }
 .hexlace-admin-role { color: var(--muted); font-size: .72rem; font-weight: 800; }
-.hexlace-admin-role select, .hex-owl-admin-trait input, .hex-owl-admin-trait select { width: 100%; min-height: 2.6rem; padding: .55rem .68rem; border: 1px solid var(--line); border-radius: .65rem; color: var(--ink); background: rgba(8, 9, 18, .72); font: inherit; }
-.hex-owl-admin-customizer { padding: .15rem 0; }
-.hex-owl-admin-trait { display: grid; gap: .32rem; color: var(--muted); font-size: .72rem; font-weight: 800; }
-.hex-owl-admin-trait input[type="checkbox"] { width: 1.3rem; min-height: 1.3rem; }
+.hexlace-admin-role select, .hex-owl-camp-trait select { width: 100%; min-height: 2.6rem; padding: .55rem .68rem; border: 1px solid var(--line); border-radius: .65rem; color: var(--ink); background: rgba(8, 9, 18, .72); font: inherit; }
+.hex-owl-camp-customizer, .hex-owl-camp-trait-controls { display: grid; gap: .7rem; }
+.hex-owl-camp-preview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+.hex-owl-camp-preview-card { display: grid; gap: .35rem; min-width: 0; margin: 0; padding: .55rem; border: 1px solid var(--line); border-radius: .75rem; background: rgba(8, 9, 18, .44); }
+.hex-owl-camp-preview-art { width: 100%; aspect-ratio: 1; overflow: hidden; border-radius: .55rem; background: #090716; }
+.hex-owl-camp-preview-art svg { display: block; width: 100%; height: 100%; }
+.hex-owl-camp-preview-card figcaption { color: var(--muted); font-size: .64rem; font-weight: 900; letter-spacing: .07em; text-align: center; text-transform: uppercase; }
+.hex-owl-camp-trait-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.hex-owl-camp-trait { display: grid; gap: .32rem; min-width: 0; color: var(--muted); font-size: .72rem; font-weight: 800; }
+.hex-owl-camp-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.hex-owl-camp-actions .planner-action { flex: 1 1 10rem; }
 .hexlace-muted { color: var(--muted); font-size: .72rem; font-weight: 650; }
 .hexlace-dialog { width: min(calc(100% - 1.5rem), 430px); max-height: calc(100dvh - 1.5rem); margin: auto; padding: 0; border: 1px solid rgba(255, 255, 255, .24); border-radius: 1rem; color: var(--ink); background: #1d1b2b; box-shadow: 0 18px 60px rgba(0, 0, 0, .55); }
 .hexlace-dialog::backdrop { background: rgba(6, 7, 14, .68); backdrop-filter: blur(3px); }
@@ -424,5 +431,5 @@ body.stage-village { --accent: #a98ad8; --accent-deep: #69499c; }
 @media (min-width: 520px) { .stage-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (min-width: 650px) { .shell { padding-top: 5rem; } .live-panel { padding: 1.35rem; } .planner-panel { padding: 1.2rem 1.35rem; } .hexlace-panel { padding: 0; } .hexlace-panel-summary, .hexlace-panel-heading { padding: 1.2rem 1.35rem; } .hexlace-panel-body { padding: 0 1.35rem 1.2rem; } .schedule-note { padding-left: 1.55rem; padding-right: 1.55rem; } .set { grid-template-columns: 7rem minmax(0, 1fr) auto; padding-left: 1.55rem; padding-right: 1.55rem; } .set-list.timeline .set { grid-template-columns: 32px 84px minmax(0, 1fr) auto; } .set-list.timeline .set::before, .set-list.timeline .set::after { left: calc(1.55rem + 16px - 1px); } }
 @media (max-width: 420px) { .day-tabs .tab { flex-direction: column; gap: .12rem; } .planner-heading { align-items: stretch; flex-direction: column; } .hexlace-panel-heading { align-items: center; flex-direction: row; } .planner-actions { justify-content: flex-start; } .set { padding-left: .9rem; padding-right: .9rem; } .set-list.timeline .set { grid-template-columns: 24px 72px minmax(0, 1fr) auto; column-gap: 8px; } .set-list.timeline .set::before, .set-list.timeline .set::after { left: calc(.9rem + 12px - 1px); } .planner-add { padding: .32rem .6rem; } }
-@media (max-width: 520px) { .planner-ping-current { align-items: flex-start; } .planner-set { grid-template-columns: 4.4rem minmax(0, 1fr) auto; gap: 7px; } .planner-row-actions { flex-direction: row; } .planner-ping-set, .planner-row-actions .planner-remove { min-height: 32px; } .planner-row-actions .planner-remove { width: 32px; } .planner-ping-set { min-width: 3rem; padding-left: 8px; padding-right: 8px; } }
+@media (max-width: 520px) { .planner-ping-current { align-items: flex-start; } .planner-set { grid-template-columns: 4.4rem minmax(0, 1fr) auto; gap: 7px; } .planner-row-actions { flex-direction: row; } .planner-ping-set, .planner-row-actions .planner-remove { min-height: 32px; } .planner-row-actions .planner-remove { width: 32px; } .planner-ping-set { min-width: 3rem; padding-left: 8px; padding-right: 8px; } .hex-owl-camp-trait-controls { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tab, .planner-action, .planner-remove, .planner-add, .install-button, .set-node, .overlap-chevron, .hex-owl-card, .hexadex-open, .hexadex-own-slot, .hexadex-entry { transition: none; } .now-playing[data-status="active"] .status-dot, .update-banner, .planner-live-dot { animation: none; } }

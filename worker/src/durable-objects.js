@@ -8,6 +8,7 @@ const OWL_SEASON = 2026;
 const HEXADEX_PAGE_SIZE = 24;
 const CAMP_ROLES = new Set(["member", "admin"]);
 const MAX_ADMIN_TRAITS = 24;
+const MEMBER_OWL_TRAIT_KEYS = new Set(["rarity", "palette", "ringMode", "ringStyle", "direction", "brow", "eyes", "beak", "marking", "accessory", "aura"]);
 const CAMP_PAIRING_TTL_MS = 10 * 60 * 1000;
 
 function nowMs(env) {
@@ -745,6 +746,7 @@ export class HexOwlProfile {
     if (url.pathname === "/read") return this.readProfile();
     if (url.pathname === "/admin-traits/read") return this.readAdminTraits();
     if (url.pathname === "/admin-traits/write") return this.writeAdminTraits(body);
+    if (url.pathname === "/admin-traits/write-member") return this.writeMemberTraits(body);
     if (url.pathname === "/hexadex/add") return this.addHexadex(body);
     if (url.pathname === "/hexadex/read") return this.readHexadex(body);
     return json({ error: "Not found." }, 404);
@@ -878,8 +880,22 @@ export class HexOwlProfile {
 
   async writeAdminTraits(body) {
     const traits = cleanAdminTraits(body.traits);
-    if (!traits) return json({ error: `Admin traits must contain at most ${MAX_ADMIN_TRAITS} simple values.` }, 400);
+    if (!traits) return json({ error: `Owl traits must contain at most ${MAX_ADMIN_TRAITS} simple values.` }, 400);
     this.record.adminTraits = traits;
+    this.record.updatedAt = nowMs(this.env);
+    await this.ctx.storage.put("profile", this.record);
+    return json({ ok: true, traits });
+  }
+
+  async writeMemberTraits(body) {
+    const traits = cleanAdminTraits(body.traits);
+    if (!traits) return json({ error: `Owl traits must contain at most ${MAX_ADMIN_TRAITS} simple values.` }, 400);
+    if (Object.keys(traits).some(key => !MEMBER_OWL_TRAIT_KEYS.has(key))) {
+      return json({ error: "Admin access is required for one or more of these Owl traits." }, 403);
+    }
+    const current = cleanAdminTraits(this.record.adminTraits) || {};
+    const adminOnlyTraits = Object.fromEntries(Object.entries(current).filter(([key]) => !MEMBER_OWL_TRAIT_KEYS.has(key)));
+    this.record.adminTraits = { ...adminOnlyTraits, ...traits };
     this.record.updatedAt = nowMs(this.env);
     await this.ctx.storage.put("profile", this.record);
     return json({ ok: true, traits });

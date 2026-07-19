@@ -723,7 +723,8 @@
   async function createGiveaway() {
     elements.giveaway.disabled = true;
     try {
-      const campRole = elements.giveawayRole?.value === "admin" ? "admin" : "member";
+      const selectedRole = elements.giveawayRole?.value || "";
+      const campRole = selectedRole === "admin" || selectedRole === "member" ? selectedRole : "";
       const result = await window.requestHexlaceGiveaway(api, campRole);
       if (!result.ok || !result.body?.readId) { feedback("Couldn't create one - check your signal."); return; }
       const campPart = result.body.campGrantToken ? `&camp=${encodeURIComponent(result.body.campGrantToken)}` : "";
@@ -733,7 +734,7 @@
       renderQr(elements.giveawayQr, giveawayLink);
       elements.giveawayResult.hidden = false;
       addCollected(result.body.readId, "Unclaimed Hexlace");
-      feedback("Giveaway Hexlace created.");
+      feedback(campRole ? `Giveaway Hexlace created with ${campRole} access.` : "Regular giveaway Hexlace created without camp access.");
     } finally {
       elements.giveaway.disabled = false;
     }

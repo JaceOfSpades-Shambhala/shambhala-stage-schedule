@@ -4,13 +4,29 @@
 // the saved key is still active.
 (() => {
   const API_BASE = "https://shambhala-setlists.hexadecibel.workers.dev";
+  const PUBLIC_APP_URL = "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/";
   const STORAGE_KEY = "shambhala-2026-camp-access";
   const KEY_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
   const API_TIMEOUT_MS = 12000;
-  const definitions = new Map();
+  const TRAIT_LABELS = Object.freeze({
+    rarity: "Rarity",
+    palette: "Owl colour",
+    ringMode: "Portal colours",
+    ringStyle: "Ring finish",
+    direction: "Ring twist",
+    brow: "Brow treatment",
+    eyes: "Eye style",
+    beak: "Beak",
+    marking: "Facial markings",
+    accessory: "Accessory",
+    aura: "Aura"
+  });
+  const adminDefinitions = new Map();
+  let definitions = [];
   let savedTraits = {};
   let traitsLoaded = false;
   let verifiedThisPage = false;
+  let editorSignature = "";
 
   const elements = {
     adminPanel: document.querySelector("#hexlace-admin-section"),
@@ -23,10 +39,14 @@
     pairQr: document.querySelector("#camp-device-pair-qr"),
     pairResultRole: document.querySelector("#camp-device-pair-result-role"),
     pairFeedback: document.querySelector("#camp-device-pair-feedback"),
-    traitControls: document.querySelector("#hex-owl-admin-trait-controls"),
-    traitEmpty: document.querySelector("#hex-owl-admin-trait-empty"),
-    traitSave: document.querySelector("#hex-owl-admin-trait-save"),
-    traitFeedback: document.querySelector("#hex-owl-admin-trait-feedback")
+    traitSection: document.querySelector("#hex-owl-camp-editor-section"),
+    traitControls: document.querySelector("#hex-owl-camp-trait-controls"),
+    traitOriginal: document.querySelector("#hex-owl-camp-original"),
+    traitPreview: document.querySelector("#hex-owl-camp-preview"),
+    traitPreviewStatus: document.querySelector("#hex-owl-camp-preview-status"),
+    traitReset: document.querySelector("#hex-owl-camp-trait-reset"),
+    traitSave: document.querySelector("#hex-owl-camp-trait-save"),
+    traitFeedback: document.querySelector("#hex-owl-camp-trait-feedback")
   };
   let currentPairing = null;
 
@@ -100,7 +120,7 @@
     verifiedThisPage = true;
     render();
     window.dispatchEvent(new CustomEvent("camp-access-changed", { detail: { active: true, role: next.role } }));
-    if (next.role === "admin") window.setTimeout(loadTraits, 0);
+    window.setTimeout(loadTraits, 0);
     return next;
   }
 
@@ -109,6 +129,7 @@
     savedTraits = {};
     traitsLoaded = false;
     verifiedThisPage = false;
+    editorSignature = "";
     render();
   }
 
@@ -172,7 +193,7 @@
   }
 
   function pairingUrl(token) {
-    const url = new URL(window.location.href);
+    const url = new URL(window.location?.protocol === "file:" ? PUBLIC_APP_URL : window.location.href);
     url.search = "";
     url.searchParams.set("camp-pair", token);
     url.hash = "my-hexlace";
@@ -272,71 +293,218 @@
     return redeemPairing(token);
   }
 
-  function validDefinition(source) {
-    return source && /^[a-z][a-z0-9_-]{0,39}$/i.test(source.key || "")
-      && typeof source.label === "string" && source.label.trim()
-      && ["select", "range", "color", "toggle", "text"].includes(source.type);
+  function hasVerifiedCampAccess() {
+    const access = load();
+    return verifiedThisPage && access?.active === true && ["member", "admin"].includes(access.role);
+  }
+
+  function currentProfile() {
+    return window.Hexadex?.loadProfile?.() || null;
+  }
+
+  function optionList(items) {
+    return (Array.isArray(items) ? items : [])
+      .filter(item => item && item.enabled !== false && (item.id != null || item.value != null))
+      .map(item => ({
+        value: String(item.id ?? item.value),
+        label: String(item.name ?? item.label ?? item.id ?? item.value)
+      }))
+      .filter(option => option.value && option.label);
+  }
+
+  function registeredOptionList(items) {
+    return (Array.isArray(items) ? items : [])
+      .map(item => typeof item === "object" && item
+        ? { value: String(item.value ?? item.id ?? ""), label: String(item.label ?? item.name ?? item.value ?? item.id ?? "") }
+        : { value: String(item ?? ""), label: String(item ?? "") })
+      .filter(option => option.value && option.label);
   }
 
   function registerOwlTraits(items) {
     for (const source of Array.isArray(items) ? items : [items]) {
-      if (!validDefinition(source)) continue;
-      definitions.set(source.key, { ...source, label: source.label.trim() });
+      const options = registeredOptionList(source?.options);
+      if (!source || !/^[a-z][a-z0-9_-]{0,39}$/i.test(source.key || "")
+        || typeof source.label !== "string" || !source.label.trim() || options.length < 1) continue;
+      adminDefinitions.set(source.key, {
+        key: source.key,
+        label: source.label.trim(),
+        options,
+        originalValue: "",
+        originalLabel: String(source.defaultLabel || "Renderer default"),
+        adminOnly: true
+      });
     }
-    renderTraitControls();
+    editorSignature = "";
+    if (hasVerifiedCampAccess() && load()?.role === "admin") renderTraitControls(true);
   }
 
-  function inputFor(definition) {
-    let input;
-    if (definition.type === "select") {
-      input = document.createElement("select");
-      for (const option of definition.options || []) {
-        const value = typeof option === "object" ? option.value : option;
-        const label = typeof option === "object" ? option.label : option;
-        const element = document.createElement("option");
-        element.value = String(value);
-        element.textContent = String(label);
-        input.append(element);
+  function traitDefinitions(profile = currentProfile()) {
+    const owl = profile?.owl;
+    if (!owl?.seed || !Number.isSafeInteger(owl.version) || !window.HexOwl?.catalogue || !window.HexOwl?.selectTraits) return [];
+    try {
+      const catalogue = window.HexOwl.catalogue(owl.version);
+      const original = window.HexOwl.selectTraits(owl.seed, owl.version);
+      const next = [];
+      const rarityOptions = optionList(catalogue?.rarities);
+      if (rarityOptions.length > 1) {
+        next.push({
+          key: "rarity",
+          label: TRAIT_LABELS.rarity,
+          options: rarityOptions,
+          originalValue: original.rarity?.id || "",
+          originalLabel: original.rarity?.name || original.rarity?.id || "Original"
+        });
       }
-    } else {
-      input = document.createElement("input");
-      input.type = definition.type === "toggle" ? "checkbox" : definition.type;
-      if (definition.min != null) input.min = String(definition.min);
-      if (definition.max != null) input.max = String(definition.max);
-      if (definition.step != null) input.step = String(definition.step);
+      for (const [key, items] of Object.entries(catalogue?.categories || {})) {
+        const options = optionList(items);
+        if (options.length <= 1) continue;
+        const originalValue = original.selectionIds?.[key] || "";
+        const originalOption = options.find(option => option.value === originalValue);
+        next.push({
+          key,
+          label: TRAIT_LABELS[key] || key.replace(/([a-z])([A-Z])/g, "$1 $2"),
+          options,
+          originalValue,
+          originalLabel: originalOption?.label || originalValue || "Original"
+        });
+      }
+      if (load()?.role === "admin") {
+        const existingKeys = new Set(next.map(definition => definition.key));
+        for (const definition of adminDefinitions.values()) {
+          if (!existingKeys.has(definition.key)) next.push({ ...definition });
+        }
+      }
+      return next;
+    } catch {
+      return [];
+    }
+  }
+
+  function inputFor(definition, activeTraits) {
+    const input = document.createElement("select");
+    const original = document.createElement("option");
+    original.value = "";
+    original.textContent = `Original - ${definition.originalLabel}`;
+    input.append(original);
+    for (const option of definition.options) {
+      const element = document.createElement("option");
+      element.value = option.value;
+      element.textContent = option.label;
+      input.append(element);
     }
     input.dataset.traitKey = definition.key;
-    const value = savedTraits[definition.key] ?? definition.defaultValue;
-    if (definition.type === "toggle") input.checked = value === true;
-    else if (value != null) input.value = String(value);
+    const saved = activeTraits?.[definition.key];
+    input.value = definition.options.some(option => option.value === saved) ? saved : "";
+    input.addEventListener("change", renderTraitPreview);
     return input;
   }
 
-  function renderTraitControls() {
+  function renderTraitControls(force = false) {
     if (!elements.traitControls) return;
+    const profile = currentProfile();
+    const activeTraits = traitsLoaded ? savedTraits : (profile?.owl?.adminTraits || savedTraits);
+    const signature = JSON.stringify([
+      profile?.profileId || "",
+      profile?.owl?.seed || "",
+      profile?.owl?.version || 0,
+      activeTraits
+    ]);
+    if (!force && signature === editorSignature && elements.traitControls.childElementCount > 0) return;
+    editorSignature = signature;
+    definitions = traitDefinitions(profile);
     elements.traitControls.replaceChildren();
-    elements.traitEmpty.hidden = definitions.size > 0;
-    elements.traitSave.hidden = definitions.size === 0;
-    for (const definition of definitions.values()) {
+    if (!definitions.length) {
+      const empty = document.createElement("p");
+      empty.className = "hex-owl-camp-preview-status";
+      empty.textContent = "This Owl does not have editable traits yet.";
+      elements.traitControls.append(empty);
+    }
+    for (const definition of definitions) {
       const label = document.createElement("label");
-      label.className = "hex-owl-admin-trait";
+      label.className = "hex-owl-camp-trait";
       const text = document.createElement("span");
       text.textContent = definition.label;
-      label.append(text, inputFor(definition));
+      label.append(text, inputFor(definition, activeTraits));
       elements.traitControls.append(label);
+    }
+    if (elements.traitSave) elements.traitSave.disabled = definitions.length === 0;
+    renderTraitPreview();
+  }
+
+  function traitsFromControls() {
+    const traits = {};
+    for (const definition of definitions) {
+      const input = elements.traitControls?.querySelector(`[data-trait-key="${definition.key}"]`);
+      if (input?.value) traits[definition.key] = input.value;
+    }
+    return traits;
+  }
+
+  function escapeRegex(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function namespaceSvg(svg, suffix) {
+    const ids = [...String(svg).matchAll(/\sid="([^"]+)"/g)].map(match => match[1]);
+    let result = String(svg);
+    for (const id of ids) {
+      const escaped = escapeRegex(id);
+      const next = `${id}-${suffix}`;
+      result = result
+        .replace(new RegExp(`id="${escaped}"`, "g"), `id="${next}"`)
+        .replace(new RegExp(`url\\(#${escaped}\\)`, "g"), `url(#${next})`)
+        .replace(new RegExp(`(href|xlink:href)="#${escaped}"`, "g"), `$1="#${next}"`);
+    }
+    return result;
+  }
+
+  function mountPreview(container, svg, suffix) {
+    if (!container) return;
+    container.innerHTML = namespaceSvg(svg, suffix);
+    window.HexOwl?.hydrate?.(container);
+  }
+
+  function renderTraitPreview() {
+    const profile = currentProfile();
+    const owl = profile?.owl;
+    if (!owl?.seed || !window.HexOwl?.renderSvg || !window.HexOwl?.renderWithTraits) return;
+    try {
+      const draft = traitsFromControls();
+      const originalSvg = window.HexOwl.renderSvg(owl.seed, owl.version);
+      const previewSvg = window.HexOwl.renderWithTraits(owl.seed, { overrides: draft }, owl.version);
+      mountPreview(elements.traitOriginal, originalSvg, "camp-original");
+      mountPreview(elements.traitPreview, previewSvg, "camp-preview");
+      const count = Object.keys(draft).length;
+      const repairs = window.HexOwl.resolveTraits?.(owl.seed, { overrides: draft }, owl.version)?.repairs || [];
+      if (elements.traitPreviewStatus) {
+        elements.traitPreviewStatus.textContent = count === 0
+          ? "Showing the original Owl on both sides."
+          : `${count} trait ${count === 1 ? "choice" : "choices"} selected.${repairs.length ? ` The Owl adjusted ${repairs.length} ${repairs.length === 1 ? "choice" : "choices"} to keep the combination valid.` : ""}`;
+      }
+    } catch {
+      if (elements.traitPreviewStatus) elements.traitPreviewStatus.textContent = "This preview could not be drawn.";
     }
   }
 
+  function resetTraits() {
+    for (const input of elements.traitControls?.querySelectorAll?.("[data-trait-key]") || []) input.value = "";
+    renderTraitPreview();
+    if (elements.traitFeedback) elements.traitFeedback.textContent = "Original traits selected. Save to keep this version.";
+  }
+
   function applyTraitsToOwnOwl() {
-    const profile = window.Hexadex?.loadProfile?.();
+    const profile = currentProfile();
     if (!profile?.owl || !window.Hexadex?.setOwl) return;
-    window.Hexadex.setOwl({ ...profile.owl, adminTraits: { ...savedTraits } });
+    const owl = { ...profile.owl };
+    if (Object.keys(savedTraits).length) owl.adminTraits = { ...savedTraits };
+    else delete owl.adminTraits;
+    window.Hexadex.setOwl(owl);
   }
 
   async function loadTraits() {
-    if (load()?.role !== "admin") return false;
-    const profile = window.Hexadex?.loadProfile?.();
-    if (!profile?.profileId || !profile?.profileKey || navigator.onLine === false) return false;
+    if (!hasVerifiedCampAccess()) return false;
+    const profile = currentProfile();
+    if (!profile?.profileId || !profile?.profileKey || !profile?.owl || navigator.onLine === false) return false;
     try {
       const result = await api(`/profiles/${profile.profileId}/owl-admin-traits`, {
         cache: "no-store",
@@ -346,29 +514,18 @@
       savedTraits = result.body?.traits && typeof result.body.traits === "object" ? result.body.traits : {};
       traitsLoaded = true;
       applyTraitsToOwnOwl();
-      renderTraitControls();
+      renderTraitControls(true);
       return true;
     } catch {
       return false;
     }
   }
 
-  function traitsFromControls() {
-    const traits = { ...savedTraits };
-    for (const definition of definitions.values()) {
-      const input = elements.traitControls?.querySelector(`[data-trait-key="${definition.key}"]`);
-      if (!input) continue;
-      if (definition.type === "toggle") traits[definition.key] = input.checked;
-      else if (definition.type === "range") traits[definition.key] = Number(input.value);
-      else traits[definition.key] = input.value;
-    }
-    return traits;
-  }
-
   async function saveTraits() {
-    const profile = window.Hexadex?.loadProfile?.();
-    if (load()?.role !== "admin" || !profile?.profileId || !profile?.profileKey) return false;
-    elements.traitSave.disabled = true;
+    const profile = currentProfile();
+    if (!hasVerifiedCampAccess() || !profile?.profileId || !profile?.profileKey || !profile?.owl) return false;
+    if (elements.traitSave) elements.traitSave.disabled = true;
+    if (elements.traitFeedback) elements.traitFeedback.textContent = "Saving Owl choices...";
     try {
       const result = await api(`/profiles/${profile.profileId}/owl-admin-traits`, {
         method: "PUT",
@@ -379,14 +536,16 @@
       savedTraits = result.body?.traits || {};
       traitsLoaded = true;
       applyTraitsToOwnOwl();
-      elements.traitFeedback.textContent = "Admin Owl choices saved.";
+      editorSignature = "";
+      renderTraitControls(true);
+      if (elements.traitFeedback) elements.traitFeedback.textContent = "Camp Owl choices saved.";
       window.dispatchEvent(new CustomEvent("hex-owl-admin-traits-changed", { detail: { traits: { ...savedTraits } } }));
       return true;
     } catch {
-      elements.traitFeedback.textContent = "Couldn't save Owl choices. Check your signal and try again.";
+      if (elements.traitFeedback) elements.traitFeedback.textContent = "Couldn't save Owl choices. Check your signal and try again.";
       return false;
     } finally {
-      elements.traitSave.disabled = false;
+      if (elements.traitSave) elements.traitSave.disabled = definitions.length === 0;
     }
   }
 
@@ -397,11 +556,18 @@
       elements.adminPanel.hidden = !isAdmin;
       if (!isAdmin) elements.adminPanel.open = false;
     }
-    if (isAdmin) renderTraitControls();
+    const profile = currentProfile();
+    const canCustomize = hasVerifiedCampAccess() && Boolean(profile?.owl?.seed);
+    if (elements.traitSection) {
+      elements.traitSection.hidden = !canCustomize;
+      if (!canCustomize) elements.traitSection.open = false;
+    }
+    if (canCustomize) renderTraitControls();
   }
 
   elements.pairCreate?.addEventListener("click", createPairing);
   elements.traitSave?.addEventListener("click", saveTraits);
+  elements.traitReset?.addEventListener("click", resetTraits);
   window.addEventListener("online", refresh);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 
@@ -418,6 +584,7 @@
     handoffCredentials,
     applyResponse,
     registerOwlTraits,
+    owlCustomizationDefinitions: () => traitDefinitions(),
     owlTraits: () => ({ ...savedTraits }),
     traitsLoaded: () => traitsLoaded
   });

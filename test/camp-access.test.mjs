@@ -13,9 +13,10 @@ function storage() {
   };
 }
 
-async function loadCampAccess(fetchHexlaceApi = () => { throw new Error("not used"); }) {
+async function loadCampAccess(fetchHexlaceApi = () => { throw new Error("not used"); }, windowGlobals = {}) {
   const source = await readFile(new URL("../camp-access.js", import.meta.url), "utf8");
   const adminPanel = { hidden: true, open: false };
+  const traitSection = { hidden: true, open: false };
   const localStorage = storage();
   const context = {
     crypto: webcrypto,
@@ -24,18 +25,23 @@ async function loadCampAccess(fetchHexlaceApi = () => { throw new Error("not use
     CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
     document: {
       hidden: false,
-      querySelector(selector) { return selector === "#hexlace-admin-section" ? adminPanel : null; },
+      querySelector(selector) {
+        if (selector === "#hexlace-admin-section") return adminPanel;
+        if (selector === "#hex-owl-camp-editor-section") return traitSection;
+        return null;
+      },
       addEventListener() {}
     },
     window: {
       addEventListener() {},
       dispatchEvent() {},
       setTimeout() {},
-      fetchHexlaceApi
+      fetchHexlaceApi,
+      ...windowGlobals
     }
   };
   vm.runInNewContext(source, context);
-  return { access: context.window.CampAccess, adminPanel, localStorage };
+  return { access: context.window.CampAccess, adminPanel, traitSection, localStorage };
 }
 
 test("camp admin controls stay hidden until a claimed device key is confirmed", async () => {
@@ -63,6 +69,47 @@ test("regular page has no visible camp-access controls", async () => {
   assert.doesNotMatch(html, /camp-device-access-(?:section|code|redeem)/);
   assert.match(html, /id="camp-access-redemption-status"[^>]*hidden/);
   assert.match(html, /id="hexlace-admin-section"[^>]*hidden/);
+  assert.match(html, /id="hex-owl-camp-editor-section"[^>]*hidden/);
+  assert.match(html, /id="hex-owl-camp-original"/);
+  assert.match(html, /id="hex-owl-camp-preview"/);
+  assert.match(html, /<option value="">No camp access<\/option>/);
+});
+
+test("member and admin access expose the current Owl catalogue without disabled or fixed traits", async () => {
+  const owl = { seed: "0123456789abcdef0123456789abcdef", version: 2 };
+  const profile = { profileId: "profile-1", profileKey: "private-key", owl };
+  const HexOwl = {
+    catalogue: () => ({
+      rarities: [{ id: "common", name: "Common" }, { id: "rare", name: "Rare" }],
+      categories: {
+        palette: [{ id: "day", name: "Day" }, { id: "night", name: "Night" }, { id: "disabled", name: "Disabled", enabled: false }],
+        eyes: [{ id: "open", name: "Open" }, { id: "sleepy", name: "Sleepy" }],
+        accessory: [{ id: "none", name: "None" }]
+      }
+    }),
+    selectTraits: () => ({
+      rarity: { id: "common", name: "Common" },
+      selectionIds: { palette: "day", eyes: "open", accessory: "none" }
+    })
+  };
+  const { access, adminPanel, traitSection } = await loadCampAccess(undefined, {
+    Hexadex: { loadProfile: () => profile },
+    HexOwl
+  });
+
+  access.claimCredentials("grant-token-that-is-long-enough-123");
+  access.applyResponse({ campAccess: { active: true, role: "member", readId: "abcdEFGH" } });
+  assert.equal(adminPanel.hidden, true);
+  assert.equal(traitSection.hidden, false);
+  assert.deepEqual([...access.owlCustomizationDefinitions()].map(definition => definition.key), ["rarity", "palette", "eyes"]);
+  assert.deepEqual([...access.owlCustomizationDefinitions()[1].options].map(option => option.value), ["day", "night"]);
+  access.registerOwlTraits({ key: "admin_glow", label: "Admin glow", options: ["quiet", "bright"] });
+  assert.equal(access.owlCustomizationDefinitions().some(definition => definition.key === "admin_glow"), false);
+
+  access.applyResponse({ campAccess: { active: true, role: "admin", readId: "abcdEFGH" } });
+  assert.equal(adminPanel.hidden, false);
+  assert.equal(traitSection.hidden, false);
+  assert.equal(access.owlCustomizationDefinitions().some(definition => definition.key === "admin_glow"), true);
 });
 
 for (const role of ["member", "admin"]) {

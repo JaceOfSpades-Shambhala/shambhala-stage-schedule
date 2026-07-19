@@ -27,3 +27,16 @@ test("giveaway creation sends the selected camp role with the claimable-list pay
     body: { name: "Unclaimed Hexlace", sets: [], claimable: true, campRole: "admin" }
   });
 });
+
+test("regular giveaway creation omits camp access from the claimable-list payload", async () => {
+  let captured;
+  await requestGiveaway(async (path, options) => {
+    captured = { path, method: options.method, body: JSON.parse(options.body) };
+    return { ok: true, body: { readId: "abcdEFGH" } };
+  }, "");
+  assert.deepEqual(captured, {
+    path: "/lists",
+    method: "POST",
+    body: { name: "Unclaimed Hexlace", sets: [], claimable: true }
+  });
+});

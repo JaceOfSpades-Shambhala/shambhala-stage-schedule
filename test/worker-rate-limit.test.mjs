@@ -1036,7 +1036,7 @@ test("Hexadex collection requires a physical tap and preserves first-collected m
   assert.deepEqual(page.entries[0].owl, source.owl);
 });
 
-test("camp Hexlaces grant hashed member/admin access and enforce admin-only APIs", async () => {
+test("camp access grants hashed roles, protects admin APIs, and permits own-Owl customization", async () => {
   const env = makeCampEnv();
   const adminAccessKey = "admin-device-access-key-123456789";
   const adminCreated = await worker.fetch(makeRequest("/lists", {
@@ -1128,6 +1128,26 @@ test("camp Hexlaces grant hashed member/admin access and enforce admin-only APIs
   }), env);
   assert.equal(unauthenticatedGiveaway.status, 401);
 
+  const regularCreated = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${adminAccessKey}` },
+    body: JSON.stringify({ name: "Unclaimed Hexlace", sets: [], claimable: true })
+  }), env);
+  assert.equal(regularCreated.status, 201);
+  const regularTag = await regularCreated.json();
+  assert.equal(Object.hasOwn(regularTag, "campRole"), false);
+  assert.equal(Object.hasOwn(regularTag, "campGrantToken"), false);
+  const regularClaim = await worker.fetch(makeRequest(`/lists/${regularTag.readId}/claim`, {
+    method: "POST",
+    body: JSON.stringify({
+      claimToken: regularTag.claimToken,
+      writeKey: "regular-owner-write-key-123456",
+      scannedAt: 900
+    })
+  }), env);
+  assert.equal(regularClaim.status, 200);
+  assert.equal(Object.hasOwn(await regularClaim.json(), "campAccess"), false);
+
   const memberCreated = await worker.fetch(makeRequest("/lists", {
     method: "POST",
     headers: { Authorization: `Bearer ${adminAccessKey}` },
@@ -1150,7 +1170,8 @@ test("camp Hexlaces grant hashed member/admin access and enforce admin-only APIs
     })
   }), env);
   assert.equal(memberClaim.status, 200);
-  assert.equal((await memberClaim.json()).campAccess.role, "member");
+  const memberClaimBody = await memberClaim.json();
+  assert.equal(memberClaimBody.campAccess.role, "member");
 
   const memberAccess = await worker.fetch(makeRequest("/camp/access", {
     headers: { Authorization: `Bearer ${memberAccessKey}` }
@@ -1170,10 +1191,29 @@ test("camp Hexlaces grant hashed member/admin access and enforce admin-only APIs
       Authorization: `Bearer ${adminAccessKey}`,
       "X-Profile-Key": admin.profileKey
     },
-    body: JSON.stringify({ traits: { portal_finish: "iridescent", halo_level: 0.75, animated: true } })
+    body: JSON.stringify({ traits: { palette: "living-daylight", eyes: "sleepy-lids", aura: "quiet-aura", admin_glow: "ultraviolet" } })
   }), env);
   assert.equal(savedTraits.status, 200);
-  assert.deepEqual((await savedTraits.json()).traits, { portal_finish: "iridescent", halo_level: 0.75, animated: true });
+  assert.deepEqual((await savedTraits.json()).traits, { palette: "living-daylight", eyes: "sleepy-lids", aura: "quiet-aura", admin_glow: "ultraviolet" });
+
+  const memberViewOfAdminTraits = await worker.fetch(makeRequest(`/profiles/${admin.profileId}/owl-admin-traits`, {
+    headers: {
+      Authorization: `Bearer ${memberAccessKey}`,
+      "X-Profile-Key": admin.profileKey
+    }
+  }), env);
+  assert.equal(memberViewOfAdminTraits.status, 200);
+  assert.deepEqual((await memberViewOfAdminTraits.json()).traits, { palette: "living-daylight", eyes: "sleepy-lids", aura: "quiet-aura" });
+
+  const memberCannotSetAdminExclusiveTrait = await worker.fetch(makeRequest(`/profiles/${admin.profileId}/owl-admin-traits`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${memberAccessKey}`,
+      "X-Profile-Key": admin.profileKey
+    },
+    body: JSON.stringify({ traits: { admin_glow: "copied" } })
+  }), env);
+  assert.equal(memberCannotSetAdminExclusiveTrait.status, 403);
 
   const publishedAdminOwl = await worker.fetch(makeRequest(`/lists/${admin.readId}`, {
     method: "PUT",
@@ -1187,19 +1227,27 @@ test("camp Hexlaces grant hashed member/admin access and enforce admin-only APIs
     })
   }), env);
   assert.equal(publishedAdminOwl.status, 200);
-  assert.deepEqual((await publishedAdminOwl.json()).owl.adminTraits, { portal_finish: "iridescent", halo_level: 0.75, animated: true });
+  assert.deepEqual((await publishedAdminOwl.json()).owl.adminTraits, { palette: "living-daylight", eyes: "sleepy-lids", aura: "quiet-aura", admin_glow: "ultraviolet" });
   const publicAdminOwl = await worker.fetch(makeRequest(`/lists/${admin.readId}`), env).then(response => response.json());
-  assert.deepEqual(publicAdminOwl.owl.adminTraits, { portal_finish: "iridescent", halo_level: 0.75, animated: true });
+  assert.deepEqual(publicAdminOwl.owl.adminTraits, { palette: "living-daylight", eyes: "sleepy-lids", aura: "quiet-aura", admin_glow: "ultraviolet" });
 
-  const memberCannotEditOwl = await worker.fetch(makeRequest(`/profiles/${admin.profileId}/owl-admin-traits`, {
+  const memberEditsOwnOwl = await worker.fetch(makeRequest(`/profiles/${memberClaimBody.profileId}/owl-admin-traits`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${memberAccessKey}`,
-      "X-Profile-Key": admin.profileKey
+      "X-Profile-Key": memberClaimBody.profileKey
     },
-    body: JSON.stringify({ traits: { portal_finish: "copied" } })
+    body: JSON.stringify({ traits: { palette: "living-daylight", eyes: "sleepy-lids" } })
   }), env);
-  assert.equal(memberCannotEditOwl.status, 403);
+  assert.equal(memberEditsOwnOwl.status, 200);
+  assert.deepEqual((await memberEditsOwnOwl.json()).traits, { palette: "living-daylight", eyes: "sleepy-lids" });
+
+  const unauthenticatedOwlEdit = await worker.fetch(makeRequest(`/profiles/${memberClaimBody.profileId}/owl-admin-traits`, {
+    method: "PUT",
+    headers: { "X-Profile-Key": memberClaimBody.profileKey },
+    body: JSON.stringify({ traits: { eyes: "pupil-lasers" } })
+  }), env);
+  assert.equal(unauthenticatedOwlEdit.status, 401);
 
   const revoked = await worker.fetch(makeRequest("/camp/access/revoke", {
     method: "POST",

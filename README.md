@@ -10,7 +10,7 @@ https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 
 Hex Owl visual playground: [open the live playground](https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/hex-owl-playground.html). It is a standalone developer tool for previewing deterministic Owl seeds, traits, palettes, and contact sheets.
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v65 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v66 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
@@ -30,6 +30,7 @@ Hexlaces (live set-list sharing):
 - Giveaway tags with claim tokens: opening one quietly records the local scan time, works offline, and lets the earliest scan own the Hexlace once signal returns (contention closes seven days after the first claim)
 - My Hexlace can be released for the next scanner without erasing the owner's saved sets; physical tag trades are online-only and require both owners to enter trade mode, tap each other's tags, and confirm the reciprocal match
 - A named profile with at least one saved set receives one deterministic, numbered Hex Owl. The renderer reuses the exact supplied Shambhala Owl vector as one cached base, then adds lightweight deterministic SVG traits; changing a display name never changes the Owl
+- Verified camp members and admins can customize their own Hex Owl from dropdowns covering every currently enabled trait, with the immutable original and a live customized preview shown side by side
 - A physical Hexlace and its Hex Owl trade together, always. Release is the only temporary separation: the profile retains its Owl while the tag becomes unclaimed, so reclaiming does not mint a replacement
 - Tap-specific physical Hexlace URLs add Owls to a private, multi-year Hexadex with broad festival/year context only. Shared links and QR codes still collect set lists but cannot collect Owls
 - On iOS 17.2+, a claimed Hexlace, saved sets, and collected-friend ids follow into a newly installed Home Screen app through a retry-safe 24-hour handoff; a compact connection code inside My Hexlace is the fallback when iOS does not copy the automatic cookie
