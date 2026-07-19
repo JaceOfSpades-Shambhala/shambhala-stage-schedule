@@ -471,15 +471,15 @@
     try {
       const draft = traitsFromControls();
       const originalSvg = window.HexOwl.renderSvg(owl.seed, owl.version);
-      const previewSvg = window.HexOwl.renderWithTraits(owl.seed, { overrides: draft }, owl.version);
+      const previewSvg = window.HexOwl.renderWithTraits(owl.seed, { overrides: draft, freestyle: true }, owl.version);
       mountPreview(elements.traitOriginal, originalSvg, "camp-original");
       mountPreview(elements.traitPreview, previewSvg, "camp-preview");
       const count = Object.keys(draft).length;
-      const repairs = window.HexOwl.resolveTraits?.(owl.seed, { overrides: draft }, owl.version)?.repairs || [];
+      const repairs = window.HexOwl.resolveTraits?.(owl.seed, { overrides: draft, freestyle: true }, owl.version)?.repairs || [];
       if (elements.traitPreviewStatus) {
         elements.traitPreviewStatus.textContent = count === 0
           ? "Showing the original Owl on both sides."
-          : `${count} trait ${count === 1 ? "choice" : "choices"} selected.${repairs.length ? ` The Owl adjusted ${repairs.length} ${repairs.length === 1 ? "choice" : "choices"} to keep the combination valid.` : ""}`;
+          : `${count} freestyle ${count === 1 ? "choice" : "choices"} applied with no rarity, weight, or combination limits.${repairs.length ? ` ${repairs.length} unknown or disabled ${repairs.length === 1 ? "choice was" : "choices were"} ignored.` : ""}`;
       }
     } catch {
       if (elements.traitPreviewStatus) elements.traitPreviewStatus.textContent = "This preview could not be drawn.";

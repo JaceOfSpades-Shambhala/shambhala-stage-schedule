@@ -9,7 +9,7 @@
   const V1_VERSION = 1;
   const VERSION = 2;
   const HEX_SEED = /^[0-9a-f]{32}$/i;
-  const OWL_ASSET = "./hex-owl-base.svg?v=66";
+  const OWL_ASSET = "./hex-owl-base.svg?v=67";
   const SHARED_MARK_ID = "hex-owl-shared-mark";
   const BROW_MARK_IDS = {
     lower: SHARED_MARK_ID + "-brow-lower",
@@ -602,11 +602,83 @@
     return weighted(RARITIES, categoryRandom(seed, version, "rarity"));
   }
 
+  function resolveFreestyleTraitsV1(seed, config, version) {
+    const normalized = normalizeSeed(seed);
+    const overrides = config.overrides && typeof config.overrides === "object" ? config.overrides : config;
+    const original = resolveTraitsV1(normalized, {}, version);
+    const repairs = [];
+    const requestedRarity = config.rarity !== undefined ? config.rarity : overrides.rarity;
+    let rarity = findByIdOrName(RARITIES, requestedRarity) || original.rarity;
+    if (requestedRarity && !findByIdOrName(RARITIES, requestedRarity)) {
+      repairs.push("Unknown rarity override was replaced with the original rarity.");
+    }
+
+    let palette = original.palette;
+    const requestedPalette = overrides.palette || overrides.face;
+    if (requestedPalette) {
+      const candidate = findByIdOrName(PALETTES, requestedPalette);
+      if (candidate && candidate.enabled !== false) palette = candidate;
+      else repairs.push("Unknown or disabled palette override was replaced with the original palette.");
+    }
+
+    const state = {};
+    CATEGORY_KEYS.forEach(category => { state[category] = original[category]; });
+    CATEGORY_KEYS.forEach(category => {
+      const legacyKey = category === "direction" ? "ringDirection" : category;
+      const supplied = overrides[category] !== undefined ? overrides[category] : overrides[legacyKey];
+      if (supplied === undefined || supplied === null || supplied === "" || String(supplied).toLowerCase() === "auto") return;
+      const candidate = findByIdOrName(CATEGORIES[category], supplied);
+      if (candidate && candidate.enabled !== false) state[category] = candidate;
+      else repairs.push("Unknown or disabled " + category + " override was replaced with the original choice.");
+    });
+
+    const totals = selectionTotalsV1(state);
+    const ringColours = state.ringMode.multicolor
+      ? [palette.tokens.ring, palette.tokens.focal, palette.tokens.beam, palette.tokens.highlight]
+      : [palette.tokens.ring, palette.tokens.ring, palette.tokens.ring, palette.tokens.ring];
+    const rings = deepFreeze({
+      id: state.ringMode.id,
+      name: state.ringMode.multicolor ? palette.name + " Festival Prism" : palette.name + " Portal",
+      colors: deepFreeze(ringColours.slice()),
+      multicolor: state.ringMode.multicolor
+    });
+    const selectionIds = {};
+    CATEGORY_KEYS.forEach(key => { selectionIds[key] = state[key].id; });
+    selectionIds.palette = palette.id;
+
+    return deepFreeze({
+      version: V1_VERSION,
+      seed: normalized,
+      palette,
+      face: palette,
+      rings,
+      ringMode: state.ringMode,
+      ringStyle: state.ringStyle,
+      direction: state.direction,
+      ringDirection: state.direction.name,
+      brow: state.brow,
+      eyes: state.eyes,
+      beak: state.beak,
+      marking: state.marking,
+      accessory: state.accessory,
+      aura: state.aura,
+      rarity,
+      cost: totals.cost,
+      budget: rarity.budget,
+      focalCount: totals.focalCount,
+      focalCap: rarity.focalCap,
+      selectionIds: deepFreeze(selectionIds),
+      repairs: deepFreeze(repairs.slice()),
+      freestyle: true
+    });
+  }
+
   function resolveTraitsV1(seed, options, version) {
     const resolvedVersion = version === undefined ? V1_VERSION : Number(version);
     if (resolvedVersion !== V1_VERSION) throw new Error("Unsupported Hex Owl version: " + version);
     const normalized = normalizeSeed(seed);
     const config = options && typeof options === "object" ? options : {};
+    if (config.freestyle === true) return resolveFreestyleTraitsV1(normalized, config, resolvedVersion);
     const overrides = config.overrides && typeof config.overrides === "object" ? config.overrides : config;
     const repairs = [];
     const forcedKeys = new Set();
@@ -855,11 +927,93 @@
     return deepFreeze({ permutation, tokens: deepFreeze(order) });
   }
 
+  function finalizeTraitsV2(normalized, state, palette, rarity, repairs, freestyle = false) {
+    const totals = selectionTotalsV2(state);
+    const prism = prismOrderForSeed(normalized);
+    const prismColours = prism.tokens.map(token => palette.tokens[token]);
+    const ringColours = state.ringMode.multicolor
+      ? prismColours
+      : [palette.tokens.ring, palette.tokens.ring, palette.tokens.ring, palette.tokens.ring];
+    const rings = deepFreeze({
+      id: state.ringMode.id,
+      name: state.ringMode.multicolor ? palette.name + " Festival Prism" : palette.name + " Portal",
+      colors: deepFreeze(ringColours.slice()),
+      multicolor: state.ringMode.multicolor
+    });
+    const selectionIds = {};
+    CATEGORY_KEYS.forEach(key => { selectionIds[key] = state[key].id; });
+    selectionIds.palette = palette.id;
+
+    return deepFreeze({
+      version: VERSION,
+      seed: normalized,
+      palette,
+      face: palette,
+      rings,
+      ringMode: state.ringMode,
+      ringStyle: state.ringStyle,
+      direction: state.direction,
+      ringDirection: state.direction.name,
+      brow: state.brow,
+      eyes: state.eyes,
+      beak: state.beak,
+      marking: state.marking,
+      accessory: state.accessory,
+      aura: state.aura,
+      rarity,
+      cost: totals.cost,
+      budget: rarity.budget,
+      focalCount: totals.focalCount,
+      focalCap: rarity.focalCap,
+      heroCount: totals.heroCount,
+      supportCount: totals.supportCount,
+      treatmentCount: totals.treatmentCount,
+      prismPermutation: prism.permutation,
+      prismOrder: prism.tokens,
+      selectionIds: deepFreeze(selectionIds),
+      repairs: deepFreeze(repairs.slice()),
+      ...(freestyle ? { freestyle: true } : {})
+    });
+  }
+
+  function resolveFreestyleTraitsV2(seed, config, version) {
+    const normalized = normalizeSeed(seed);
+    const overrides = config.overrides && typeof config.overrides === "object" ? config.overrides : config;
+    const original = resolveTraitsV2(normalized, {}, version);
+    const repairs = [];
+    const requestedRarity = config.rarity !== undefined ? config.rarity : overrides.rarity;
+    let rarity = findByIdOrName(V2_RARITIES, requestedRarity) || original.rarity;
+    if (requestedRarity && !findByIdOrName(V2_RARITIES, requestedRarity)) {
+      repairs.push("Unknown rarity override was replaced with the original rarity.");
+    }
+
+    let palette = original.palette;
+    const requestedPalette = overrides.palette || overrides.face;
+    if (requestedPalette) {
+      const candidate = findByIdOrName(V2_PALETTES, requestedPalette);
+      if (candidate && candidate.enabled !== false) palette = candidate;
+      else repairs.push("Unknown or disabled palette override was replaced with the original palette.");
+    }
+
+    const state = {};
+    CATEGORY_KEYS.forEach(category => { state[category] = original[category]; });
+    CATEGORY_KEYS.forEach(category => {
+      const legacyKey = category === "direction" ? "ringDirection" : category;
+      const supplied = overrides[category] !== undefined ? overrides[category] : overrides[legacyKey];
+      if (supplied === undefined || supplied === null || supplied === "" || String(supplied).toLowerCase() === "auto") return;
+      const candidate = findByIdOrName(V2_CATEGORIES[category], supplied);
+      if (candidate && candidate.enabled !== false) state[category] = candidate;
+      else repairs.push("Unknown or disabled " + category + " override was replaced with the original choice.");
+    });
+    return finalizeTraitsV2(normalized, state, palette, rarity, repairs, true);
+  }
+
   function resolveTraitsV2(seed, options, version) {
     const resolvedVersion = version === undefined ? VERSION : Number(version);
     if (resolvedVersion !== VERSION) throw new Error("Unsupported Hex Owl version: " + version);
     const normalized = normalizeSeed(seed);
     const config = options && typeof options === "object" ? options : {};
+    if (config.freestyle === true) return resolveFreestyleTraitsV2(normalized, config, resolvedVersion);
     const overrides = config.overrides && typeof config.overrides === "object" ? config.overrides : config;
     const repairs = [];
     const forcedKeys = new Set();
@@ -971,51 +1125,7 @@
       if (candidate) apply(category, candidate);
     });
 
-    const totals = selectionTotalsV2(state);
-    const prism = prismOrderForSeed(normalized);
-    const prismColours = prism.tokens.map(token => palette.tokens[token]);
-    const ringColours = state.ringMode.multicolor
-      ? prismColours
-      : [palette.tokens.ring, palette.tokens.ring, palette.tokens.ring, palette.tokens.ring];
-    const rings = deepFreeze({
-      id: state.ringMode.id,
-      name: state.ringMode.multicolor ? palette.name + " Festival Prism" : palette.name + " Portal",
-      colors: deepFreeze(ringColours.slice()),
-      multicolor: state.ringMode.multicolor
-    });
-    const selectionIds = {};
-    CATEGORY_KEYS.forEach(key => { selectionIds[key] = state[key].id; });
-    selectionIds.palette = palette.id;
-
-    return deepFreeze({
-      version: VERSION,
-      seed: normalized,
-      palette,
-      face: palette,
-      rings,
-      ringMode: state.ringMode,
-      ringStyle: state.ringStyle,
-      direction: state.direction,
-      ringDirection: state.direction.name,
-      brow: state.brow,
-      eyes: state.eyes,
-      beak: state.beak,
-      marking: state.marking,
-      accessory: state.accessory,
-      aura: state.aura,
-      rarity,
-      cost: totals.cost,
-      budget: rarity.budget,
-      focalCount: totals.focalCount,
-      focalCap: rarity.focalCap,
-      heroCount: totals.heroCount,
-      supportCount: totals.supportCount,
-      treatmentCount: totals.treatmentCount,
-      prismPermutation: prism.permutation,
-      prismOrder: prism.tokens,
-      selectionIds: deepFreeze(selectionIds),
-      repairs: deepFreeze(repairs.slice())
-    });
+    return finalizeTraitsV2(normalized, state, palette, rarity, repairs);
   }
 
   function selectTraitsV2(seed) {
@@ -1031,10 +1141,15 @@
     if (!traits || typeof traits !== "object") {
       return deepFreeze({ valid: false, issues: ["Traits are missing."], repairs: [] });
     }
+    const freestyle = traits.freestyle === true;
     const rarity = findByIdOrName(RARITIES, traits.rarity);
     if (!rarity) issues.push("Rarity is not in the V1 manifest.");
     const palette = findByIdOrName(PALETTES, traits.palette || traits.face);
-    if (!palette) issues.push("Palette is not in the V1 manifest.");
+    if (!palette) {
+      issues.push("Palette is not in the V1 manifest.");
+    } else if (palette.enabled === false || (!freestyle && palette.campOnly)) {
+      issues.push(palette.name + " is camp-only and excluded from ordinary generation.");
+    }
     const chosen = [];
     CATEGORY_KEYS.forEach(category => {
       const supplied = traits[category] || (category === "direction" ? traits.ringDirection : null);
@@ -1043,28 +1158,31 @@
         issues.push(category + " is not in the V1 manifest.");
       } else {
         chosen.push({ category, option });
-        if (rarity && !isTierEligibleV1(option, rarity)) issues.push(option.name + " is not eligible for " + rarity.name + ".");
-        if (option.campOnly) issues.push(option.name + " is camp-only and excluded from ordinary generation.");
+        if (option.enabled === false) issues.push(option.name + " is disabled.");
+        else if (!freestyle && rarity && !isTierEligibleV1(option, rarity)) issues.push(option.name + " is not eligible for " + rarity.name + ".");
+        if (!freestyle && option.campOnly) issues.push(option.name + " is camp-only and excluded from ordinary generation.");
       }
     });
     const computedCost = chosen.reduce((sum, item) => sum + Number(item.option.cost || 0), 0);
     const computedFocals = chosen.reduce((sum, item) => sum + (item.option.focal ? 1 : 0), 0);
-    if (rarity && computedCost > rarity.budget) issues.push("Trait cost exceeds the rarity budget.");
-    if (rarity && computedFocals > rarity.focalCap) issues.push("Focal trait count exceeds the rarity cap.");
-    for (let index = 0; index < chosen.length; index += 1) {
-      for (let other = index + 1; other < chosen.length; other += 1) {
-        const left = chosen[index].option;
-        const right = chosen[other].option;
-        if ((left.excludes || []).includes(right.id) || (right.excludes || []).includes(left.id)) {
-          issues.push(left.name + " conflicts with " + right.name + ".");
+    if (!freestyle) {
+      if (rarity && computedCost > rarity.budget) issues.push("Trait cost exceeds the rarity budget.");
+      if (rarity && computedFocals > rarity.focalCap) issues.push("Focal trait count exceeds the rarity cap.");
+      for (let index = 0; index < chosen.length; index += 1) {
+        for (let other = index + 1; other < chosen.length; other += 1) {
+          const left = chosen[index].option;
+          const right = chosen[other].option;
+          if ((left.excludes || []).includes(right.id) || (right.excludes || []).includes(left.id)) {
+            issues.push(left.name + " conflicts with " + right.name + ".");
+          }
         }
       }
+      const brow = findByIdOrName(BROWS, traits.brow);
+      const ringMode = findByIdOrName(RING_MODES, traits.ringMode);
+      if (rarity && rarity.level >= 2 && brow?.id !== "three-band-prism") issues.push(rarity.name + " requires a multicolour prism brow.");
+      if (rarity?.id === "legendary" && ringMode?.id !== "festival-prism") issues.push("Legendary requires palette-linked multicolour portal rings.");
+      if (rarity && rarity.id !== "legendary" && ringMode?.multicolor) issues.push("Multicolour portal rings are Legendary-only.");
     }
-    const brow = findByIdOrName(BROWS, traits.brow);
-    const ringMode = findByIdOrName(RING_MODES, traits.ringMode);
-    if (rarity && rarity.level >= 2 && brow?.id !== "three-band-prism") issues.push(rarity.name + " requires a multicolour prism brow.");
-    if (rarity?.id === "legendary" && ringMode?.id !== "festival-prism") issues.push("Legendary requires palette-linked multicolour portal rings.");
-    if (rarity && rarity.id !== "legendary" && ringMode?.multicolor) issues.push("Multicolour portal rings are Legendary-only.");
     return deepFreeze({
       valid: issues.length === 0,
       issues,
@@ -1079,12 +1197,13 @@
     if (!traits || typeof traits !== "object") {
       return deepFreeze({ valid: false, issues: ["Traits are missing."], repairs: [] });
     }
+    const freestyle = traits.freestyle === true;
     const rarity = findByIdOrName(V2_RARITIES, traits.rarity);
     if (!rarity) issues.push("Rarity is not in the V2 manifest.");
     const palette = findByIdOrName(V2_PALETTES, traits.palette || traits.face);
     if (!palette) {
       issues.push("Palette is not in the V2 manifest.");
-    } else if (palette.enabled === false || palette.campOnly) {
+    } else if (palette.enabled === false || (!freestyle && palette.campOnly)) {
       issues.push(palette.name + " is camp-only and excluded from ordinary generation.");
     }
     const chosen = [];
@@ -1095,7 +1214,8 @@
         issues.push(category + " is not in the V2 manifest.");
       } else {
         chosen.push({ category, option });
-        if (rarity && !isTierEligibleV2(option, rarity)) issues.push(option.name + " is not eligible for " + rarity.name + ".");
+        if (option.enabled === false) issues.push(option.name + " is disabled.");
+        else if (!freestyle && rarity && !isTierEligibleV2(option, rarity)) issues.push(option.name + " is not eligible for " + rarity.name + ".");
       }
     });
     const computedCost = chosen.reduce((sum, item) => sum + Number(item.option.cost || 0), 0);
@@ -1105,24 +1225,26 @@
       sum + (V2_SUPPORT_KEYS.includes(item.category) && Number(item.option.cost || 0) > 0 && !item.option.hero ? 1 : 0), 0);
     const ringTreatments = chosen.some(item => item.category === "ringMode" && Number(item.option.cost || 0) > 0) ? 1 : 0;
     const computedTreatments = ringTreatments + computedHeroes + computedSupports;
-    if (rarity && computedCost > rarity.budget) issues.push("Trait cost exceeds the rarity budget.");
-    if (rarity && computedFocals > rarity.focalCap) issues.push("Hero trait count exceeds the rarity cap.");
-    if (rarity?.id === "common" && computedHeroes !== 0) issues.push("Common cannot carry a hero treatment.");
-    if (rarity && rarity.id !== "common" && computedHeroes !== 1) issues.push(rarity.name + " requires exactly one hero treatment.");
-    if (rarity && computedSupports > rarity.supportCap) issues.push("Support treatment count exceeds the rarity cap.");
-    if (rarity && computedTreatments > rarity.treatmentCap) issues.push("Visible treatment count exceeds the rarity cap.");
-    for (let index = 0; index < chosen.length; index += 1) {
-      for (let other = index + 1; other < chosen.length; other += 1) {
-        const left = chosen[index].option;
-        const right = chosen[other].option;
-        if ((left.excludes || []).includes(right.id) || (right.excludes || []).includes(left.id)) {
-          issues.push(left.name + " conflicts with " + right.name + ".");
+    if (!freestyle) {
+      if (rarity && computedCost > rarity.budget) issues.push("Trait cost exceeds the rarity budget.");
+      if (rarity && computedFocals > rarity.focalCap) issues.push("Hero trait count exceeds the rarity cap.");
+      if (rarity?.id === "common" && computedHeroes !== 0) issues.push("Common cannot carry a hero treatment.");
+      if (rarity && rarity.id !== "common" && computedHeroes !== 1) issues.push(rarity.name + " requires exactly one hero treatment.");
+      if (rarity && computedSupports > rarity.supportCap) issues.push("Support treatment count exceeds the rarity cap.");
+      if (rarity && computedTreatments > rarity.treatmentCap) issues.push("Visible treatment count exceeds the rarity cap.");
+      for (let index = 0; index < chosen.length; index += 1) {
+        for (let other = index + 1; other < chosen.length; other += 1) {
+          const left = chosen[index].option;
+          const right = chosen[other].option;
+          if ((left.excludes || []).includes(right.id) || (right.excludes || []).includes(left.id)) {
+            issues.push(left.name + " conflicts with " + right.name + ".");
+          }
         }
       }
+      const ringMode = findByIdOrName(V2_RING_MODES, traits.ringMode);
+      if (rarity?.id === "legendary" && ringMode?.id !== "festival-prism") issues.push("Legendary requires palette-linked multicolour portal rings.");
+      if (rarity && rarity.id !== "legendary" && ringMode?.multicolor) issues.push("Multicolour portal rings are Legendary-only.");
     }
-    const ringMode = findByIdOrName(V2_RING_MODES, traits.ringMode);
-    if (rarity?.id === "legendary" && ringMode?.id !== "festival-prism") issues.push("Legendary requires palette-linked multicolour portal rings.");
-    if (rarity && rarity.id !== "legendary" && ringMode?.multicolor) issues.push("Multicolour portal rings are Legendary-only.");
     const prismOrder = Array.isArray(traits.prismOrder) ? traits.prismOrder : [];
     if (prismOrder.length !== 4 || new Set(prismOrder).size !== 4 || prismOrder.some(token => !["highlight", "beam", "focal", "ring"].includes(token))) {
       issues.push("Prism band order is invalid.");
@@ -1597,7 +1719,7 @@
     } else {
       const forced = {};
       Object.keys(traits.selectionIds || {}).forEach(key => { forced[key] = traits.selectionIds[key]; });
-      traits = resolveTraits(seed, { rarity: traits.rarity.id, overrides: forced }, resolvedVersion);
+      traits = resolveTraits(seed, { rarity: traits.rarity.id, overrides: forced, freestyle: traits.freestyle === true }, resolvedVersion);
     }
     return renderResolved(traits);
   }

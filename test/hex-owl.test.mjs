@@ -1597,6 +1597,85 @@ test("every enabled V2 catalogue option can be forced, validated, and rendered d
   assert.ok(forced >= 80, `Expected the complete V2 public catalogue, forced only ${forced} options.`);
 });
 
+test("camp freestyle keeps every enabled V2 choice without rarity, weight, or grammar repairs", async () => {
+  const owl = await renderer();
+  const catalogue = catalogueValue(owl, 2);
+  const categories = ["palette", "ringMode", "ringStyle", "direction", "brow", "eyes", "beak", "marking", "accessory", "aura"];
+  let forced = 0;
+  for (const category of categories) {
+    for (const option of categoryOptions(catalogue, category)) {
+      if (option.enabled === false) continue;
+      const id = rawOptionId(option);
+      const resolved = owl.resolveTraits(`freestyle-${category}-${id}`, {
+        rarity: "common",
+        overrides: { [category]: id },
+        freestyle: true
+      }, 2);
+      assert.equal(resolved.selectionIds[category], id, `${category}.${id} must remain selected in freestyle mode.`);
+      assert.equal(resolved.freestyle, true);
+      assert.deepEqual(plain(resolved.repairs), []);
+      assert.equal(validationIsValid(owl.validateTraits(resolved, 2)), true);
+      assert.equal(owl.renderWithTraits(resolved.seed, resolved, 2), owl.renderWithTraits(resolved.seed, resolved, 2));
+      forced += 1;
+    }
+  }
+  assert.ok(forced >= 80, `Expected freestyle coverage for the complete enabled catalogue, forced only ${forced} options.`);
+});
+
+test("camp freestyle also keeps every enabled choice on recorded V1 Owls", async () => {
+  const owl = await renderer();
+  const catalogue = catalogueValue(owl, 1);
+  const categories = ["palette", "ringMode", "ringStyle", "direction", "brow", "eyes", "beak", "marking", "accessory", "aura"];
+  let forced = 0;
+  for (const category of categories) {
+    for (const option of categoryOptions(catalogue, category)) {
+      if (option.enabled === false) continue;
+      const id = rawOptionId(option);
+      const resolved = owl.resolveTraits(`v1-freestyle-${category}-${id}`, {
+        rarity: "common",
+        overrides: { [category]: id },
+        freestyle: true
+      }, 1);
+      assert.equal(resolved.selectionIds[category], id, `${category}.${id} must remain selected in V1 freestyle mode.`);
+      assert.equal(resolved.freestyle, true);
+      assert.deepEqual(plain(resolved.repairs), []);
+      assert.equal(validationIsValid(owl.validateTraits(resolved, 1)), true);
+      assert.equal(owl.renderWithTraits(resolved.seed, resolved, 1), owl.renderWithTraits(resolved.seed, resolved, 1));
+      forced += 1;
+    }
+  }
+  assert.ok(forced >= 60, `Expected freestyle coverage for the complete enabled V1 catalogue, forced only ${forced} options.`);
+});
+
+test("camp freestyle permits several hero treatments and Legendary rings on a Common Owl", async () => {
+  const owl = await renderer();
+  const seed = "camp-freestyle-no-mandatory-grammar";
+  const resolved = owl.resolveTraits(seed, {
+    rarity: "common",
+    overrides: {
+      ringMode: "festival-prism",
+      brow: "three-band-prism",
+      eyes: "pupil-lasers",
+      aura: "radial-glow"
+    },
+    freestyle: true
+  }, 2);
+  assert.equal(resolved.rarity.id, "common");
+  assert.equal(resolved.ringMode.id, "festival-prism");
+  assert.equal(resolved.brow.id, "three-band-prism");
+  assert.equal(resolved.eyes.id, "pupil-lasers");
+  assert.equal(resolved.aura.id, "radial-glow");
+  assert.equal(resolved.heroCount, 3);
+  assert.ok(resolved.cost > resolved.budget);
+  assert.deepEqual(plain(resolved.repairs), []);
+  assert.equal(validationIsValid(owl.validateTraits(resolved, 2)), true);
+  const svg = owl.renderWithTraits(seed, resolved, 2);
+  assert.match(svg, /data-aura="radial-glow"/);
+  assert.match(svg, /href="#hex-owl-shared-mark-brow-upper"/);
+  assert.match(svg, /data-crossing-exception="laser"/);
+  assert.match(svg, new RegExp(`data-rarity="common"[^>]*data-cost="${resolved.cost}"[^>]*data-heroes="3"`));
+});
+
 test("same-seed V1 and V2 SVG definition IDs cannot collide", async () => {
   const owl = await renderer();
   const seed = "cross-version-definition-isolation";

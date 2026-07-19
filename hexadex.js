@@ -132,7 +132,7 @@
     if (!container || !validOwl(owl) || !window.HexOwl) return;
     const overrides = owl.adminTraits && typeof owl.adminTraits === "object" ? owl.adminTraits : null;
     container.innerHTML = overrides && window.HexOwl.renderWithTraits
-      ? window.HexOwl.renderWithTraits(owl.seed, { overrides }, owl.version)
+      ? window.HexOwl.renderWithTraits(owl.seed, { overrides, freestyle: true }, owl.version)
       : window.HexOwl.renderSvg(owl.seed, owl.version);
     void window.HexOwl.hydrate?.(container);
   }
@@ -141,7 +141,7 @@
     if (!validOwl(owl) || !window.HexOwl) return {};
     try {
       if (owl.adminTraits && typeof owl.adminTraits === "object" && window.HexOwl.resolveTraits) {
-        const traits = window.HexOwl.resolveTraits(owl.seed, { overrides: owl.adminTraits }, owl.version);
+        const traits = window.HexOwl.resolveTraits(owl.seed, { overrides: owl.adminTraits, freestyle: true }, owl.version);
         return {
           "Eye style": traits.eyes.name,
           "Owl colour": traits.palette.name,

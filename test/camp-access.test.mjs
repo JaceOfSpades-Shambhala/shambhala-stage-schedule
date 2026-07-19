@@ -65,6 +65,8 @@ test("camp admin controls stay hidden until a claimed device key is confirmed", 
 
 test("regular page has no visible camp-access controls", async () => {
   const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const campAccess = await readFile(new URL("../camp-access.js", import.meta.url), "utf8");
+  const hexadex = await readFile(new URL("../hexadex.js", import.meta.url), "utf8");
   assert.doesNotMatch(html, /Camp access on this device/);
   assert.doesNotMatch(html, /camp-device-access-(?:section|code|redeem)/);
   assert.match(html, /id="camp-access-redemption-status"[^>]*hidden/);
@@ -72,7 +74,10 @@ test("regular page has no visible camp-access controls", async () => {
   assert.match(html, /id="hex-owl-camp-editor-section"[^>]*hidden/);
   assert.match(html, /id="hex-owl-camp-original"/);
   assert.match(html, /id="hex-owl-camp-preview"/);
+  assert.match(html, /Mix any enabled traits freely/);
   assert.match(html, /<option value="">No camp access<\/option>/);
+  assert.match(campAccess, /freestyle:\s*true/);
+  assert.match(hexadex, /freestyle:\s*true/);
 });
 
 test("member and admin access expose the current Owl catalogue without disabled or fixed traits", async () => {
