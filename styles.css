@@ -1,13 +1,13 @@
 @font-face {
   font-family: "Inter";
-  src: url("fonts/InterVariable.woff2?v=63") format("woff2");
+  src: url("fonts/InterVariable.woff2?v=64") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Inter";
-  src: url("fonts/InterVariable-Italic.woff2?v=63") format("woff2");
+  src: url("fonts/InterVariable-Italic.woff2?v=64") format("woff2");
   font-weight: 100 900;
   font-style: italic;
   font-display: swap;
@@ -189,6 +189,12 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .hexlace-admin-section > summary { color: var(--muted); }
 .hexlace-admin-label { width: max-content; padding: .12rem .42rem; border: 1px solid rgba(255, 255, 255, .22); border-radius: 999px; font-size: .55rem !important; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
 .hexlace-admin-divider { height: 1px; background: rgba(255, 255, 255, .07); }
+.hexlace-admin-role, .hex-owl-admin-customizer, .hex-owl-admin-trait-controls { display: grid; gap: .55rem; }
+.hexlace-admin-role { color: var(--muted); font-size: .72rem; font-weight: 800; }
+.hexlace-admin-role select, .hex-owl-admin-trait input, .hex-owl-admin-trait select { width: 100%; min-height: 2.6rem; padding: .55rem .68rem; border: 1px solid var(--line); border-radius: .65rem; color: var(--ink); background: rgba(8, 9, 18, .72); font: inherit; }
+.hex-owl-admin-customizer { padding: .15rem 0; }
+.hex-owl-admin-trait { display: grid; gap: .32rem; color: var(--muted); font-size: .72rem; font-weight: 800; }
+.hex-owl-admin-trait input[type="checkbox"] { width: 1.3rem; min-height: 1.3rem; }
 .hexlace-muted { color: var(--muted); font-size: .72rem; font-weight: 650; }
 .hexlace-dialog { width: min(calc(100% - 1.5rem), 430px); max-height: calc(100dvh - 1.5rem); margin: auto; padding: 0; border: 1px solid rgba(255, 255, 255, .24); border-radius: 1rem; color: var(--ink); background: #1d1b2b; box-shadow: 0 18px 60px rgba(0, 0, 0, .55); }
 .hexlace-dialog::backdrop { background: rgba(6, 7, 14, .68); backdrop-filter: blur(3px); }
@@ -290,6 +296,7 @@ h1 { max-width: 13ch; margin-bottom: .85rem; font-size: clamp(2.4rem, 12vw, 4.6r
 .hexlace-connect-editor { display: grid; gap: .45rem; width: 100%; }
 .hexlace-connect-code { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; padding: .7rem; border: 1px solid var(--line); border-radius: .7rem; color: var(--muted); background: rgba(0, 0, 0, .18); font-size: .8rem; }
 .hexlace-connect-code strong { padding: .3rem .45rem; border-radius: .4rem; color: var(--ink); background: rgba(0, 0, 0, .25); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .04em; }
+.hexlace-connect-code-value { display: block; padding: .45rem .55rem; border-radius: .4rem; color: var(--ink); background: rgba(0, 0, 0, .25); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .82rem; letter-spacing: .04em; overflow-wrap: anywhere; text-align: center; }
 .hexlace-qr { width: min(150px, 55vw); padding: .6rem; border-radius: .6rem; background: #fff; }
 .hexlace-qr svg { display: block; width: 100%; height: auto; }
 .hexlace-giveaway-result { display: grid; gap: .45rem; justify-items: start; }

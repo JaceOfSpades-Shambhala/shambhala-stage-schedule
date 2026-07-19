@@ -16,7 +16,8 @@
       { "name": "HEXLACES", "class_name": "HexlaceCoordinator" },
       { "name": "RATE_LIMITS", "class_name": "RateLimitCoordinator" },
       { "name": "HEX_OWL_PROFILES", "class_name": "HexOwlProfile" },
-      { "name": "OWL_NUMBERS", "class_name": "OwlNumberAllocator" }
+      { "name": "OWL_NUMBERS", "class_name": "OwlNumberAllocator" },
+      { "name": "CAMP_ACCESS", "class_name": "CampAccessRegistry" }
     ]
   },
   "migrations": [
@@ -27,6 +28,10 @@
     {
       "tag": "v2",
       "new_sqlite_classes": ["HexOwlProfile", "OwlNumberAllocator"]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["CampAccessRegistry"]
     }
   ]
 }

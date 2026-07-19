@@ -84,6 +84,7 @@
     connectCodeValue: document.querySelector("#hexlace-connect-code-value"),
     connectCopy: document.querySelector("#hexlace-connect-copy"),
     manageSection: document.querySelector("#hexlace-manage-section"),
+    giveawayRole: document.querySelector("#hexlace-giveaway-role"),
     giveaway: document.querySelector("#hexlace-giveaway"),
     giveawayResult: document.querySelector("#hexlace-giveaway-result"),
     giveawayQr: document.querySelector("#hexlace-giveaway-qr"),
@@ -344,6 +345,7 @@
     if (window.Hexadex?.validOwl?.(body.owl)) identity.owl = body.owl;
     if (typeof body.isPhysical === "boolean") identity.isPhysical = body.isPhysical;
     if (body.tapToken) identity.tapToken = body.tapToken;
+    window.CampAccess?.applyResponse?.(body, identity.readId);
     return identity;
   }
 
@@ -442,7 +444,10 @@
       const result = await api("/handoffs/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(automatic ? { token: value, redemptionId } : { code: value, redemptionId })
+        body: JSON.stringify({
+          ...(automatic ? { token: value, redemptionId } : { code: value, redemptionId }),
+          ...window.CampAccess?.handoffCredentials?.()
+        })
       });
       if (!result.ok || !result.body?.readId || !result.body?.writeKey) {
         if (result.status === 410 && automatic) {
@@ -718,10 +723,12 @@
   async function createGiveaway() {
     elements.giveaway.disabled = true;
     try {
-      const result = await window.requestHexlaceGiveaway(api);
+      const campRole = elements.giveawayRole?.value === "admin" ? "admin" : "member";
+      const result = await window.requestHexlaceGiveaway(api, campRole);
       if (!result.ok || !result.body?.readId) { feedback("Couldn't create one - check your signal."); return; }
-      giveawayLink = `${shareUrl(result.body.readId)}&claim=${result.body.claimToken}`;
-      giveawayTapLink = `${tapUrl(result.body.readId, result.body.tapToken)}&claim=${result.body.claimToken}`;
+      const campPart = result.body.campGrantToken ? `&camp=${encodeURIComponent(result.body.campGrantToken)}` : "";
+      giveawayLink = `${shareUrl(result.body.readId)}&claim=${result.body.claimToken}${campPart}`;
+      giveawayTapLink = `${tapUrl(result.body.readId, result.body.tapToken)}&claim=${result.body.claimToken}${campPart}`;
       elements.giveawayUrl.textContent = giveawayLink;
       renderQr(elements.giveawayQr, giveawayLink);
       elements.giveawayResult.hidden = false;
@@ -732,7 +739,7 @@
     }
   }
 
-  function claimHexlace(readId, claimToken) {
+  function claimHexlace(readId, claimToken, campGrantToken = "") {
     // Adopt the tag right away with a locally generated key so naming and
     // list-building work offline; the claim is sent (and retried) on signal.
     const previous = loadIdentity();
@@ -746,6 +753,7 @@
       silentClaim: !previous?.name,
       dirty: true,
       isPhysical: true,
+      ...(campGrantToken ? { campGrantToken, ...window.CampAccess?.claimCredentials?.(campGrantToken) } : {}),
       ...(previous?.isPhysical === false ? { claimFallback: previous } : {})
     }, owlRequestCredentials());
     saveIdentity(pending);
@@ -756,18 +764,35 @@
   async function flushPendingClaim(options = {}) {
     const identity = loadIdentity();
     if (!identity || !identity.pendingClaim || claiming) return false;
+    if (identity.campGrantToken && !identity.campAccessKey) {
+      const access = window.CampAccess?.claimCredentials?.(identity.campGrantToken);
+      if (access?.campAccessKey) {
+        identity.campAccessKey = access.campAccessKey;
+        saveIdentity(identity);
+      }
+    }
     claiming = true;
     try {
       const result = await api(`/lists/${identity.readId}/claim`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ claimToken: identity.pendingClaim, writeKey: identity.writeKey, scannedAt: identity.claimScannedAt || Date.now(), ...owlRequestCredentials() })
+        body: JSON.stringify({
+          claimToken: identity.pendingClaim,
+          writeKey: identity.writeKey,
+          scannedAt: identity.claimScannedAt || Date.now(),
+          ...(identity.campGrantToken ? {
+            campGrantToken: identity.campGrantToken,
+            campAccessKey: identity.campAccessKey
+          } : {}),
+          ...owlRequestCredentials()
+        })
       });
       if (result.ok) {
         const claimed = loadIdentity();
         if (claimed && claimed.readId === identity.readId) {
-          if (result.body?.accepted === false) {
-            window.Hexadex?.saveFromResponse?.(result.body);
+            if (result.body?.accepted === false) {
+              window.Hexadex?.saveFromResponse?.(result.body);
+              if (identity.campGrantToken) window.CampAccess?.clear?.();
             if (identity.claimFallback) saveIdentity(identity.claimFallback);
             else try { localStorage.removeItem(IDENTITY_KEY); } catch {}
             if (!identity.silentClaim) addCollected(identity.readId, "");
@@ -776,6 +801,8 @@
           }
           delete claimed.pendingClaim;
           delete claimed.claimFallback;
+          delete claimed.campGrantToken;
+          delete claimed.campAccessKey;
           applyOwlMetadata(claimed, result.body);
           if (Number.isSafeInteger(result.body?.revision) && result.body.revision > 0) claimed.revision = result.body.revision;
           saveIdentity(claimed);
@@ -787,6 +814,7 @@
       } else if (result.status === 409 || result.status === 403) {
         // Keep the user's sets and quietly drop an unstarted background claim.
         const lostId = identity.readId;
+        if (identity.campGrantToken) window.CampAccess?.clear?.();
         if (identity.claimFallback) saveIdentity(identity.claimFallback);
         else try { localStorage.removeItem(IDENTITY_KEY); } catch {}
         editorMode = "";
@@ -921,6 +949,7 @@
         return;
       }
       try { localStorage.removeItem(IDENTITY_KEY); } catch {}
+      window.CampAccess?.clear?.();
       editorMode = "";
       elements.releaseDialog?.close();
       renderMine();
@@ -1450,9 +1479,11 @@
     const readId = (params.get("f") || "").trim();
     if (!readId) return;
     const claimToken = (params.get("claim") || "").trim();
+    const campGrantToken = (params.get("camp") || "").trim();
     const tapToken = (params.get("tap") || "").trim();
     params.delete("f");
     params.delete("claim");
+    params.delete("camp");
     params.delete("tap");
     const query = params.toString();
     history.replaceState({}, "", `${location.pathname}${query ? "?" + query : ""}${location.hash}`);
@@ -1485,7 +1516,7 @@
     }
     if (effectiveClaimToken && canClaim) {
       try {
-        if (await claimHexlace(readId, effectiveClaimToken)) {
+        if (await claimHexlace(readId, effectiveClaimToken, campGrantToken)) {
           renderCollected();
           return;
         }
@@ -1678,6 +1709,7 @@
   window.addEventListener("hexadex-feedback", event => {
     if (event.detail?.message) feedback(event.detail.message);
   });
+  window.addEventListener("hex-owl-admin-traits-changed", () => markDirtyAndPublishSoon(0));
 
   renderMine();
   renderCollected();

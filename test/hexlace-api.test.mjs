@@ -33,3 +33,22 @@ test("Hexlace requests preserve supplied options when they complete", async () =
   });
   assert.equal(await response.text(), "ok");
 });
+
+test("Hexlace requests attach confirmed camp bearer access without replacing caller headers", async () => {
+  const source = await readFile(new URL("../hexlace-api.js", import.meta.url), "utf8");
+  const context = {
+    window: {
+      setTimeout,
+      clearTimeout,
+      CampAccess: { authorizationHeaders: () => ({ Authorization: "Bearer admin-device-key" }) }
+    },
+    AbortController,
+    fetch
+  };
+  vm.runInNewContext(source, context);
+  await context.window.fetchHexlaceApi("https://api.example.test/lists", { headers: { "X-Write-Key": "owner" } }, 50, async (_url, options) => {
+    assert.equal(options.headers.Authorization, "Bearer admin-device-key");
+    assert.equal(options.headers["X-Write-Key"], "owner");
+    return new Response("ok");
+  });
+});

@@ -23,14 +23,14 @@
 //   GET  /lists/:readId/owner -> authenticated state for cross-context sync
 //   POST /handoffs/redeem       -> idempotently exchange it for ownership
 
-import { CLAIM_CONTENTION_WINDOW_MS, HexlaceCoordinator, HexOwlProfile, OwlNumberAllocator, RateLimitCoordinator } from "./durable-objects.js";
+import { CampAccessRegistry, CLAIM_CONTENTION_WINDOW_MS, HexlaceCoordinator, HexOwlProfile, OwlNumberAllocator, RateLimitCoordinator } from "./durable-objects.js";
 
-export { HexlaceCoordinator, HexOwlProfile, OwlNumberAllocator, RateLimitCoordinator };
+export { CampAccessRegistry, HexlaceCoordinator, HexOwlProfile, OwlNumberAllocator, RateLimitCoordinator };
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-Write-Key, X-Profile-Key",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Camp-Bootstrap-Key, X-Write-Key, X-Profile-Key",
   "Access-Control-Max-Age": "86400"
 };
 
@@ -48,6 +48,7 @@ const READ_ID_LENGTH = 8;
 const PROFILE_ID_LENGTH = 16;
 const VALID_DAYS = new Set(["Thursday", "Friday", "Saturday", "Sunday"]);
 const VALID_STAGE_IDS = new Set(["amp", "fractal-forest", "grove", "living-room", "pagoda", "secret-garden", "village"]);
+const CAMP_ROLES = new Set(["member", "admin"]);
 const TIME_PATTERN = /^(1[0-2]|[1-9]):[0-5]\d\s(?:AM|PM)$/;
 // Per-IP limits are sized for festival reality: a whole camp can sit behind
 // one carrier-NAT/hotspot IP, so bursts of legitimate traffic share a bucket.
@@ -98,6 +99,12 @@ function displayHandoffCode(token) {
   return compact.match(/.{1,4}/g)?.join("-") || compact;
 }
 
+function cleanCampPairingToken(value) {
+  if (typeof value !== "string") return "";
+  const compact = [...value.trim()].filter(character => ID_ALPHABET.includes(character)).join("");
+  return compact.length === 24 ? compact : "";
+}
+
 async function handoffKey(token) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   return `handoff:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
@@ -132,10 +139,30 @@ function hasOwlInfrastructure(env) {
   return Boolean(env?.HEX_OWL_PROFILES && env?.OWL_NUMBERS);
 }
 
+function hasCampAccess(env) {
+  return Boolean(env?.CAMP_ACCESS && (typeof env.CAMP_ACCESS.getByName === "function"
+    || (typeof env.CAMP_ACCESS.idFromName === "function" && typeof env.CAMP_ACCESS.get === "function")));
+}
+
 function validProfileCredentials(profileId, profileKey) {
   return typeof profileId === "string" && profileId.length === PROFILE_ID_LENGTH
     && [...profileId].every(character => ID_ALPHABET.includes(character))
     && typeof profileKey === "string" && profileKey.length >= 24;
+}
+
+function cleanAdminTraits(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const entries = Object.entries(value);
+  if (entries.length > 24) return {};
+  const clean = {};
+  for (const [key, traitValue] of entries) {
+    if (!/^[a-z][a-z0-9_-]{0,39}$/i.test(key)) return {};
+    if (!(traitValue === null || typeof traitValue === "boolean"
+      || (typeof traitValue === "string" && traitValue.length <= 120)
+      || (typeof traitValue === "number" && Number.isFinite(traitValue)))) return {};
+    clean[key] = traitValue;
+  }
+  return clean;
 }
 
 function cleanOwl(value) {
@@ -151,7 +178,9 @@ function cleanOwl(value) {
   // Public reads must never send an old renderer version back to a client.
   // V1 and V2 share the same immutable identity fields, so V2 regenerates the
   // Owl deterministically from this unchanged seed and number.
-  return { seed, version: version === 1 ? 2 : version, number, createdAt, season };
+  const adminTraits = cleanAdminTraits(value.adminTraits);
+  return { seed, version: version === 1 ? 2 : version, number, createdAt, season,
+    ...(Object.keys(adminTraits).length ? { adminTraits } : {}) };
 }
 
 async function callOwlProfile(env, profileId, path, body = {}) {
@@ -194,6 +223,57 @@ async function callHexlaceCoordinator(env, readId, path, body = {}) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...body, readId })
   }));
+}
+
+async function callCampAccess(env, path, body = {}) {
+  return namedStub(env.CAMP_ACCESS, "camp-access-registry").fetch(new Request(`https://camp-access.internal${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  }));
+}
+
+function bearerToken(request) {
+  const value = request.headers.get("Authorization") || "";
+  const match = /^Bearer\s+([^\s]+)$/i.exec(value);
+  return match && match[1].length >= 24 && match[1].length <= 128 ? match[1] : "";
+}
+
+async function campAuthorization(request, env, requiredRole = "") {
+  if (!hasCampAccess(env)) return { error: json({ error: "Camp access is temporarily unavailable." }, 503) };
+  const accessKey = bearerToken(request);
+  if (!accessKey) return { error: json({ error: "Camp access is required." }, 401) };
+  const response = await callCampAccess(env, "/authorize", { accessKey });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) return { error: json({ error: data.error || "Camp access is invalid or revoked." }, response.status) };
+  if (requiredRole && data.role !== requiredRole) return { error: json({ error: "Admin access is required." }, 403) };
+  return { accessKey, access: data };
+}
+
+async function transferCampAccess(env, readId, accessKey, profileId = "") {
+  if (!hasCampAccess(env) || typeof accessKey !== "string" || accessKey.length < 24) return null;
+  const response = await callCampAccess(env, "/transfer", { readId, accessKey, profileId });
+  const data = await response.json().catch(() => ({}));
+  return response.ok ? { active: data.active === true, role: data.role || null, readId } : null;
+}
+
+async function revokeCampAccess(env, readId) {
+  if (!hasCampAccess(env)) return;
+  const response = await callCampAccess(env, "/revoke", { readId });
+  if (!response.ok) throw new Error("Camp access revocation failed.");
+}
+
+async function secretsEqual(left, right) {
+  if (typeof left !== "string" || typeof right !== "string" || !left || left.length !== right.length) return false;
+  const [leftHash, rightHash] = await Promise.all([
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(left)),
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(right))
+  ]);
+  const a = new Uint8Array(leftHash);
+  const b = new Uint8Array(rightHash);
+  let difference = 0;
+  for (let index = 0; index < a.length; index += 1) difference |= a[index] ^ b[index];
+  return difference === 0;
 }
 
 async function relayInternal(response, transform = value => value) {
@@ -398,6 +478,84 @@ export default {
     }
 
     try {
+      // Accountless camp access. Bootstrap requires both a one-time Worker secret and
+      // proof of ownership for the Hexlace receiving the first admin pass.
+      if (parts[0] === "camp") {
+        if (request.method === "GET" && parts.length === 2 && parts[1] === "access") {
+          const authorized = await campAuthorization(request, env);
+          if (authorized.error) return authorized.error;
+          return json({ active: true, role: authorized.access.role, readId: authorized.access.readId });
+        }
+        if (request.method === "POST" && parts.length === 2 && parts[1] === "bootstrap") {
+          const limited = await enforceRateLimit(request, env, "claim");
+          if (limited) return limited;
+          if (!hasCampAccess(env) || typeof env.CAMP_BOOTSTRAP_KEY !== "string") return json({ error: "Camp bootstrap is not configured." }, 503);
+          if (!(await secretsEqual(request.headers.get("X-Camp-Bootstrap-Key") || "", env.CAMP_BOOTSTRAP_KEY))) {
+            return json({ error: "Invalid bootstrap key." }, 403);
+          }
+          const body = await readJson(request);
+          const readId = typeof body?.readId === "string" ? body.readId : "";
+          const writeKey = typeof body?.writeKey === "string" ? body.writeKey : "";
+          const accessKey = typeof body?.accessKey === "string" ? body.accessKey : "";
+          if (!isReadId(readId) || writeKey.length < MIN_KEY_LENGTH || accessKey.length < 24) return json({ error: "Valid Hexlace and device credentials are required." }, 400);
+          if (hasHexlaceCoordinator(env)) {
+            const owner = await callHexlaceCoordinator(env, readId, "/owner", { writeKey });
+            if (!owner.ok) return relayInternal(owner);
+          } else {
+            const expected = await env.LISTS.get(`auth:${readId}`);
+            if (!expected || writeKey !== expected) return json({ error: "Invalid write key." }, 403);
+          }
+          const response = await callCampAccess(env, "/bootstrap", {
+            readId,
+            accessKey,
+            profileId: typeof body.profileId === "string" ? body.profileId : ""
+          });
+          return relayInternal(response, data => ({ ...data, campAccess: data?.role ? { active: true, role: data.role, readId } : null }));
+        }
+        if (request.method === "POST" && parts.length === 2 && parts[1] === "pairings") {
+          const limited = await enforceRateLimit(request, env, "claim");
+          if (limited) return limited;
+          const authorized = await campAuthorization(request, env, "admin");
+          if (authorized.error) return authorized.error;
+          const pairingToken = randomId(24);
+          const response = await callCampAccess(env, "/pairing-create", {
+            readId: authorized.access.readId,
+            role: "admin",
+            pairingToken
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) return json({ error: data.error || "Admin pairing could not be created." }, response.status);
+          return json({ ...data, token: pairingToken, code: displayHandoffCode(pairingToken) }, response.status);
+        }
+        if (request.method === "POST" && parts.length === 3 && parts[1] === "pairings" && parts[2] === "redeem") {
+          const limited = await enforceRateLimit(request, env, "claim");
+          if (limited) return limited;
+          const body = await readJson(request);
+          const pairingToken = cleanCampPairingToken(body?.token || body?.code);
+          const accessKey = typeof body?.accessKey === "string" ? body.accessKey : "";
+          if (!pairingToken || accessKey.length < 24 || accessKey.length > 128) {
+            return json({ error: "Invalid or expired admin pairing code." }, 410);
+          }
+          const response = await callCampAccess(env, "/pairing-redeem", { pairingToken, accessKey });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) return json({ error: data.error || "Invalid or expired admin pairing code." }, response.status);
+          return json({
+            ok: data.ok === true,
+            campAccess: data.active === true ? { active: true, role: data.role, readId: data.readId } : null
+          }, response.status);
+        }
+        if (request.method === "POST" && parts.length === 3 && parts[1] === "access" && parts[2] === "revoke") {
+          const authorized = await campAuthorization(request, env, "admin");
+          if (authorized.error) return authorized.error;
+          const body = await readJson(request);
+          if (!isReadId(body?.readId)) return json({ error: "A valid Hexlace id is required." }, 400);
+          if (body.readId === authorized.access.readId) return json({ error: "Use a different admin pass to revoke this admin." }, 409);
+          const response = await callCampAccess(env, "/revoke", { readId: body.readId });
+          return relayInternal(response);
+        }
+        return json({ error: "Not found." }, 404);
+      }
+
       // POST /handoffs/redeem — the installed PWA consumes the cookie copied
       // by iOS and receives the existing owner identity. New tickets are held
       // by the per-Hexlace coordinator and may be retried with the same stable
@@ -413,25 +571,26 @@ export default {
         if (hasHexlaceCoordinator(env) && isReadId(tokenReadId)) {
           const redemptionId = body && typeof body.redemptionId === "string" ? body.redemptionId.trim() : "";
           const response = await callHexlaceCoordinator(env, tokenReadId, "/redeem", { token, redemptionId });
-          return relayInternal(response, data => {
-            if (!data?.list) return data;
-            const list = publicList(JSON.stringify(data.list), env);
-            return {
-              readId: data.readId,
-              writeKey: data.writeKey,
-              name: list.name || "",
-              sets: Array.isArray(list.sets) ? list.sets : [],
-              ping: list.ping || null,
-              friends: Array.isArray(data.list.friends) ? data.list.friends : [],
-              revision: Number.isSafeInteger(list.revision) ? list.revision : 1,
-              ...(hasOwlInfrastructure(env) ? {
-                profileId: data.profileId || null,
-                profileKey: data.profileKey || null,
-                owl: cleanOwl(data.owl),
-                isPhysical: data.isPhysical === true,
-                tapToken: data.tapToken || null
-              } : {})
-            };
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data?.list) return json(data, response.status);
+          const list = publicList(JSON.stringify(data.list), env);
+          const campAccess = await transferCampAccess(env, data.readId, body?.campAccessKey || "", data.profileId || "");
+          return json({
+            readId: data.readId,
+            writeKey: data.writeKey,
+            name: list.name || "",
+            sets: Array.isArray(list.sets) ? list.sets : [],
+            ping: list.ping || null,
+            friends: Array.isArray(data.list.friends) ? data.list.friends : [],
+            revision: Number.isSafeInteger(list.revision) ? list.revision : 1,
+            ...(hasOwlInfrastructure(env) ? {
+              profileId: data.profileId || null,
+              profileKey: data.profileKey || null,
+              owl: cleanOwl(data.owl),
+              isPhysical: data.isPhysical === true,
+              tapToken: data.tapToken || null
+            } : {}),
+            ...(campAccess ? { campAccess } : {})
           });
         }
         const key = await handoffKey(token);
@@ -446,6 +605,28 @@ export default {
         const list = publicList(stored, env);
         const privateList = JSON.parse(stored);
         return json({ readId, writeKey, name: list.name || "", sets: Array.isArray(list.sets) ? list.sets : [], ping: list.ping || null, friends: Array.isArray(privateList.friends) ? privateList.friends : [], revision: Number.isSafeInteger(list.revision) ? list.revision : 1 });
+      }
+
+      // Admin-only Owl parameters live on the existing private Owl profile.
+      // Values are generic until the visual trait catalogue is finalized.
+      if (parts[0] === "profiles" && parts.length === 3 && parts[2] === "owl-admin-traits") {
+        if (!hasOwlInfrastructure(env)) return json({ error: "Hex Owl profiles are temporarily unavailable." }, 503);
+        const authorized = await campAuthorization(request, env, "admin");
+        if (authorized.error) return authorized.error;
+        const profileId = parts[1];
+        const profileKey = request.headers.get("X-Profile-Key") || "";
+        if (!validProfileCredentials(profileId, profileKey)) return json({ error: "Not found." }, 404);
+        if (request.method === "GET") {
+          const response = await callOwlProfile(env, profileId, "/admin-traits/read", { profileKey });
+          return relayInternal(response);
+        }
+        if (request.method === "PUT") {
+          const limited = await enforceRateLimit(request, env, "updateIp");
+          if (limited) return limited;
+          const body = await readJson(request);
+          const response = await callOwlProfile(env, profileId, "/admin-traits/write", { profileKey, traits: body?.traits });
+          return relayInternal(response);
+        }
       }
 
       // Private, authenticated Hexadex storage. A source entry is accepted only
@@ -501,6 +682,13 @@ export default {
         const limited = await enforceRateLimit(request, env, "create");
         if (limited) return limited;
         const body = await readJson(request);
+        let campRole = null;
+        if (body.claimable === true && hasCampAccess(env)) {
+          const authorized = await campAuthorization(request, env, "admin");
+          if (authorized.error) return authorized.error;
+          campRole = typeof body.campRole === "string" ? body.campRole : "member";
+          if (!CAMP_ROLES.has(campRole)) return json({ error: "Camp role must be member or admin." }, 400);
+        }
         const payload = cleanPayload(body);
         const blob = serialize(payload, 1, env);
         if (hasHexlaceCoordinator(env)) {
@@ -528,8 +716,14 @@ export default {
             if (!claimable && credentials && isPhysical && owl) {
               await qualifyProfile(env, { ...credentials, eligible: true, claimedReadId: readId, tagOwl: owl });
             }
+            let campGrantToken = null;
+            if (claimable && campRole) {
+              campGrantToken = randomId(32);
+              const granted = await callCampAccess(env, "/grant", { readId, role: campRole, grantToken: campGrantToken });
+              if (!granted.ok) return json({ error: "Camp access could not be assigned to this Hexlace." }, 503);
+            }
             return claimable
-              ? json({ readId, claimToken, tapToken, isPhysical: true, revision: 1 }, 201)
+              ? json({ readId, claimToken, tapToken, isPhysical: true, revision: 1, ...(campGrantToken ? { campGrantToken, campRole } : {}) }, 201)
               : json({ readId, writeKey, tapToken, isPhysical, revision: 1, ...credentials, ...(owl ? { owl } : {}) }, 201);
           }
           return json({ error: "Couldn't create a unique list. Please try again." }, 503);
@@ -581,8 +775,23 @@ export default {
           if (!credentials) return relayInternal(response);
           const claimed = await response.json().catch(() => ({}));
           if (!response.ok) return json(claimed, response.status);
+          let campAccess = null;
           if (claimed.accepted) {
             owl = await qualifyProfile(env, { ...credentials, eligible: false, claimedReadId: readId, tagOwl: owl });
+            const grantToken = typeof body?.campGrantToken === "string" ? body.campGrantToken : "";
+            if (grantToken && hasCampAccess(env)) {
+              const accessKey = typeof body?.campAccessKey === "string" ? body.campAccessKey : "";
+              if (accessKey.length < 24) return json({ error: "A valid camp device key is required." }, 400);
+              const redeemed = await callCampAccess(env, "/redeem", {
+                readId,
+                grantToken,
+                accessKey,
+                profileId: credentials.profileId
+              });
+              const granted = await redeemed.json().catch(() => ({}));
+              if (!redeemed.ok) return json({ error: granted.error || "Camp access could not be claimed." }, redeemed.status);
+              campAccess = { active: true, role: granted.role, readId };
+            }
           }
           return json({
             ok: true,
@@ -591,7 +800,8 @@ export default {
             isPhysical: true,
             tapToken: claimed.tapToken || null,
             ...credentials,
-            ...(owl ? { owl } : {})
+            ...(owl ? { owl } : {}),
+            ...(campAccess ? { campAccess } : {})
           });
         }
         const claim = parseClaimRecord(await env.LISTS.get(`claim:${readId}`));
@@ -629,6 +839,9 @@ export default {
         const writeKey = request.headers.get("X-Write-Key") || "";
         const claimToken = randomId(12);
         if (hasHexlaceCoordinator(env)) {
+          const owner = await callHexlaceCoordinator(env, readId, "/owner", { writeKey });
+          if (!owner.ok) return relayInternal(owner);
+          await revokeCampAccess(env, readId);
           const response = await callHexlaceCoordinator(env, readId, "/release", { writeKey, claimToken });
           return relayInternal(response);
         }
@@ -636,6 +849,7 @@ export default {
         const stored = await env.LISTS.get(`list:${readId}`);
         if (!expected || !stored) return json({ error: "Not found." }, 404);
         if (writeKey !== expected) return json({ error: "Invalid write key." }, 403);
+        await revokeCampAccess(env, readId);
         const current = JSON.parse(stored);
         const revision = (Number.isSafeInteger(current.revision) ? current.revision : 1) + 1;
         const released = serialize({ name: "Unclaimed Hexlace", sets: [], ping: null, friends: [] }, revision, env);

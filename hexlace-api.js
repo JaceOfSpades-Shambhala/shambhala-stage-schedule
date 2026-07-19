@@ -5,7 +5,11 @@
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await fetchFn(url, { ...options, signal: controller.signal });
+      const accessHeaders = window.CampAccess?.authorizationHeaders?.() || {};
+      const authorizedOptions = accessHeaders.Authorization
+        ? { ...options, headers: { ...accessHeaders, ...(options.headers || {}) } }
+        : options;
+      return await fetchFn(url, { ...authorizedOptions, signal: controller.signal });
     } finally {
       window.clearTimeout(timeout);
     }

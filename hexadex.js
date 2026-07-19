@@ -130,13 +130,33 @@
 
   function putOwl(container, owl) {
     if (!container || !validOwl(owl) || !window.HexOwl) return;
-    container.innerHTML = window.HexOwl.renderSvg(owl.seed, owl.version);
+    const overrides = owl.adminTraits && typeof owl.adminTraits === "object" ? owl.adminTraits : null;
+    container.innerHTML = overrides && window.HexOwl.renderWithTraits
+      ? window.HexOwl.renderWithTraits(owl.seed, { overrides }, owl.version)
+      : window.HexOwl.renderSvg(owl.seed, owl.version);
     void window.HexOwl.hydrate?.(container);
   }
 
   function traitsFor(owl) {
     if (!validOwl(owl) || !window.HexOwl) return {};
     try {
+      if (owl.adminTraits && typeof owl.adminTraits === "object" && window.HexOwl.resolveTraits) {
+        const traits = window.HexOwl.resolveTraits(owl.seed, { overrides: owl.adminTraits }, owl.version);
+        return {
+          "Eye style": traits.eyes.name,
+          "Owl colour": traits.palette.name,
+          Accessory: traits.accessory.name,
+          Aura: traits.aura.name,
+          "Brow treatment": traits.brow.name,
+          Beak: traits.beak.name,
+          "Facial disc": traits.marking.name,
+          "Portal rings": traits.rings.name,
+          "Ring finish": traits.ringStyle.name,
+          "Ring twist": traits.ringDirection,
+          Rarity: traits.rarity.name,
+          Edition: "2026"
+        };
+      }
       return window.HexOwl.traitNames(owl.seed, owl.version) || {};
     } catch {
       return {};

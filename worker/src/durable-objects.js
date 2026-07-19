@@ -6,6 +6,9 @@ const PROFILE_ID_LENGTH = 16;
 const OWL_VERSION = 2;
 const OWL_SEASON = 2026;
 const HEXADEX_PAGE_SIZE = 24;
+const CAMP_ROLES = new Set(["member", "admin"]);
+const MAX_ADMIN_TRAITS = 24;
+const CAMP_PAIRING_TTL_MS = 10 * 60 * 1000;
 
 function nowMs(env) {
   return Number.isSafeInteger(env?.NOW_MS) ? env.NOW_MS : Date.now();
@@ -66,6 +69,27 @@ function upgradeV1Owl(value) {
 function randomHex(byteLength) {
   const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
   return [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function cleanAdminTraits(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const entries = Object.entries(value);
+  if (entries.length > MAX_ADMIN_TRAITS) return null;
+  const clean = {};
+  for (const [key, traitValue] of entries) {
+    if (!/^[a-z][a-z0-9_-]{0,39}$/i.test(key)) return null;
+    if (!(traitValue === null || typeof traitValue === "boolean"
+      || (typeof traitValue === "string" && traitValue.length <= 120)
+      || (typeof traitValue === "number" && Number.isFinite(traitValue)))) return null;
+    clean[key] = traitValue;
+  }
+  return clean;
+}
+
+function owlWithAdminTraits(owl, traits) {
+  if (!validOwl(owl)) return null;
+  const clean = cleanAdminTraits(traits);
+  return clean && Object.keys(clean).length ? { ...owl, adminTraits: clean } : owl;
 }
 
 async function callProfile(env, profileId, path, body = {}) {
@@ -571,7 +595,13 @@ export class HexlaceCoordinator {
         : (Array.isArray(this.record.list.friends) ? this.record.list.friends : []),
       revision: currentRevision + 1
     };
-    if (validOwl(body.owl) && (!this.record.isPhysical || !validOwl(this.record.owl))) this.record.owl = body.owl;
+    if (validOwl(body.owl)) {
+      const sameOwl = validOwl(this.record.owl)
+        && this.record.owl.seed === body.owl.seed
+        && this.record.owl.number === body.owl.number
+        && this.record.owl.season === body.owl.season;
+      if (!this.record.isPhysical || !validOwl(this.record.owl) || sameOwl) this.record.owl = body.owl;
+    }
     await this.commit();
     const result = { ok: true, updated: this.record.list.updated, revision: this.record.list.revision };
     if (validProfileCredentials(this.record.profileId, this.record.profileKey)) {
@@ -707,11 +737,14 @@ export class HexOwlProfile {
     if (url.pathname === "/initialize") return this.initialize(body);
     if (!this.record) return json({ error: "Profile not found." }, 404);
     if (!(await this.authorized(body.profileKey))) return json({ error: "Invalid profile key." }, 403);
+    if (!cleanAdminTraits(this.record.adminTraits)) this.record.adminTraits = {};
     await this.migrateV1Owls();
     if (url.pathname === "/qualify") return this.qualify(body);
     if (url.pathname === "/adopt") return this.adopt(body);
     if (url.pathname === "/release") return this.release(body);
     if (url.pathname === "/read") return this.readProfile();
+    if (url.pathname === "/admin-traits/read") return this.readAdminTraits();
+    if (url.pathname === "/admin-traits/write") return this.writeAdminTraits(body);
     if (url.pathname === "/hexadex/add") return this.addHexadex(body);
     if (url.pathname === "/hexadex/read") return this.readHexadex(body);
     return json({ error: "Not found." }, 404);
@@ -725,11 +758,12 @@ export class HexOwlProfile {
   async initialize(body) {
     if (!validProfileCredentials(body.profileId, body.profileKey)) return json({ error: "Invalid profile credentials." }, 400);
     const authHash = await tokenHash(body.profileKey);
-    if (this.record) return this.record.authHash === authHash ? json({ ok: true, owl: this.record.owl || null }) : json({ error: "Profile already exists." }, 409);
+    if (this.record) return this.record.authHash === authHash ? json({ ok: true, owl: owlWithAdminTraits(this.record.owl, this.record.adminTraits) }) : json({ error: "Profile already exists." }, 409);
     this.record = {
       profileId: body.profileId,
       authHash,
       owl: null,
+      adminTraits: {},
       claimedReadId: null,
       total: 0,
       createdAt: nowMs(this.env),
@@ -795,7 +829,7 @@ export class HexOwlProfile {
     if (typeof body.claimedReadId === "string" && body.claimedReadId.length === 8) this.record.claimedReadId = body.claimedReadId;
     this.record.updatedAt = nowMs(this.env);
     await this.ctx.storage.put("profile", this.record);
-    return json({ ok: true, owl: this.record.owl || null, claimedReadId: this.record.claimedReadId, total: this.record.total || 0 });
+    return json({ ok: true, owl: owlWithAdminTraits(this.record.owl, this.record.adminTraits), claimedReadId: this.record.claimedReadId, total: this.record.total || 0 });
   }
 
   async adopt(body) {
@@ -803,33 +837,52 @@ export class HexOwlProfile {
       return json({ error: "Invalid Hex Owl assignment." }, 400);
     }
     const owl = upgradeV1Owl(body.owl);
+    const adoptedTraits = cleanAdminTraits(owl.adminTraits);
+    if (adoptedTraits && Object.keys(adoptedTraits).length) this.record.adminTraits = adoptedTraits;
     if (body.tradeId && body.tradeId === this.record.lastTradeId && this.record.claimedReadId === body.claimedReadId) {
-      return json({ ok: true, owl: this.record.owl });
+      return json({ ok: true, owl: owlWithAdminTraits(this.record.owl, this.record.adminTraits) });
     }
     if (!body.tradeId && this.record.claimedReadId === body.claimedReadId
       && validOwl(this.record.owl) && this.record.owl.seed === owl.seed
       && this.record.owl.version === owl.version && this.record.owl.number === owl.number) {
-      return json({ ok: true, owl: this.record.owl });
+      return json({ ok: true, owl: owlWithAdminTraits(this.record.owl, this.record.adminTraits) });
     }
     this.record.owl = owl;
     this.record.claimedReadId = body.claimedReadId;
     this.record.lastTradeId = typeof body.tradeId === "string" ? body.tradeId.slice(0, 80) : "";
     this.record.updatedAt = nowMs(this.env);
     await this.ctx.storage.put("profile", this.record);
-    return json({ ok: true, owl: this.record.owl });
+    return json({ ok: true, owl: owlWithAdminTraits(this.record.owl, this.record.adminTraits) });
   }
 
   async release(body) {
     if (body.owl != null && !validOwl(body.owl)) return json({ error: "Invalid Hex Owl." }, 400);
-    if (validOwl(body.owl)) this.record.owl = upgradeV1Owl(body.owl);
+    if (validOwl(body.owl)) {
+      this.record.owl = upgradeV1Owl(body.owl);
+      const releasedTraits = cleanAdminTraits(body.owl.adminTraits);
+      if (releasedTraits && Object.keys(releasedTraits).length) this.record.adminTraits = releasedTraits;
+    }
     if (!body.readId || this.record.claimedReadId === body.readId) this.record.claimedReadId = null;
     this.record.updatedAt = nowMs(this.env);
     await this.ctx.storage.put("profile", this.record);
-    return json({ ok: true, owl: this.record.owl || null });
+    return json({ ok: true, owl: owlWithAdminTraits(this.record.owl, this.record.adminTraits) });
   }
 
   readProfile() {
-    return json({ owl: this.record.owl || null, claimedReadId: this.record.claimedReadId, total: this.record.total || 0 });
+    return json({ owl: owlWithAdminTraits(this.record.owl, this.record.adminTraits), claimedReadId: this.record.claimedReadId, total: this.record.total || 0 });
+  }
+
+  readAdminTraits() {
+    return json({ traits: cleanAdminTraits(this.record.adminTraits) || {} });
+  }
+
+  async writeAdminTraits(body) {
+    const traits = cleanAdminTraits(body.traits);
+    if (!traits) return json({ error: `Admin traits must contain at most ${MAX_ADMIN_TRAITS} simple values.` }, 400);
+    this.record.adminTraits = traits;
+    this.record.updatedAt = nowMs(this.env);
+    await this.ctx.storage.put("profile", this.record);
+    return json({ ok: true, traits });
   }
 
   async addHexadex(body) {
@@ -873,8 +926,206 @@ export class HexOwlProfile {
       entries: visible.map(([, entry]) => entry),
       total: this.record.total || 0,
       nextCursor: pairs.length > limit ? visible[visible.length - 1][0] : null,
-      owl: this.record.owl || null
+      owl: owlWithAdminTraits(this.record.owl, this.record.adminTraits)
     });
+  }
+}
+
+/**
+ * One small registry is the coordination atom for camp access. Claim grants,
+ * device credentials, role changes, and revocations are committed together so
+ * a copied or superseded pass cannot win a race through eventually-consistent
+ * KV. Raw bearer values are never persisted; only SHA-256 hashes are stored.
+ */
+export class CampAccessRegistry {
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+    this.record = null;
+    this.queue = Promise.resolve();
+    ctx.blockConcurrencyWhile(async () => {
+      this.record = (await ctx.storage.get("registry")) || {
+        initialized: false,
+        grants: {},
+        sessions: {},
+        readIds: {},
+        pairings: {}
+      };
+      this.record.pairings ||= {};
+    });
+  }
+
+  fetch(request) {
+    const result = this.queue.then(() => this.handle(request));
+    this.queue = result.then(() => undefined, () => undefined);
+    return result;
+  }
+
+  async handle(request) {
+    const url = new URL(request.url);
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") return json({ error: "Invalid camp access request." }, 400);
+    if (url.pathname === "/bootstrap") return this.bootstrap(body);
+    if (url.pathname === "/authorize") return this.authorize(body);
+    if (url.pathname === "/grant") return this.grant(body);
+    if (url.pathname === "/redeem") return this.redeem(body);
+    if (url.pathname === "/transfer") return this.transfer(body);
+    if (url.pathname === "/pairing-create") return this.createPairing(body);
+    if (url.pathname === "/pairing-redeem") return this.redeemPairing(body);
+    if (url.pathname === "/revoke") return this.revoke(body);
+    return json({ error: "Not found." }, 404);
+  }
+
+  validAccessKey(value) {
+    return typeof value === "string" && value.length >= 24 && value.length <= 128;
+  }
+
+  validReadId(value) {
+    return typeof value === "string" && value.length === 8;
+  }
+
+  async save() {
+    await this.ctx.storage.put("registry", this.record);
+  }
+
+  async bootstrap(body) {
+    if (this.record.initialized) return json({ error: "Camp access is already initialized." }, 409);
+    if (!this.validReadId(body.readId) || !this.validAccessKey(body.accessKey)) return json({ error: "Invalid camp access credentials." }, 400);
+    const sessionHash = await tokenHash(body.accessKey);
+    const access = { readId: body.readId, role: "admin", active: true, profileId: typeof body.profileId === "string" ? body.profileId : "", createdAt: nowMs(this.env) };
+    this.record.initialized = true;
+    this.record.readIds[body.readId] = { role: "admin", active: true, profileId: access.profileId };
+    this.record.sessions[sessionHash] = access;
+    await this.save();
+    return json({ ok: true, role: "admin", readId: body.readId }, 201);
+  }
+
+  async authorize(body) {
+    if (!this.validAccessKey(body.accessKey)) return json({ error: "Camp access is required." }, 401);
+    const sessionHash = await tokenHash(body.accessKey);
+    const session = this.record.sessions[sessionHash];
+    const pass = session && this.record.readIds[session.readId];
+    if (!session?.active || !pass?.active || session.role !== pass.role) return json({ error: "Camp access is invalid or revoked." }, 401);
+    return json({ active: true, role: session.role, readId: session.readId, profileId: session.profileId || pass.profileId || "" });
+  }
+
+  async grant(body) {
+    if (!this.validReadId(body.readId) || !CAMP_ROLES.has(body.role) || !this.validAccessKey(body.grantToken)) {
+      return json({ error: "Invalid camp access grant." }, 400);
+    }
+    const grantHash = await tokenHash(body.grantToken);
+    if (this.record.grants[grantHash]) return json({ error: "Camp access grant already exists." }, 409);
+    this.record.grants[grantHash] = { readId: body.readId, role: body.role, active: true, createdAt: nowMs(this.env) };
+    this.record.readIds[body.readId] = { role: body.role, active: true, profileId: "" };
+    await this.save();
+    return json({ ok: true, role: body.role, readId: body.readId }, 201);
+  }
+
+  async redeem(body) {
+    if (!this.validReadId(body.readId) || !this.validAccessKey(body.grantToken) || !this.validAccessKey(body.accessKey)) {
+      return json({ error: "Invalid camp access grant." }, 400);
+    }
+    const grantHash = await tokenHash(body.grantToken);
+    const grant = this.record.grants[grantHash];
+    if (!grant?.active || grant.readId !== body.readId) return json({ error: "Camp access grant is invalid or revoked." }, 403);
+    for (const session of Object.values(this.record.sessions)) {
+      if (session.readId === body.readId) session.active = false;
+    }
+    const sessionHash = await tokenHash(body.accessKey);
+    const profileId = typeof body.profileId === "string" ? body.profileId : "";
+    this.record.sessions[sessionHash] = { readId: body.readId, role: grant.role, active: true, profileId, createdAt: nowMs(this.env) };
+    this.record.readIds[body.readId] = { role: grant.role, active: true, profileId };
+    grant.redeemedAt = nowMs(this.env);
+    await this.save();
+    return json({ ok: true, role: grant.role, readId: body.readId });
+  }
+
+  async transfer(body) {
+    if (!this.validReadId(body.readId) || !this.validAccessKey(body.accessKey)) return json({ error: "Invalid camp access transfer." }, 400);
+    const sessionHash = await tokenHash(body.accessKey);
+    const pass = this.record.readIds[body.readId];
+    if (!pass?.active) {
+      if (this.record.sessions[sessionHash]) {
+        this.record.sessions[sessionHash].active = false;
+        await this.save();
+      }
+      return json({ active: false, role: null, readId: body.readId });
+    }
+    const profileId = typeof body.profileId === "string" ? body.profileId : pass.profileId || "";
+    this.record.sessions[sessionHash] = { readId: body.readId, role: pass.role, active: true, profileId, createdAt: nowMs(this.env) };
+    pass.profileId = profileId;
+    await this.save();
+    return json({ active: true, role: pass.role, readId: body.readId });
+  }
+
+  prunePairings(now = nowMs(this.env)) {
+    for (const [hash, pairing] of Object.entries(this.record.pairings)) {
+      if (!pairing || pairing.expiresAt <= now) delete this.record.pairings[hash];
+    }
+  }
+
+  async createPairing(body) {
+    if (!this.validReadId(body.readId) || body.role !== "admin" || !this.validAccessKey(body.pairingToken)) {
+      return json({ error: "Invalid camp access pairing." }, 400);
+    }
+    const pass = this.record.readIds[body.readId];
+    if (!pass?.active || pass.role !== "admin") return json({ error: "Admin access is invalid or revoked." }, 403);
+    const now = nowMs(this.env);
+    this.prunePairings(now);
+    const pairingHash = await tokenHash(body.pairingToken);
+    this.record.pairings[pairingHash] = {
+      readId: body.readId,
+      role: "admin",
+      createdAt: now,
+      expiresAt: now + CAMP_PAIRING_TTL_MS
+    };
+    await this.save();
+    return json({ ok: true, expiresIn: Math.floor(CAMP_PAIRING_TTL_MS / 1000) }, 201);
+  }
+
+  async redeemPairing(body) {
+    if (!this.validAccessKey(body.pairingToken) || !this.validAccessKey(body.accessKey)) {
+      return json({ error: "Invalid or expired admin pairing code." }, 410);
+    }
+    const now = nowMs(this.env);
+    const pairingHash = await tokenHash(body.pairingToken);
+    const pairing = this.record.pairings[pairingHash];
+    if (!pairing || pairing.expiresAt <= now) {
+      this.prunePairings(now);
+      await this.save();
+      return json({ error: "Invalid or expired admin pairing code." }, 410);
+    }
+    const pass = this.record.readIds[pairing.readId];
+    if (!pass?.active || pass.role !== "admin") return json({ error: "Admin access is invalid or revoked." }, 403);
+    const sessionHash = await tokenHash(body.accessKey);
+    if (pairing.redeemedSessionHash && pairing.redeemedSessionHash !== sessionHash) {
+      return json({ error: "That admin pairing code has already been used." }, 410);
+    }
+    pairing.redeemedSessionHash = sessionHash;
+    pairing.redeemedAt ||= now;
+    this.record.sessions[sessionHash] = {
+      readId: pairing.readId,
+      role: "admin",
+      active: true,
+      profileId: "",
+      createdAt: now
+    };
+    await this.save();
+    return json({ ok: true, active: true, role: "admin", readId: pairing.readId });
+  }
+
+  async revoke(body) {
+    if (!this.validReadId(body.readId)) return json({ error: "Invalid Hexlace id." }, 400);
+    const pass = this.record.readIds[body.readId];
+    if (pass) pass.active = false;
+    for (const grant of Object.values(this.record.grants)) {
+      if (grant.readId === body.readId) grant.active = false;
+    }
+    for (const session of Object.values(this.record.sessions)) {
+      if (session.readId === body.readId) session.active = false;
+    }
+    await this.save();
+    return json({ ok: true, readId: body.readId });
   }
 }
 

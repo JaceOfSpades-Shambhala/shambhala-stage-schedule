@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import worker, { HexlaceCoordinator, HexOwlProfile, OwlNumberAllocator, RateLimitCoordinator } from "../worker/src/index.js";
+import worker, { CampAccessRegistry, HexlaceCoordinator, HexOwlProfile, OwlNumberAllocator, RateLimitCoordinator } from "../worker/src/index.js";
 
 class MemoryKv {
   constructor() {
@@ -113,6 +113,13 @@ function makeOwlEnv(now = 1_800_000_000_000) {
   const env = makeDurableEnv(now);
   env.HEX_OWL_PROFILES = new MemoryDoNamespace(HexOwlProfile, env);
   env.OWL_NUMBERS = new MemoryDoNamespace(OwlNumberAllocator, env);
+  return env;
+}
+
+function makeCampEnv(now = 1_800_000_000_000) {
+  const env = makeOwlEnv(now);
+  env.CAMP_ACCESS = new MemoryDoNamespace(CampAccessRegistry, env);
+  env.CAMP_BOOTSTRAP_KEY = "bootstrap-secret-for-tests";
   return env;
 }
 
@@ -1027,4 +1034,190 @@ test("Hexadex collection requires a physical tap and preserves first-collected m
   assert.equal(page.total, 1);
   assert.equal(page.entries.length, 1);
   assert.deepEqual(page.entries[0].owl, source.owl);
+});
+
+test("camp Hexlaces grant hashed member/admin access and enforce admin-only APIs", async () => {
+  const env = makeCampEnv();
+  const adminAccessKey = "admin-device-access-key-123456789";
+  const adminCreated = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Camp admin", sets: [QUALIFYING_SET] })
+  }), env);
+  assert.equal(adminCreated.status, 201);
+  const admin = await adminCreated.json();
+
+  const bootstrap = await worker.fetch(makeRequest("/camp/bootstrap", {
+    method: "POST",
+    headers: { "X-Camp-Bootstrap-Key": env.CAMP_BOOTSTRAP_KEY },
+    body: JSON.stringify({
+      readId: admin.readId,
+      writeKey: admin.writeKey,
+      profileId: admin.profileId,
+      accessKey: adminAccessKey
+    })
+  }), env);
+  assert.equal(bootstrap.status, 201);
+  assert.equal((await bootstrap.json()).campAccess.role, "admin");
+
+  const pairing = await worker.fetch(makeRequest("/camp/pairings", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${adminAccessKey}` }
+  }), env);
+  assert.equal(pairing.status, 201);
+  const pairingBody = await pairing.json();
+  assert.equal(pairingBody.token.length, 24);
+  assert.match(pairingBody.code, /^[^-]{4}(?:-[^-]{4}){5}$/);
+  assert.equal(pairingBody.expiresIn, 600);
+
+  const pairedPhoneAccessKey = "existing-phone-admin-key-123456789";
+  const pairedPhone = await worker.fetch(makeRequest("/camp/pairings/redeem", {
+    method: "POST",
+    body: JSON.stringify({ code: pairingBody.code, accessKey: pairedPhoneAccessKey })
+  }), env);
+  assert.equal(pairedPhone.status, 200);
+  assert.equal((await pairedPhone.json()).campAccess.role, "admin");
+
+  const pairingRetry = await worker.fetch(makeRequest("/camp/pairings/redeem", {
+    method: "POST",
+    body: JSON.stringify({ token: pairingBody.token, accessKey: pairedPhoneAccessKey })
+  }), env);
+  assert.equal(pairingRetry.status, 200);
+
+  const pairingReuse = await worker.fetch(makeRequest("/camp/pairings/redeem", {
+    method: "POST",
+    body: JSON.stringify({ token: pairingBody.token, accessKey: "different-phone-admin-key-1234567" })
+  }), env);
+  assert.equal(pairingReuse.status, 410);
+
+  const pairedPhoneAccess = await worker.fetch(makeRequest("/camp/access", {
+    headers: { Authorization: `Bearer ${pairedPhoneAccessKey}` }
+  }), env);
+  assert.deepEqual(await pairedPhoneAccess.json(), { active: true, role: "admin", readId: admin.readId });
+
+  const unauthenticatedGiveaway = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Unclaimed Hexlace", sets: [], claimable: true, campRole: "member" })
+  }), env);
+  assert.equal(unauthenticatedGiveaway.status, 401);
+
+  const memberCreated = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${adminAccessKey}` },
+    body: JSON.stringify({ name: "Unclaimed Hexlace", sets: [], claimable: true, campRole: "member" })
+  }), env);
+  assert.equal(memberCreated.status, 201);
+  const memberTag = await memberCreated.json();
+  assert.equal(memberTag.campRole, "member");
+  assert.ok(memberTag.campGrantToken.length >= 24);
+
+  const memberAccessKey = "member-device-access-key-12345678";
+  const memberClaim = await worker.fetch(makeRequest(`/lists/${memberTag.readId}/claim`, {
+    method: "POST",
+    body: JSON.stringify({
+      claimToken: memberTag.claimToken,
+      writeKey: "member-write-key-123456789",
+      scannedAt: 1000,
+      campGrantToken: memberTag.campGrantToken,
+      campAccessKey: memberAccessKey
+    })
+  }), env);
+  assert.equal(memberClaim.status, 200);
+  assert.equal((await memberClaim.json()).campAccess.role, "member");
+
+  const memberAccess = await worker.fetch(makeRequest("/camp/access", {
+    headers: { Authorization: `Bearer ${memberAccessKey}` }
+  }), env);
+  assert.deepEqual(await memberAccess.json(), { active: true, role: "member", readId: memberTag.readId });
+
+  const memberCannotCreate = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${memberAccessKey}` },
+    body: JSON.stringify({ name: "Unclaimed Hexlace", sets: [], claimable: true, campRole: "admin" })
+  }), env);
+  assert.equal(memberCannotCreate.status, 403);
+
+  const savedTraits = await worker.fetch(makeRequest(`/profiles/${admin.profileId}/owl-admin-traits`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${adminAccessKey}`,
+      "X-Profile-Key": admin.profileKey
+    },
+    body: JSON.stringify({ traits: { portal_finish: "iridescent", halo_level: 0.75, animated: true } })
+  }), env);
+  assert.equal(savedTraits.status, 200);
+  assert.deepEqual((await savedTraits.json()).traits, { portal_finish: "iridescent", halo_level: 0.75, animated: true });
+
+  const publishedAdminOwl = await worker.fetch(makeRequest(`/lists/${admin.readId}`, {
+    method: "PUT",
+    headers: { "X-Write-Key": admin.writeKey },
+    body: JSON.stringify({
+      name: "Camp admin",
+      sets: [QUALIFYING_SET],
+      revision: 1,
+      profileId: admin.profileId,
+      profileKey: admin.profileKey
+    })
+  }), env);
+  assert.equal(publishedAdminOwl.status, 200);
+  assert.deepEqual((await publishedAdminOwl.json()).owl.adminTraits, { portal_finish: "iridescent", halo_level: 0.75, animated: true });
+  const publicAdminOwl = await worker.fetch(makeRequest(`/lists/${admin.readId}`), env).then(response => response.json());
+  assert.deepEqual(publicAdminOwl.owl.adminTraits, { portal_finish: "iridescent", halo_level: 0.75, animated: true });
+
+  const memberCannotEditOwl = await worker.fetch(makeRequest(`/profiles/${admin.profileId}/owl-admin-traits`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${memberAccessKey}`,
+      "X-Profile-Key": admin.profileKey
+    },
+    body: JSON.stringify({ traits: { portal_finish: "copied" } })
+  }), env);
+  assert.equal(memberCannotEditOwl.status, 403);
+
+  const revoked = await worker.fetch(makeRequest("/camp/access/revoke", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${adminAccessKey}` },
+    body: JSON.stringify({ readId: memberTag.readId })
+  }), env);
+  assert.equal(revoked.status, 200);
+  const rejectedAfterRevoke = await worker.fetch(makeRequest("/camp/access", {
+    headers: { Authorization: `Bearer ${memberAccessKey}` }
+  }), env);
+  assert.equal(rejectedAfterRevoke.status, 401);
+
+  const releasableCreated = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${adminAccessKey}` },
+    body: JSON.stringify({ name: "Unclaimed Hexlace", sets: [], claimable: true, campRole: "member" })
+  }), env).then(response => response.json());
+  const releasableAccessKey = "released-device-access-key-123456";
+  const releasableWriteKey = "released-owner-write-key-123456";
+  const releasableClaim = await worker.fetch(makeRequest(`/lists/${releasableCreated.readId}/claim`, {
+    method: "POST",
+    body: JSON.stringify({
+      claimToken: releasableCreated.claimToken,
+      writeKey: releasableWriteKey,
+      scannedAt: 2000,
+      campGrantToken: releasableCreated.campGrantToken,
+      campAccessKey: releasableAccessKey
+    })
+  }), env);
+  assert.equal(releasableClaim.status, 200);
+  const released = await worker.fetch(makeRequest(`/lists/${releasableCreated.readId}/release`, {
+    method: "POST",
+    headers: { "X-Write-Key": releasableWriteKey }
+  }), env);
+  assert.equal(released.status, 200);
+  const rejectedAfterRelease = await worker.fetch(makeRequest("/camp/access", {
+    headers: { Authorization: `Bearer ${releasableAccessKey}` }
+  }), env);
+  assert.equal(rejectedAfterRelease.status, 401);
+
+  const registry = env.CAMP_ACCESS.instances.get("camp-access-registry").ctx.storage.values.get("registry");
+  const stored = JSON.stringify(registry);
+  assert.equal(stored.includes(adminAccessKey), false);
+  assert.equal(stored.includes(memberAccessKey), false);
+  assert.equal(stored.includes(memberTag.campGrantToken), false);
+  assert.equal(stored.includes(releasableAccessKey), false);
+  assert.equal(stored.includes(pairingBody.token), false);
+  assert.equal(stored.includes(pairedPhoneAccessKey), false);
 });

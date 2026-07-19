@@ -10,7 +10,7 @@ https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 
 Hex Owl visual playground: [open the live playground](https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/hex-owl-playground.html). It is a standalone developer tool for previewing deterministic Owl seeds, traits, palettes, and contact sheets.
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v63 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v64 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
@@ -138,7 +138,7 @@ Do not put `preview=...` in NFC tag URLs.
 
 Stage IDs: `amp`, `fractal-forest`, `grove`, `living-room`, `pagoda`, `secret-garden`, `village`. Days: `Thursday`–`Sunday`, mapped in `app.js` to calendar dates 2026-07-23 through 2026-07-26; post-midnight sets stay in the previous evening's list and roll over internally.
 
-My Set List and local Hexlace credentials live in browser localStorage (no login account). Per-profile Durable Objects privately retain Hex Owl assignment and paged Hexadex entries across release, app handoff, device transfer, and future festival years. Per-Hexlace Durable Objects serialize ownership and mutations; physical Hexlace records are durable, while browser-only share identities and KV public snapshots use a rolling 60-day TTL. Existing KV-only Hexlaces migrate lazily on their next qualifying publish. The full API surface is documented in HANDOFF.md.
+My Set List and local Hexlace credentials live in browser localStorage (no login account). Per-profile Durable Objects privately retain Hex Owl assignment and paged Hexadex entries across release, app handoff, device transfer, and future festival years. Per-Hexlace Durable Objects serialize ownership and mutations; physical Hexlace records are durable, while browser-only share identities and KV public snapshots use a rolling 60-day TTL. Existing KV-only Hexlaces migrate lazily on their next qualifying publish. Accountless camp member/admin access and the admin Hex Owl trait framework are documented in [CAMP-ACCESS.md](CAMP-ACCESS.md). The full API surface is documented in HANDOFF.md.
 
 ## Testing
 

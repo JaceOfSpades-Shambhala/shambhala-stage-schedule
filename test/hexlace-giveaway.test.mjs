@@ -3,11 +3,11 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 
-async function requestGiveaway(api) {
+async function requestGiveaway(api, campRole) {
   const source = await readFile(new URL("../hexlace-giveaway.js", import.meta.url), "utf8");
   const context = { window: {} };
   vm.runInNewContext(source, context);
-  return context.window.requestHexlaceGiveaway(api);
+  return context.window.requestHexlaceGiveaway(api, campRole);
 }
 
 test("giveaway creation turns a rejected API request into a retryable failed result", async () => {
@@ -15,15 +15,15 @@ test("giveaway creation turns a rejected API request into a retryable failed res
   assert.deepEqual({ ...result }, { ok: false, status: 0, body: null, networkError: true });
 });
 
-test("giveaway creation sends only the expected claimable-list payload", async () => {
+test("giveaway creation sends the selected camp role with the claimable-list payload", async () => {
   let captured;
   await requestGiveaway(async (path, options) => {
     captured = { path, method: options.method, body: JSON.parse(options.body) };
     return { ok: true, body: { readId: "abcdEFGH" } };
-  });
+  }, "admin");
   assert.deepEqual(captured, {
     path: "/lists",
     method: "POST",
-    body: { name: "Unclaimed Hexlace", sets: [], claimable: true }
+    body: { name: "Unclaimed Hexlace", sets: [], claimable: true, campRole: "admin" }
   });
 });
