@@ -40,11 +40,13 @@ The role is not encoded in either token. Admins can revoke a tag through `POST /
 
 Camp access belongs to the claimant, not to the Owl: the existing physical-tag trade flow swaps Hexlaces and Owls but does not silently swap member/admin roles. Releasing a privileged Hexlace revokes its access; a newly issued privileged claim is required for the next owner.
 
-## Adding admin access to an existing phone
+## Adding access to an existing phone
 
-Do not use the Hexlace profile handoff for this. On an already-authorized device, open **My Hexlace → Admin options → Add admin access to another device** and create a one-time code. On the phone, open **My Hexlace → Camp access on this device** and enter that code, or open the matching QR/link in the installed app.
+Do not use the Hexlace profile handoff or rewrite anyone's NFC tag for this. On an already-authorized admin device, open **My Hexlace → Admin options**, choose **Camp member** or **Camp admin**, and create a one-use access QR. Have the recipient scan that QR in person with the phone that should receive access.
 
-This flow calls only `POST /camp/pairings` and `POST /camp/pairings/redeem`. It creates a new hashed admin bearer key for the receiving device and never reads, returns, or writes the receiving device's Hexlace identity, Owl profile, saved sets, friends, or pings. Codes expire after 10 minutes, can be redeemed by only one device key, and may be retried by that same key after a dropped response.
+The receiving phone generates its own private bearer key and redeems the pass automatically. The regular page contains no camp-access menu, code field, or status, so visitors without verified admin access see the same interface as before. Only a phone arriving from an access QR sees the temporary redemption result.
+
+This flow calls only `POST /camp/pairings` and `POST /camp/pairings/redeem`. It never reads, returns, or writes the receiving device's Hexlace identity, Owl profile, saved sets, friends, pings, or NFC tag. A QR expires after 10 minutes, can be redeemed by only one device key, and may be retried by that same key after a dropped response. The UI intentionally provides no copy, share, or NFC-write action so an access pass is less likely to be forwarded or overwrite a set-list tag.
 
 ## Admin Owl trait framework
 

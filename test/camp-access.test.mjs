@@ -57,30 +57,40 @@ test("camp admin controls stay hidden until a claimed device key is confirmed", 
   assert.deepEqual({ ...access.authorizationHeaders() }, {});
 });
 
-test("access-only admin pairing preserves an existing phone profile and saved data", async () => {
-  let requestBody = null;
-  const { access, localStorage } = await loadCampAccess(async (url, options) => {
-    assert.match(url, /\/camp\/pairings\/redeem$/);
-    requestBody = JSON.parse(options.body);
-    return new Response(JSON.stringify({
-      ok: true,
-      campAccess: { active: true, role: "admin", readId: "abcdEFGH" }
-    }), { status: 200, headers: { "Content-Type": "application/json" } });
-  });
-  const existingPhoneData = {
-    "shambhala-2026-hexlace-identity": JSON.stringify({ readId: "phone123", writeKey: "existing-private-key", name: "Phone owner" }),
-    "shambhala-2026-my-set-list": JSON.stringify([{ artist: "Existing set", startKey: 123 }]),
-    "shambhala-2026-hexlaces-collected": JSON.stringify(["friend01"]),
-    "shambhala-2026-ping": JSON.stringify({ type: "camp", startKey: 1, endKey: 31 }),
-    "shambhala-hex-owl-profile": JSON.stringify({ profileId: "existingProfile1", profileKey: "existing-profile-private-key", owl: { seed: "abc" } })
-  };
-  for (const [key, value] of Object.entries(existingPhoneData)) localStorage.setItem(key, value);
-
-  const paired = await access.redeemPairing("2345-6789-abcd-efgh-jkmn-pqrs");
-
-  assert.equal(paired, true);
-  assert.equal(requestBody.token, "23456789abcdefghjkmnpqrs");
-  assert.ok(requestBody.accessKey.length >= 24);
-  for (const [key, value] of Object.entries(existingPhoneData)) assert.equal(localStorage.getItem(key), value);
-  assert.equal(access.load().role, "admin");
+test("regular page has no visible camp-access controls", async () => {
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  assert.doesNotMatch(html, /Camp access on this device/);
+  assert.doesNotMatch(html, /camp-device-access-(?:section|code|redeem)/);
+  assert.match(html, /id="camp-access-redemption-status"[^>]*hidden/);
+  assert.match(html, /id="hexlace-admin-section"[^>]*hidden/);
 });
+
+for (const role of ["member", "admin"]) {
+  test(`access-only ${role} QR preserves an existing phone profile and saved data`, async () => {
+    let requestBody = null;
+    const { access, localStorage } = await loadCampAccess(async (url, options) => {
+      assert.match(url, /\/camp\/pairings\/redeem$/);
+      requestBody = JSON.parse(options.body);
+      return new Response(JSON.stringify({
+        ok: true,
+        campAccess: { active: true, role, readId: "abcdEFGH" }
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    const existingPhoneData = {
+      "shambhala-2026-hexlace-identity": JSON.stringify({ readId: "phone123", writeKey: "existing-private-key", name: "Phone owner" }),
+      "shambhala-2026-my-set-list": JSON.stringify([{ artist: "Existing set", startKey: 123 }]),
+      "shambhala-2026-hexlaces-collected": JSON.stringify(["friend01"]),
+      "shambhala-2026-ping": JSON.stringify({ type: "camp", startKey: 1, endKey: 31 }),
+      "shambhala-hex-owl-profile": JSON.stringify({ profileId: "existingProfile1", profileKey: "existing-profile-private-key", owl: { seed: "abc" } })
+    };
+    for (const [key, value] of Object.entries(existingPhoneData)) localStorage.setItem(key, value);
+
+    const paired = await access.redeemPairing("2345-6789-abcd-efgh-jkmn-pqrs");
+
+    assert.equal(paired, true);
+    assert.equal(requestBody.token, "23456789abcdefghjkmnpqrs");
+    assert.ok(requestBody.accessKey.length >= 24);
+    for (const [key, value] of Object.entries(existingPhoneData)) assert.equal(localStorage.getItem(key), value);
+    assert.equal(access.load().role, role);
+  });
+}

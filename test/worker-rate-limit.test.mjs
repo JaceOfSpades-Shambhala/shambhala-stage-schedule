@@ -1061,12 +1061,14 @@ test("camp Hexlaces grant hashed member/admin access and enforce admin-only APIs
 
   const pairing = await worker.fetch(makeRequest("/camp/pairings", {
     method: "POST",
-    headers: { Authorization: `Bearer ${adminAccessKey}` }
+    headers: { Authorization: `Bearer ${adminAccessKey}` },
+    body: JSON.stringify({ role: "admin" })
   }), env);
   assert.equal(pairing.status, 201);
   const pairingBody = await pairing.json();
   assert.equal(pairingBody.token.length, 24);
   assert.match(pairingBody.code, /^[^-]{4}(?:-[^-]{4}){5}$/);
+  assert.equal(pairingBody.role, "admin");
   assert.equal(pairingBody.expiresIn, 600);
 
   const pairedPhoneAccessKey = "existing-phone-admin-key-123456789";
@@ -1093,6 +1095,32 @@ test("camp Hexlaces grant hashed member/admin access and enforce admin-only APIs
     headers: { Authorization: `Bearer ${pairedPhoneAccessKey}` }
   }), env);
   assert.deepEqual(await pairedPhoneAccess.json(), { active: true, role: "admin", readId: admin.readId });
+
+  const memberPairing = await worker.fetch(makeRequest("/camp/pairings", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${adminAccessKey}` },
+    body: JSON.stringify({ role: "member" })
+  }), env);
+  assert.equal(memberPairing.status, 201);
+  const memberPairingBody = await memberPairing.json();
+  assert.equal(memberPairingBody.role, "member");
+  const pairedMemberAccessKey = "existing-phone-member-key-12345678";
+  const pairedMember = await worker.fetch(makeRequest("/camp/pairings/redeem", {
+    method: "POST",
+    body: JSON.stringify({ token: memberPairingBody.token, accessKey: pairedMemberAccessKey })
+  }), env);
+  assert.equal(pairedMember.status, 200);
+  assert.equal((await pairedMember.json()).campAccess.role, "member");
+  const pairedMemberAccess = await worker.fetch(makeRequest("/camp/access", {
+    headers: { Authorization: `Bearer ${pairedMemberAccessKey}` }
+  }), env);
+  assert.deepEqual(await pairedMemberAccess.json(), { active: true, role: "member", readId: admin.readId });
+  const pairedMemberCannotCreate = await worker.fetch(makeRequest("/camp/pairings", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${pairedMemberAccessKey}` },
+    body: JSON.stringify({ role: "admin" })
+  }), env);
+  assert.equal(pairedMemberCannotCreate.status, 403);
 
   const unauthenticatedGiveaway = await worker.fetch(makeRequest("/lists", {
     method: "POST",
@@ -1220,4 +1248,6 @@ test("camp Hexlaces grant hashed member/admin access and enforce admin-only APIs
   assert.equal(stored.includes(releasableAccessKey), false);
   assert.equal(stored.includes(pairingBody.token), false);
   assert.equal(stored.includes(pairedPhoneAccessKey), false);
+  assert.equal(stored.includes(memberPairingBody.token), false);
+  assert.equal(stored.includes(pairedMemberAccessKey), false);
 });

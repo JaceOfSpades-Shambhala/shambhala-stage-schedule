@@ -15,18 +15,14 @@
   const elements = {
     adminPanel: document.querySelector("#hexlace-admin-section"),
     role: document.querySelector("#hexlace-giveaway-role"),
-    deviceSection: document.querySelector("#camp-device-access-section"),
-    deviceStatus: document.querySelector("#camp-device-access-status"),
-    deviceEditor: document.querySelector("#camp-device-access-editor"),
-    deviceCode: document.querySelector("#camp-device-access-code"),
-    deviceRedeem: document.querySelector("#camp-device-access-redeem"),
-    deviceFeedback: document.querySelector("#camp-device-access-feedback"),
+    redemptionStatus: document.querySelector("#camp-access-redemption-status"),
+    redemptionText: document.querySelector("#camp-access-redemption-text"),
+    pairRole: document.querySelector("#camp-device-pair-role"),
     pairCreate: document.querySelector("#camp-device-pair-create"),
     pairResult: document.querySelector("#camp-device-pair-result"),
     pairQr: document.querySelector("#camp-device-pair-qr"),
-    pairCode: document.querySelector("#camp-device-pair-code"),
-    pairCopy: document.querySelector("#camp-device-pair-copy"),
-    pairShare: document.querySelector("#camp-device-pair-share"),
+    pairResultRole: document.querySelector("#camp-device-pair-result-role"),
+    pairFeedback: document.querySelector("#camp-device-pair-feedback"),
     traitControls: document.querySelector("#hex-owl-admin-trait-controls"),
     traitEmpty: document.querySelector("#hex-owl-admin-trait-empty"),
     traitSave: document.querySelector("#hex-owl-admin-trait-save"),
@@ -191,27 +187,34 @@
     elements.pairQr.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
     const image = elements.pairQr.querySelector("svg");
     image?.setAttribute("role", "img");
-    image?.setAttribute("aria-label", "QR code for access-only admin pairing");
+    image?.setAttribute("aria-label", `One-use QR code granting ${currentPairing?.role === "admin" ? "camp admin" : "camp member"} access`);
   }
 
   async function createPairing() {
     if (load()?.role !== "admin" || !verifiedThisPage) return false;
+    const role = elements.pairRole?.value === "admin" ? "admin" : "member";
     elements.pairCreate.disabled = true;
-    if (elements.deviceFeedback) elements.deviceFeedback.textContent = "";
+    if (elements.pairFeedback) elements.pairFeedback.textContent = "";
+    if (elements.pairResult) elements.pairResult.hidden = true;
     try {
-      const result = await api("/camp/pairings", { method: "POST" });
-      if (!result.ok || !cleanPairingToken(result.body?.token)) throw new Error("pairing failed");
+      const result = await api("/camp/pairings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role })
+      });
+      if (!result.ok || !cleanPairingToken(result.body?.token) || result.body?.role !== role) throw new Error("pairing failed");
       currentPairing = {
         token: result.body.token,
-        code: result.body.code || result.body.token.match(/.{1,4}/g)?.join("-") || result.body.token,
+        role,
         url: pairingUrl(result.body.token)
       };
-      if (elements.pairCode) elements.pairCode.textContent = currentPairing.code;
+      if (elements.pairResultRole) elements.pairResultRole.textContent = currentPairing.role === "admin" ? "Grants camp admin access" : "Grants camp member access";
       if (elements.pairResult) elements.pairResult.hidden = false;
       renderPairingQr(currentPairing.url);
       return true;
     } catch {
-      if (elements.deviceFeedback) elements.deviceFeedback.textContent = "Couldn't create a pairing code. Check your signal and try again.";
+      currentPairing = null;
+      if (elements.pairFeedback) elements.pairFeedback.textContent = "Couldn't create an access QR. Check your signal and try again.";
       return false;
     } finally {
       elements.pairCreate.disabled = false;
@@ -229,11 +232,11 @@
   async function redeemPairing(value) {
     const pairingToken = cleanPairingToken(value);
     if (!pairingToken) {
-      if (elements.deviceFeedback) elements.deviceFeedback.textContent = "Enter the complete one-time admin code.";
+      clearPairingFromUrl();
+      showRedemptionStatus("That camp access QR is incomplete or invalid.");
       return false;
     }
-    if (elements.deviceRedeem) elements.deviceRedeem.disabled = true;
-    if (elements.deviceFeedback) elements.deviceFeedback.textContent = "Adding admin access without changing your profile...";
+    showRedemptionStatus("Adding camp access without changing anything already saved on this phone...");
     try {
       const accessKey = ensureAccessKey();
       const result = await api("/camp/pairings/redeem", {
@@ -241,56 +244,31 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: pairingToken, accessKey })
       });
-      if (!result.ok || result.body?.campAccess?.role !== "admin") {
+      const role = result.body?.campAccess?.role;
+      if (!result.ok || !["member", "admin"].includes(role)) {
         if (result.status === 410) clearPairingFromUrl();
-        if (elements.deviceFeedback) elements.deviceFeedback.textContent = result.body?.error || "That pairing code is invalid or expired.";
+        showRedemptionStatus(result.body?.error || "That camp access QR is invalid or expired.");
         return false;
       }
       applyResponse(result.body);
       clearPairingFromUrl();
-      if (elements.deviceCode) elements.deviceCode.value = "";
-      if (elements.deviceFeedback) elements.deviceFeedback.textContent = "Admin access added. Your existing profile and saved data were not changed.";
+      showRedemptionStatus(`${role === "admin" ? "Camp admin" : "Camp member"} access added. Your existing profile and saved data were not changed.`);
       return true;
     } catch {
-      if (elements.deviceFeedback) elements.deviceFeedback.textContent = "Couldn't add access yet. Check your signal and try the same code again.";
+      showRedemptionStatus("Couldn't add access yet. Check your signal and scan the QR again.");
       return false;
-    } finally {
-      if (elements.deviceRedeem) elements.deviceRedeem.disabled = false;
     }
   }
 
-  async function copyPairingCode() {
-    if (!currentPairing) return;
-    try {
-      await navigator.clipboard.writeText(currentPairing.code);
-      if (elements.deviceFeedback) elements.deviceFeedback.textContent = "Pairing code copied.";
-    } catch {
-      if (elements.deviceFeedback) elements.deviceFeedback.textContent = "Press and hold the visible code to copy it.";
-    }
-  }
-
-  async function sharePairing() {
-    if (!currentPairing) return;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Add Shambhala admin access", url: currentPairing.url });
-        return;
-      } catch {}
-    }
-    try {
-      await navigator.clipboard.writeText(currentPairing.url);
-      if (elements.deviceFeedback) elements.deviceFeedback.textContent = "Secure pairing link copied.";
-    } catch {
-      if (elements.deviceFeedback) elements.deviceFeedback.textContent = "Use the QR code or enter the visible code on the other device.";
-    }
+  function showRedemptionStatus(message) {
+    if (elements.redemptionText) elements.redemptionText.textContent = message;
+    if (elements.redemptionStatus) elements.redemptionStatus.hidden = false;
   }
 
   async function redeemPairingFromUrl() {
     if (!window.location) return false;
     const token = new URL(window.location.href).searchParams.get("camp-pair") || "";
     if (!token) return false;
-    if (elements.deviceSection) elements.deviceSection.open = true;
-    if (elements.deviceCode) elements.deviceCode.value = token.match(/.{1,4}/g)?.join("-") || token;
     return redeemPairing(token);
   }
 
@@ -419,22 +397,10 @@
       elements.adminPanel.hidden = !isAdmin;
       if (!isAdmin) elements.adminPanel.open = false;
     }
-    if (elements.deviceStatus) {
-      elements.deviceStatus.textContent = isAdmin
-        ? "Admin access is active on this device."
-        : access?.active === true && access.role === "member"
-          ? "Camp member access is active on this device. Enter an admin code to upgrade it."
-          : "No camp access is active on this device.";
-    }
-    if (elements.deviceEditor) elements.deviceEditor.hidden = isAdmin;
     if (isAdmin) renderTraitControls();
   }
 
-  elements.deviceRedeem?.addEventListener("click", () => redeemPairing(elements.deviceCode?.value || ""));
-  elements.deviceCode?.addEventListener("keydown", event => { if (event.key === "Enter") redeemPairing(elements.deviceCode.value); });
   elements.pairCreate?.addEventListener("click", createPairing);
-  elements.pairCopy?.addEventListener("click", copyPairingCode);
-  elements.pairShare?.addEventListener("click", sharePairing);
   elements.traitSave?.addEventListener("click", saveTraits);
   window.addEventListener("online", refresh);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });

@@ -1005,7 +1005,10 @@ export class CampAccessRegistry {
     const sessionHash = await tokenHash(body.accessKey);
     const session = this.record.sessions[sessionHash];
     const pass = session && this.record.readIds[session.readId];
-    if (!session?.active || !pass?.active || session.role !== pass.role) return json({ error: "Camp access is invalid or revoked." }, 401);
+    const roleIsValid = session?.paired === true
+      ? pass?.role === "admin" && CAMP_ROLES.has(session.role)
+      : session?.role === pass?.role;
+    if (!session?.active || !pass?.active || !roleIsValid) return json({ error: "Camp access is invalid or revoked." }, 401);
     return json({ active: true, role: session.role, readId: session.readId, profileId: session.profileId || pass.profileId || "" });
   }
 
@@ -1065,7 +1068,7 @@ export class CampAccessRegistry {
   }
 
   async createPairing(body) {
-    if (!this.validReadId(body.readId) || body.role !== "admin" || !this.validAccessKey(body.pairingToken)) {
+    if (!this.validReadId(body.readId) || !CAMP_ROLES.has(body.role) || !this.validAccessKey(body.pairingToken)) {
       return json({ error: "Invalid camp access pairing." }, 400);
     }
     const pass = this.record.readIds[body.readId];
@@ -1075,17 +1078,17 @@ export class CampAccessRegistry {
     const pairingHash = await tokenHash(body.pairingToken);
     this.record.pairings[pairingHash] = {
       readId: body.readId,
-      role: "admin",
+      role: body.role,
       createdAt: now,
       expiresAt: now + CAMP_PAIRING_TTL_MS
     };
     await this.save();
-    return json({ ok: true, expiresIn: Math.floor(CAMP_PAIRING_TTL_MS / 1000) }, 201);
+    return json({ ok: true, role: body.role, expiresIn: Math.floor(CAMP_PAIRING_TTL_MS / 1000) }, 201);
   }
 
   async redeemPairing(body) {
     if (!this.validAccessKey(body.pairingToken) || !this.validAccessKey(body.accessKey)) {
-      return json({ error: "Invalid or expired admin pairing code." }, 410);
+      return json({ error: "Invalid or expired camp access pass." }, 410);
     }
     const now = nowMs(this.env);
     const pairingHash = await tokenHash(body.pairingToken);
@@ -1093,25 +1096,26 @@ export class CampAccessRegistry {
     if (!pairing || pairing.expiresAt <= now) {
       this.prunePairings(now);
       await this.save();
-      return json({ error: "Invalid or expired admin pairing code." }, 410);
+      return json({ error: "Invalid or expired camp access pass." }, 410);
     }
     const pass = this.record.readIds[pairing.readId];
     if (!pass?.active || pass.role !== "admin") return json({ error: "Admin access is invalid or revoked." }, 403);
     const sessionHash = await tokenHash(body.accessKey);
     if (pairing.redeemedSessionHash && pairing.redeemedSessionHash !== sessionHash) {
-      return json({ error: "That admin pairing code has already been used." }, 410);
+      return json({ error: "That camp access pass has already been used." }, 410);
     }
     pairing.redeemedSessionHash = sessionHash;
     pairing.redeemedAt ||= now;
     this.record.sessions[sessionHash] = {
       readId: pairing.readId,
-      role: "admin",
+      role: pairing.role,
       active: true,
+      paired: true,
       profileId: "",
       createdAt: now
     };
     await this.save();
-    return json({ ok: true, active: true, role: "admin", readId: pairing.readId });
+    return json({ ok: true, active: true, role: pairing.role, readId: pairing.readId });
   }
 
   async revoke(body) {

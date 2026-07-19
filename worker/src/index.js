@@ -517,14 +517,19 @@ export default {
           if (limited) return limited;
           const authorized = await campAuthorization(request, env, "admin");
           if (authorized.error) return authorized.error;
+          const body = await readJson(request);
+          // v64 clients sent no body because their access-only pass was always
+          // admin. Keep that safe default during the v65 rolling deployment.
+          const role = body?.role === undefined ? "admin" : body.role;
+          if (role !== "member" && role !== "admin") return json({ error: "Choose member or admin access." }, 400);
           const pairingToken = randomId(24);
           const response = await callCampAccess(env, "/pairing-create", {
             readId: authorized.access.readId,
-            role: "admin",
+            role,
             pairingToken
           });
           const data = await response.json().catch(() => ({}));
-          if (!response.ok) return json({ error: data.error || "Admin pairing could not be created." }, response.status);
+          if (!response.ok) return json({ error: data.error || "Camp access pass could not be created." }, response.status);
           return json({ ...data, token: pairingToken, code: displayHandoffCode(pairingToken) }, response.status);
         }
         if (request.method === "POST" && parts.length === 3 && parts[1] === "pairings" && parts[2] === "redeem") {
@@ -534,11 +539,11 @@ export default {
           const pairingToken = cleanCampPairingToken(body?.token || body?.code);
           const accessKey = typeof body?.accessKey === "string" ? body.accessKey : "";
           if (!pairingToken || accessKey.length < 24 || accessKey.length > 128) {
-            return json({ error: "Invalid or expired admin pairing code." }, 410);
+            return json({ error: "Invalid or expired camp access pass." }, 410);
           }
           const response = await callCampAccess(env, "/pairing-redeem", { pairingToken, accessKey });
           const data = await response.json().catch(() => ({}));
-          if (!response.ok) return json({ error: data.error || "Invalid or expired admin pairing code." }, response.status);
+          if (!response.ok) return json({ error: data.error || "Invalid or expired camp access pass." }, response.status);
           return json({
             ok: data.ok === true,
             campAccess: data.active === true ? { active: true, role: data.role, readId: data.readId } : null

@@ -7,21 +7,21 @@
   <meta name="description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
   <title>Shambhala 2026 Stage Set Times</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=64">
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=64">
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=64">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=64">
-  <link rel="stylesheet" href="styles.css?v=64">
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=65">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=65">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=65">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=65">
+  <link rel="stylesheet" href="styles.css?v=65">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Camp Hexadecibel">
   <meta property="og:title" content="Shambhala 2026 Stage Set Times">
   <meta property="og:description" content="A fan-made, stage-specific Shambhala 2026 set-times guide designed for NFC necklace links.">
-  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=64">
+  <meta property="og:image" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/icon-512.png?v=65">
   <meta property="og:url" content="https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/">
   <meta name="twitter:card" content="summary">
 </head>
 <body>
-  <!-- v64 -->
+  <!-- v65 -->
   <a class="skip-link" href="#schedule">Skip to schedule</a>
   <div class="hx-vortex" aria-hidden="true">
     <div class="hx-vortex-glow"></div>
@@ -35,7 +35,7 @@
 
   <main class="shell">
     <header class="hero">
-      <h1 class="hero-mark"><img class="hero-wordmark" src="wordmark.svg?v=64" alt="Shambhala Music Festival 2026 set times" width="800" height="253"></h1>
+      <h1 class="hero-mark"><img class="hero-wordmark" src="wordmark.svg?v=65" alt="Shambhala Music Festival 2026 set times" width="800" height="253"></h1>
       <p class="camp-credit"><span>Made by Camp Hexadecibel</span><span aria-hidden="true"> - </span><a id="camp-location-link" href="https://www.google.com/maps/search/?api=1&query=Shambhala%20Music%20Festival%20Salmo%20BC" target="_blank" rel="noreferrer">Come visit us</a></p>
       <p class="offline-ready">Offline ready after first online load</p>
       <button id="install-button" class="install-button" type="button" hidden>Add to Home Screen</button>
@@ -44,7 +44,7 @@
 
     <section class="live-panel" aria-label="Live stage controls">
       <div id="stage-mark-header" class="stage-mark-header">
-        <img id="stage-mark" class="stage-mark" src="stage-names/amp.png?v=64" alt="AMP" width="150" height="64" data-stage="amp">
+        <img id="stage-mark" class="stage-mark" src="stage-names/amp.png?v=65" alt="AMP" width="150" height="64" data-stage="amp">
       </div>
       <section id="now-playing" class="now-playing" data-status="checking" aria-live="polite" aria-atomic="true">
         <div class="now-playing-topline">
@@ -158,6 +158,9 @@
           <strong id="hexlace-notice-text"></strong>
           <button id="hexlace-notice-action" class="planner-action" type="button" hidden></button>
         </div>
+        <div id="camp-access-redemption-status" class="hexlace-notice" role="status" aria-live="polite" hidden>
+          <strong id="camp-access-redemption-text"></strong>
+        </div>
         <div id="hexlace-setup">
           <p class="hexlace-hint">Friends tap your Hexlace or scan your QR to see your saved sets.</p>
           <button id="hexlace-enable" class="planner-action hexlace-primary-action" type="button">Start sharing</button>
@@ -198,20 +201,6 @@
               </div>
             </div>
           </details>
-          <details id="camp-device-access-section" class="hexlace-section">
-            <summary><strong>Camp access on this device</strong></summary>
-            <div class="hexlace-section-body">
-              <small id="camp-device-access-status" class="hexlace-section-subheading">No camp access is active on this device.</small>
-              <div id="camp-device-access-editor" class="hexlace-connect-editor">
-                <label class="hexlace-hint" for="camp-device-access-code">Enter a one-time code from a camp admin. This adds access only and does not replace anything on your phone.</label>
-                <div class="hexlace-editor-row">
-                  <input id="camp-device-access-code" maxlength="29" placeholder="ABCD-EFGH-JKLM-NPQR-STUV-WXYZ" autocomplete="off" autocapitalize="none" spellcheck="false">
-                  <button id="camp-device-access-redeem" class="planner-action" type="button">Add access</button>
-                </div>
-              </div>
-              <small id="camp-device-access-feedback" class="hexlace-section-subheading" role="status" aria-live="polite"></small>
-            </div>
-          </details>
           <details id="hexlace-manage-section" class="hexlace-section">
             <summary><strong>Manage Hexlace</strong></summary>
             <div class="hexlace-section-body hexlace-manage-zone">
@@ -224,14 +213,20 @@
             <summary><strong>Admin options</strong></summary>
             <div class="hexlace-section-body">
               <small class="hexlace-section-subheading hexlace-admin-label">Admin only</small>
-              <button id="camp-device-pair-create" class="hexlace-menu-action" type="button"><strong>Add admin access to another device</strong><span>Create a one-time code that leaves the other device's profile untouched</span></button>
+              <label class="hexlace-admin-role" for="camp-device-pair-role">
+                <span>Access to grant</span>
+                <select id="camp-device-pair-role">
+                  <option value="member">Camp member</option>
+                  <option value="admin">Camp admin</option>
+                </select>
+              </label>
+              <button id="camp-device-pair-create" class="hexlace-menu-action" type="button"><strong>Create a one-use access QR</strong><span>Have the person scan it now; their profile and saved data stay untouched</span></button>
               <div id="camp-device-pair-result" class="hexlace-giveaway-result" hidden>
                 <div id="camp-device-pair-qr" class="hexlace-qr hexlace-qr-small"></div>
-                <strong id="camp-device-pair-code" class="hexlace-connect-code-value"></strong>
-                <button id="camp-device-pair-copy" class="planner-action" type="button">Copy code</button>
-                <button id="camp-device-pair-share" class="planner-action" type="button">Share secure link</button>
-                <small>One use &middot; expires in 10 minutes &middot; transfers access only</small>
+                <strong id="camp-device-pair-result-role"></strong>
+                <small>Scan in person &middot; one use &middot; expires in 10 minutes &middot; access only</small>
               </div>
+              <small id="camp-device-pair-feedback" class="hexlace-section-subheading" role="status" aria-live="polite"></small>
               <div class="hexlace-admin-divider"></div>
               <button id="hexlace-nfc" class="hexlace-menu-action" type="button" hidden><strong>Write my tag <span class="hexlace-muted">(Android)</span></strong><span>Put your sharing link on a blank NFC tag</span></button>
               <div class="hexlace-admin-divider"></div>
@@ -396,22 +391,22 @@
     <button id="undo-button" type="button">Undo</button>
   </div>
 
-  <script src="camp-location.js?v=64"></script>
-  <script src="schedule-data.js?v=64"></script>
-  <script src="schedule-metadata.js?v=64"></script>
-  <script src="search-normalize.js?v=64"></script>
-  <script src="preview-time.js?v=64"></script>
-  <script src="app.js?v=64"></script>
-  <script src="undo.js?v=64"></script>
-  <script src="planner.js?v=64"></script>
-  <script src="qrcode.js?v=64"></script>
-  <script src="camp-access.js?v=64"></script>
-  <script src="hexlace-api.js?v=64"></script>
-  <script src="hexlace-giveaway.js?v=64"></script>
-  <script src="hexlace-compare.js?v=64"></script>
-  <script src="hex-owl.js?v=64"></script>
-  <script src="hexadex.js?v=64"></script>
-  <script src="hexlaces.js?v=64"></script>
-  <script src="install.js?v=64"></script>
+  <script src="camp-location.js?v=65"></script>
+  <script src="schedule-data.js?v=65"></script>
+  <script src="schedule-metadata.js?v=65"></script>
+  <script src="search-normalize.js?v=65"></script>
+  <script src="preview-time.js?v=65"></script>
+  <script src="app.js?v=65"></script>
+  <script src="undo.js?v=65"></script>
+  <script src="planner.js?v=65"></script>
+  <script src="qrcode.js?v=65"></script>
+  <script src="camp-access.js?v=65"></script>
+  <script src="hexlace-api.js?v=65"></script>
+  <script src="hexlace-giveaway.js?v=65"></script>
+  <script src="hexlace-compare.js?v=65"></script>
+  <script src="hex-owl.js?v=65"></script>
+  <script src="hexadex.js?v=65"></script>
+  <script src="hexlaces.js?v=65"></script>
+  <script src="install.js?v=65"></script>
 </body>
 </html>
