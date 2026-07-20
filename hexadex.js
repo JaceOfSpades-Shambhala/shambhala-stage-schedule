@@ -9,6 +9,7 @@
   const API_TIMEOUT_MS = 12000;
   const OWL_VERSION = 4;
   const CAMP_OWL_TIER = "camp-hexadecibel";
+  const HEXADEX_COLLECTION_SIZE = 7;
 
   const elements = {
     own: document.querySelector("#hex-owl-card"),
@@ -18,6 +19,7 @@
     open: document.querySelector("#hexadex-open"),
     openAvatar: document.querySelector("#hexadex-avatar"),
     count: document.querySelector("#hexadex-count"),
+    ghostSlots: document.querySelector("#hexadex-ghost-slots"),
     dialog: document.querySelector("#hexadex-dialog"),
     grid: document.querySelector("#hexadex-grid"),
     empty: document.querySelector("#hexadex-empty"),
@@ -252,15 +254,10 @@
     const profile = loadProfile();
     const hasOwnOwl = validOwl(profile?.owl);
     if (!elements.own) {
-      if (elements.openAvatar) {
-        elements.openAvatar.hidden = !hasOwnOwl;
-        if (hasOwnOwl) putOwl(elements.openAvatar, profile.owl);
-      }
       renderCount();
       return;
     }
     elements.own.hidden = !hasOwnOwl;
-    if (elements.openAvatar) elements.openAvatar.hidden = !hasOwnOwl;
     if (!hasOwnOwl) {
       elements.own.removeAttribute("aria-label");
       renderCount();
@@ -269,7 +266,6 @@
     const traits = traitsFor(profile.owl);
     const rarity = traits.Rarity || "Unknown rarity";
     putOwl(elements.ownImage, profile.owl);
-    putOwl(elements.openAvatar, profile.owl);
     elements.ownNumber.textContent = owlLabel(profile.owl);
     elements.ownRarity.textContent = rarity;
     elements.own.setAttribute("aria-label", `Your Hex Owl, ${owlLabel(profile.owl)}, ${rarity}. Show details.`);
@@ -278,9 +274,36 @@
 
   function renderCount() {
     const profile = loadProfile();
-    const total = cachedEntries().length + (validOwl(profile?.owl) ? 1 : 0);
+    const entries = cachedEntries();
+    const foundNumbers = new Set(entries.map(entry => entry.owl.number));
+    if (validOwl(profile?.owl)) foundNumbers.add(profile.owl.number);
+    const found = foundNumbers.size;
+    const displayOwl = validOwl(profile?.owl) ? profile.owl : entries[0]?.owl;
     if (elements.open) elements.open.hidden = false;
-    if (elements.count) elements.count.textContent = String(total);
+    if (elements.count) elements.count.textContent = `${found} Hex Owl${found === 1 ? "" : "s"} found`;
+    if (elements.openAvatar) {
+      elements.openAvatar.hidden = !validOwl(displayOwl);
+      if (validOwl(displayOwl)) putOwl(elements.openAvatar, displayOwl);
+    }
+    if (elements.ghostSlots) {
+      elements.ghostSlots.replaceChildren();
+      const ghostCount = Math.max(0, HEXADEX_COLLECTION_SIZE - found);
+      for (let index = 0; index < ghostCount; index += 1) {
+        const slot = document.createElement("span");
+        slot.className = "hexadex-ghost-slot";
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 100 100");
+        const hexagon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+        hexagon.setAttribute("points", "50,4 96,27 96,73 50,96 4,73 4,27");
+        hexagon.setAttribute("fill", "none");
+        hexagon.setAttribute("stroke", "#c8c6dc");
+        hexagon.setAttribute("stroke-width", "2.5");
+        hexagon.setAttribute("stroke-dasharray", "7 7");
+        svg.append(hexagon);
+        slot.append(svg);
+        elements.ghostSlots.append(slot);
+      }
+    }
   }
 
   function ghostSlot(rotated = false) {

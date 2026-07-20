@@ -15,10 +15,12 @@
   const isCancelledSet = item => Boolean(window.ScheduleStatus?.isCancelled(item));
   const elements = {
     stageTabs: document.querySelector("#stage-tabs"),
-    dayTabs: document.querySelector("#day-tabs"),
     stageMarkHeader: document.querySelector("#stage-mark-header"),
     scheduleDayRule: document.querySelector("#schedule-day-rule"),
     scheduleDay: document.querySelector("#schedule-day"),
+    scheduleToday: document.querySelector("#schedule-today"),
+    previousDay: document.querySelector("#schedule-previous-day"),
+    nextDay: document.querySelector("#schedule-next-day"),
     scheduleNote: document.querySelector("#schedule-note"),
     setList: document.querySelector("#set-list"),
     noResults: document.querySelector("#no-results"),
@@ -226,7 +228,6 @@
   }
 
   function renderTabs() {
-    const currentScheduleDay = getCurrentFestivalDay();
     const focusedControl = document.activeElement?.dataset.scheduleControl || "";
     elements.stageTabs.innerHTML = "";
     STAGES.forEach(stage => {
@@ -239,30 +240,31 @@
       button.addEventListener("click", () => switchStage(stage.id));
       elements.stageTabs.append(button);
     });
-    elements.dayTabs.innerHTML = "";
-    DAYS.forEach(day => {
-      const button = document.createElement("button");
-      const available = isAvailable(day, appState.stage);
-      button.className = "tab";
-      button.type = "button";
-      button.disabled = !available;
-      button.dataset.scheduleControl = `day:${day}`;
-      button.setAttribute("aria-pressed", String(day === appState.day));
-      button.addEventListener("click", () => switchDay(day));
-      const label = document.createElement("span");
-      label.textContent = day;
-      button.append(label);
-      if (available && day === currentScheduleDay) {
-        button.classList.add("tab-today");
-        button.setAttribute("aria-label", `${day} - current schedule day`);
-        const marker = document.createElement("span");
-        marker.className = "today-marker";
-        marker.textContent = "Today";
-        button.append(document.createTextNode(" "), marker);
+    if (focusedControl.startsWith("stage:")) document.querySelector(`[data-schedule-control="${focusedControl}"]`)?.focus({ preventScroll: true });
+  }
+
+  function renderDayRail() {
+    const currentScheduleDay = getCurrentFestivalDay();
+    const currentIndex = DAYS.indexOf(appState.day);
+    const updateDayButton = (button, day, direction) => {
+      const available = Boolean(day && isAvailable(day, appState.stage));
+      button.classList.toggle("is-unavailable", !available);
+      button.setAttribute("aria-hidden", String(!available));
+      if (!available) {
+        button.textContent = "";
+        button.onclick = null;
+        button.removeAttribute("data-schedule-control");
+        return;
       }
-      elements.dayTabs.append(button);
-    });
-    if (focusedControl) document.querySelector(`[data-schedule-control="${focusedControl}"]`)?.focus({ preventScroll: true });
+      const shortDay = day.slice(0, 3).toUpperCase();
+      button.textContent = direction === "previous" ? `‹ ${shortDay}` : `${shortDay} ›`;
+      button.dataset.scheduleControl = `day:${day}`;
+      button.setAttribute("aria-label", `Show ${day}'s schedule`);
+      button.onclick = () => switchDay(day);
+    };
+    updateDayButton(elements.previousDay, DAYS[currentIndex - 1], "previous");
+    updateDayButton(elements.nextDay, DAYS[currentIndex + 1], "next");
+    elements.scheduleToday.hidden = appState.day !== currentScheduleDay;
   }
 
   function getGlobalMatches(term) {
@@ -358,10 +360,10 @@
     const art = document.createElement("img");
     art.id = "stage-mark";
     art.className = "stage-mark";
-    art.src = `stage-names/${appState.stage}.png?v=71`;
+    art.src = `stage-names/${appState.stage}.png?v=72`;
     art.alt = stageLabel;
-    art.width = 170;
-    art.height = 68;
+    art.width = 232;
+    art.height = 93;
     art.dataset.stage = appState.stage;
     art.addEventListener("error", () => {
       const fallback = document.createElement("h2");
@@ -381,6 +383,7 @@
     document.body.classList.add(`stage-${appState.stage}`);
     setStageMarkArt(stageLabel);
     elements.scheduleDay.textContent = appState.day.toUpperCase();
+    renderDayRail();
     elements.setList.innerHTML = "";
     const status = getNowPlayingStatus(appState.stage);
     const current = ["active", "final"].includes(status.type) ? status.current : null;
@@ -549,7 +552,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-metadata.js?v=71";
+  const SCHEDULE_ASSET = "schedule-metadata.js?v=72";
   const FRESHNESS_ASSET = "schedule-freshness.json";
   const FRESHNESS_KEY = "shambhala-schedule-refreshed-at";
   const FRESH_THRESHOLD_MS = 15 * 60 * 1000;
@@ -710,7 +713,7 @@
     STAGES.forEach(stage => {
       if (stage.id === appState.stage) return;
       const img = new Image();
-      img.src = `stage-names/${stage.id}.png?v=71`;
+      img.src = `stage-names/${stage.id}.png?v=72`;
     });
   }, 1500);
   window.setInterval(renderLiveStatus, 30000);
@@ -730,6 +733,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=71").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=72").then(registerPeriodicSync).catch(() => {});
   });
 })();
