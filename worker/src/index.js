@@ -46,6 +46,7 @@ const VALID_PING_LOCATIONS = new Set(["camp", "river", "vendors"]);
 const MIN_KEY_LENGTH = 16;
 const READ_ID_LENGTH = 8;
 const PROFILE_ID_LENGTH = 16;
+const CAMP_OWL_VERSION = 3;
 const VALID_DAYS = new Set(["Thursday", "Friday", "Saturday", "Sunday"]);
 const VALID_STAGE_IDS = new Set(["amp", "fractal-forest", "grove", "living-room", "pagoda", "secret-garden", "village"]);
 const CAMP_ROLES = new Set(["member", "admin"]);
@@ -202,14 +203,14 @@ async function initializeProfile(env, profileId, profileKey) {
   if (!response.ok) throw new HttpError(response.status, "The Hex Owl profile could not be initialized.");
 }
 
-async function qualifyProfile(env, { profileId, profileKey, eligible, claimedReadId = "", tagOwl = null }) {
+async function qualifyProfile(env, { profileId, profileKey, eligible, claimedReadId = "", tagOwl = null, version = 2 }) {
   await initializeProfile(env, profileId, profileKey);
   if (cleanOwl(tagOwl) && claimedReadId) {
     const adopted = await callOwlProfile(env, profileId, "/adopt", { profileKey, owl: cleanOwl(tagOwl), claimedReadId });
     if (!adopted.ok) throw new HttpError(adopted.status, "The Hex Owl could not be synchronized.");
     return cleanOwl((await adopted.json()).owl);
   }
-  const response = await callOwlProfile(env, profileId, "/qualify", { profileKey, eligible, ...(claimedReadId ? { claimedReadId } : {}) });
+  const response = await callOwlProfile(env, profileId, "/qualify", { profileKey, eligible, version, ...(claimedReadId ? { claimedReadId } : {}) });
   if (!response.ok) throw new HttpError(response.status, "The Hex Owl could not be assigned.");
   return cleanOwl((await response.json()).owl);
 }
@@ -711,6 +712,9 @@ export default {
           campRole = requestedCampRole || null;
         }
         const payload = cleanPayload(body);
+        if (body.claimable !== true && body.physical === false && payload.sets.length === 0) {
+          return json({ error: "Save at least one set before choosing a sharing name." }, 400);
+        }
         const blob = serialize(payload, 1, env);
         if (hasHexlaceCoordinator(env)) {
           const claimable = body.claimable === true;
@@ -811,6 +815,14 @@ export default {
               });
               const granted = await redeemed.json().catch(() => ({}));
               if (!redeemed.ok) return json({ error: granted.error || "Camp access could not be claimed." }, redeemed.status);
+              owl = await qualifyProfile(env, {
+                ...credentials,
+                eligible: true,
+                claimedReadId: readId,
+                version: CAMP_OWL_VERSION
+              });
+              const assigned = await callHexlaceCoordinator(env, readId, "/owl/assign", { ...credentials, owl });
+              if (!assigned.ok) return json({ error: "The Camp Hexadecibel Owl could not be attached to this Hexlace." }, 503);
               campAccess = { active: true, role: granted.role, readId };
             }
           }

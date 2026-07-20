@@ -4,6 +4,7 @@ const CLAIM_CONTENTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const TRADE_TTL_MS = 15 * 60 * 1000;
 const PROFILE_ID_LENGTH = 16;
 const OWL_VERSION = 2;
+const CAMP_OWL_VERSION = 3;
 const OWL_SEASON = 2026;
 const HEXADEX_PAGE_SIZE = 24;
 const CAMP_ROLES = new Set(["member", "admin"]);
@@ -65,6 +66,10 @@ function validOwl(value) {
 function upgradeV1Owl(value) {
   if (!validOwl(value) || value.version !== 1) return value;
   return { ...value, version: OWL_VERSION };
+}
+
+function isCampOwl(value) {
+  return validOwl(value) && value.version === CAMP_OWL_VERSION;
 }
 
 function randomHex(byteLength) {
@@ -200,6 +205,7 @@ export class HexlaceCoordinator {
     if (!this.record) return json({ error: "Not found." }, 404);
     if (url.pathname === "/claim" && request.method === "POST") return this.claim(body);
     if (url.pathname === "/profile/link" && request.method === "POST") return this.linkProfile(body);
+    if (url.pathname === "/owl/assign" && request.method === "POST") return this.assignOwl(body);
     if (url.pathname === "/physical" && request.method === "POST") return this.markPhysical(body);
     if (url.pathname === "/collect" && request.method === "POST") return this.readCollectible(body);
     if (url.pathname === "/update" && request.method === "POST") return this.update(body);
@@ -360,6 +366,21 @@ export class HexlaceCoordinator {
     });
   }
 
+  async assignOwl(body) {
+    if (!validProfileCredentials(body.profileId, body.profileKey)
+      || body.profileId !== this.record.profileId || body.profileKey !== this.record.profileKey) {
+      return json({ error: "Invalid Hex Owl profile." }, 403);
+    }
+    if (!validOwl(body.owl)) return json({ error: "Invalid Hex Owl assignment." }, 400);
+    if (validOwl(this.record.owl)
+      && (this.record.owl.seed !== body.owl.seed || this.record.owl.number !== body.owl.number || this.record.owl.season !== body.owl.season)) {
+      return json({ error: "This Hexlace already carries another Hex Owl." }, 409);
+    }
+    this.record.owl = body.owl;
+    await this.commit();
+    return json({ ok: true, owl: this.record.owl });
+  }
+
   async markPhysical(body) {
     if (!this.record.auth) return json({ error: "Not found." }, 404);
     if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
@@ -430,6 +451,7 @@ export class HexlaceCoordinator {
   async startTrade(body) {
     if (!this.record.auth) return json({ error: "Not found." }, 404);
     if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
+    if (isCampOwl(this.record.owl)) return json({ error: "Camp Hexadecibel Owls cannot be traded." }, 409);
     if (!this.record.isPhysical) return json({ error: "Only physical Hexlaces can be traded." }, 409);
     if (typeof body.targetReadId !== "string" || body.targetReadId.length !== 8 || body.targetReadId === this.record.readId) {
       return json({ error: "Invalid trade target." }, 400);
@@ -448,6 +470,11 @@ export class HexlaceCoordinator {
       body: JSON.stringify({ readId: body.targetReadId, requesterReadId: this.record.readId })
     }));
     const match = await response.json().catch(() => ({}));
+    if (response.status === 409) {
+      this.record.trade = null;
+      await this.saveRecord();
+      return json({ error: match.error || "That Hexlace cannot be traded." }, 409);
+    }
     if (response.ok && match.matched) {
       this.record.trade.matched = true;
       await this.saveRecord();
@@ -456,6 +483,7 @@ export class HexlaceCoordinator {
   }
 
   async matchTrade(body) {
+    if (isCampOwl(this.record.owl)) return json({ error: "Camp Hexadecibel Owls cannot be traded." }, 409);
     if (!this.record.isPhysical || !this.tradeActive() || this.record.trade.targetReadId !== body.requesterReadId) return json({ matched: false });
     this.record.trade.matched = true;
     await this.saveRecord();
@@ -478,6 +506,7 @@ export class HexlaceCoordinator {
   async confirmTrade(body) {
     if (!this.record.auth) return json({ error: "Not found." }, 404);
     if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
+    if (isCampOwl(this.record.owl)) return json({ error: "Camp Hexadecibel Owls cannot be traded." }, 409);
     if (!this.tradeActive() || !this.record.trade.matched) return json({ error: "Trade is not matched." }, 409);
     this.record.trade.confirmed = true;
     await this.saveRecord();
@@ -485,6 +514,7 @@ export class HexlaceCoordinator {
   }
 
   async settleTrade() {
+    if (isCampOwl(this.record.owl)) return json({ error: "Camp Hexadecibel Owls cannot be traded." }, 409);
     if (!this.record.auth || !this.tradeActive() || !this.record.trade.matched || !this.record.trade.confirmed) {
       return json({ completed: false }, 202);
     }
@@ -535,6 +565,7 @@ export class HexlaceCoordinator {
   }
 
   async applyTrade(body) {
+    if (isCampOwl(this.record.owl)) return json({ error: "Camp Hexadecibel Owls cannot be traded." }, 409);
     this.record.appliedTrades ||= {};
     const prior = this.record.appliedTrades[body.tradeId];
     if (prior) return json(prior);
@@ -811,6 +842,7 @@ export class HexOwlProfile {
   }
 
   async qualify(body) {
+    const requestedVersion = body.version === CAMP_OWL_VERSION ? CAMP_OWL_VERSION : OWL_VERSION;
     if (!this.record.owl && body.eligible === true) {
       if (!this.env?.OWL_NUMBERS) return json({ error: "Hex Owl numbering is unavailable." }, 503);
       const allocation = await namedStub(this.env.OWL_NUMBERS, "global").fetch(new Request("https://owl-number.internal/allocate", {
@@ -822,11 +854,14 @@ export class HexOwlProfile {
       if (!allocation.ok || !Number.isSafeInteger(allocated.number)) return json({ error: "Hex Owl numbering is unavailable." }, 503);
       this.record.owl = {
         seed: randomHex(16),
-        version: OWL_VERSION,
+        version: requestedVersion,
         number: allocated.number,
         createdAt: nowMs(this.env),
         season: OWL_SEASON
       };
+    } else if (validOwl(this.record.owl) && body.eligible === true
+      && requestedVersion === CAMP_OWL_VERSION && this.record.owl.version !== CAMP_OWL_VERSION) {
+      this.record.owl = { ...this.record.owl, version: CAMP_OWL_VERSION };
     }
     if (typeof body.claimedReadId === "string" && body.claimedReadId.length === 8) this.record.claimedReadId = body.claimedReadId;
     this.record.updatedAt = nowMs(this.env);

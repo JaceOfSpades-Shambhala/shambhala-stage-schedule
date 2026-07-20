@@ -209,6 +209,19 @@ test("ownership locks once the seven-day contention window closes", async () => 
   assert.equal(await env.LISTS.get(`auth:${readId}`), "owner-write-key-1234");
 });
 
+test("browser sharing cannot save a name before the first set", async () => {
+  const env = makeDurableEnv();
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Too Soon", sets: [], physical: false })
+  }), env);
+
+  assert.equal(created.status, 400);
+  assert.deepEqual(await created.json(), { error: "Save at least one set before choosing a sharing name." });
+  assert.equal(env.HEXLACES.fetchCount, 0);
+  assert.equal(env.LISTS.writes.some(write => write.key.startsWith("list:")), false);
+});
+
 test("Durable Objects serialize claims and preserve the earliest scan for seven days", async () => {
   const env = makeDurableEnv();
   const created = await worker.fetch(makeRequest("/lists", {
@@ -793,33 +806,18 @@ test("connection codes copy ownership and privately sync friend ids across brows
   assert.equal(wrongOwner.status, 403);
 });
 
-test("a Hex Owl is assigned once only after a named profile saves a set", async () => {
+test("a named browser profile is created with its first saved set and one stable Hex Owl", async () => {
   const env = makeOwlEnv();
   const created = await worker.fetch(makeRequest("/lists", {
     method: "POST",
-    body: JSON.stringify({ name: "Night Owl", sets: [], physical: false })
+    body: JSON.stringify({ name: "Night Owl", sets: [QUALIFYING_SET], physical: false })
   }), env);
   assert.equal(created.status, 201, await created.clone().text());
   const identity = await created.json();
-  assert.equal(identity.owl, undefined);
   assert.equal(identity.isPhysical, false);
-
-  const qualified = await worker.fetch(makeRequest(`/lists/${identity.readId}`, {
-    method: "PUT",
-    headers: { "X-Write-Key": identity.writeKey },
-    body: JSON.stringify({
-      name: "Night Owl",
-      sets: [QUALIFYING_SET],
-      revision: 1,
-      profileId: identity.profileId,
-      profileKey: identity.profileKey
-    })
-  }), env);
-  assert.equal(qualified.status, 200, await qualified.clone().text());
-  const qualifiedBody = await qualified.json();
-  assert.match(qualifiedBody.owl.seed, /^[0-9a-f]{32}$/);
-  assert.equal(qualifiedBody.owl.version, 2);
-  assert.equal(qualifiedBody.owl.number, 1);
+  assert.match(identity.owl.seed, /^[0-9a-f]{32}$/);
+  assert.equal(identity.owl.version, 2);
+  assert.equal(identity.owl.number, 1);
 
   const renamed = await worker.fetch(makeRequest(`/lists/${identity.readId}`, {
     method: "PUT",
@@ -827,15 +825,15 @@ test("a Hex Owl is assigned once only after a named profile saves a set", async 
     body: JSON.stringify({
       name: "Renamed Owl",
       sets: [QUALIFYING_SET],
-      revision: 2,
+      revision: 1,
       profileId: identity.profileId,
       profileKey: identity.profileKey
     })
   }), env).then(response => response.json());
-  assert.deepEqual(renamed.owl, qualifiedBody.owl);
+  assert.deepEqual(renamed.owl, identity.owl);
 
   const publicBody = await worker.fetch(makeRequest(`/lists/${identity.readId}`), env).then(response => response.json());
-  assert.deepEqual(publicBody.owl, qualifiedBody.owl);
+  assert.deepEqual(publicBody.owl, identity.owl);
   assert.equal(Object.hasOwn(publicBody, "profileId"), false);
   assert.equal(Object.hasOwn(publicBody, "profileKey"), false);
   assert.equal(Object.hasOwn(publicBody, "hexadex"), false);
@@ -890,11 +888,11 @@ test("V1 Owls regenerate as V2 across profile, Hexadex, physical tag, and public
   assert.equal((await tagStorage.get("record")).owl.version, 2);
 });
 
-test("concurrent qualification allocates one stable Owl number and seed", async () => {
+test("concurrent browser updates retain one stable Owl number and seed", async () => {
   const env = makeOwlEnv();
   const identity = await worker.fetch(makeRequest("/lists", {
     method: "POST",
-    body: JSON.stringify({ name: "Concurrent Owl", sets: [], physical: false })
+    body: JSON.stringify({ name: "Concurrent Owl", sets: [QUALIFYING_SET], physical: false })
   }), env).then(response => response.json());
   const update = index => worker.fetch(makeRequest(`/lists/${identity.readId}`, {
     method: "PUT",
@@ -912,6 +910,7 @@ test("concurrent qualification allocates one stable Owl number and seed", async 
   const owner = await worker.fetch(makeRequest(`/lists/${identity.readId}/owner`, {
     headers: { "X-Write-Key": identity.writeKey }
   }), env).then(response => response.json());
+  assert.deepEqual(owner.owl, identity.owl);
   assert.equal(owner.owl.number, 1);
   const allocator = env.OWL_NUMBERS.instances.get("global").ctx.storage;
   assert.equal(await allocator.get("counter"), 1);
@@ -1172,6 +1171,33 @@ test("camp access grants hashed roles, protects admin APIs, and permits own-Owl 
   assert.equal(memberClaim.status, 200);
   const memberClaimBody = await memberClaim.json();
   assert.equal(memberClaimBody.campAccess.role, "member");
+  assert.equal(memberClaimBody.owl.version, 3);
+  assert.equal(memberClaimBody.owl.number > 0, true);
+  const publicCampOwl = await worker.fetch(makeRequest(`/lists/${memberTag.readId}`), env).then(response => response.json());
+  assert.deepEqual(publicCampOwl.owl, memberClaimBody.owl);
+  const memberProfile = await worker.fetch(makeRequest(`/profiles/${memberClaimBody.profileId}/owl-admin-traits`, {
+    headers: {
+      Authorization: `Bearer ${memberAccessKey}`,
+      "X-Profile-Key": memberClaimBody.profileKey
+    }
+  }), env);
+  assert.equal(memberProfile.status, 200);
+
+  const campSourceTrade = await worker.fetch(makeRequest(`/lists/${memberTag.readId}/trade`, {
+    method: "POST",
+    headers: { "X-Write-Key": "member-write-key-123456789" },
+    body: JSON.stringify({ targetReadId: admin.readId, targetTapToken: admin.tapToken })
+  }), env);
+  assert.equal(campSourceTrade.status, 409);
+  assert.match((await campSourceTrade.json()).error, /Camp Hexadecibel Owls cannot be traded/);
+
+  const campTargetTrade = await worker.fetch(makeRequest(`/lists/${admin.readId}/trade`, {
+    method: "POST",
+    headers: { "X-Write-Key": admin.writeKey },
+    body: JSON.stringify({ targetReadId: memberTag.readId, targetTapToken: memberClaimBody.tapToken })
+  }), env);
+  assert.equal(campTargetTrade.status, 409);
+  assert.match((await campTargetTrade.json()).error, /Camp Hexadecibel Owls cannot be traded/);
 
   const memberAccess = await worker.fetch(makeRequest("/camp/access", {
     headers: { Authorization: `Bearer ${memberAccessKey}` }

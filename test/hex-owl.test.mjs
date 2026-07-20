@@ -414,7 +414,7 @@ test("version 1 has a frozen snapshot and ignores display-name labels", async ()
   });
   assert.doesNotMatch(owl.renderSvg(seed, 1), /display name|Night Owl|Alex/);
   assert.match(owl.renderSvg(seed, 2), /data-hex-owl-version="2"/);
-  assert.throws(() => owl.renderSvg(seed, 3), /Unsupported Hex Owl version/);
+  assert.match(owl.renderSvg(seed, 3), /data-hex-owl-version="3"/);
 });
 
 test("different seeds create useful visible variation", async () => {
@@ -609,31 +609,36 @@ test("retired sticker-like, pinpoint, face-glow, and accessory traits do not ret
   assert.doesNotMatch(legacyCatalogue, /pattern.*(?:halo|pulse|moon)/);
 });
 
-test("the dual-version public API keeps V1 frozen and makes V2 current", async () => {
+test("the versioned public API keeps V1/V2 frozen, V2 ordinary, and V3 provenance-only", async () => {
   const owl = await renderer();
   for (const name of ["normalizeSeed", "randomSeed", "selectTraits", "traitNames", "renderSvg", "mountBase", "hydrate",
     "spec", "catalogue", "resolveTraits", "validateTraits", "renderWithTraits"]) {
     assert.equal(typeof owl[name], "function", `HexOwl.${name} must remain public.`);
   }
   assert.equal(owl.VERSION, 2);
-  assert.deepEqual(Object.keys(owl.SPECS), ["1", "2"]);
+  assert.deepEqual(Object.keys(owl.SPECS), ["1", "2", "3"]);
   assert.equal(owl.SPECS[1].id, "hex-owl-v1");
   assert.equal(owl.SPECS[1].version, 1);
   assert.equal(owl.SPECS[1].status, "frozen");
   assert.equal(owl.SPECS[2].id, "hex-owl-v2");
   assert.equal(owl.SPECS[2].version, 2);
   assert.equal(owl.SPECS[2].status, "current");
+  assert.equal(owl.SPECS[3].id, "camp-hexadecibel-v3");
+  assert.equal(owl.SPECS[3].version, 3);
+  assert.equal(owl.SPECS[3].status, "provenance-only");
   assert.equal(owl.SPEC, owl.SPECS[2]);
   assert.equal(owl.spec(), owl.SPECS[2]);
   assert.equal(owl.spec(1), owl.SPECS[1]);
-  for (const version of [1, 2]) {
+  assert.equal(owl.spec(3), owl.SPECS[3]);
+  for (const version of [1, 2, 3]) {
     const spec = owl.spec(version);
     for (const key of ["rarities", "paletteFamilies", "palettes", "geometry", "layerOrder", "catalogue"]) {
       assert.ok(spec[key] != null, `SPECS[${version}].${key} is required.`);
     }
     assert.equal(owl.catalogue(version), spec.catalogue);
-    assert.deepEqual(Object.keys(spec.catalogue.categories).sort(),
-      ["accessory", "aura", "beak", "brow", "direction", "eyes", "marking", "palette", "ringMode", "ringStyle"].sort());
+    const expectedCategories = ["aura", "beak", "brow", "direction", "eyes", "marking", "palette", "ringMode", "ringStyle"];
+    if (version !== 3) expectedCategories.push("accessory");
+    assert.deepEqual(Object.keys(spec.catalogue.categories).sort(), expectedCategories.sort());
   }
   assert.equal(owl.catalogue(), owl.SPECS[2].catalogue, "The unversioned catalogue follows current V2.");
   assertDeepFrozen(owl, "HexOwl");
@@ -641,9 +646,10 @@ test("the dual-version public API keeps V1 frozen and makes V2 current", async (
   assertDeepFrozen(owl.SPECS, "HexOwl.SPECS");
   assertDeepFrozen(owl.catalogue(1), "HexOwl.catalogue(1)");
   assertDeepFrozen(owl.catalogue(2), "HexOwl.catalogue(2)");
+  assertDeepFrozen(owl.catalogue(3), "HexOwl.catalogue(3)");
 
   const seed = "00112233445566778899aabbccddeeff";
-  for (const version of [1, 2]) {
+  for (const version of [1, 2, 3]) {
     const selected = owl.selectTraits(seed, version);
     const resolved = owl.resolveTraits(seed, {}, version);
     assertDeepFrozen(selected, `selectTraits V${version} result`);
@@ -655,9 +661,9 @@ test("the dual-version public API keeps V1 frozen and makes V2 current", async (
   assert.deepEqual(plain(owl.selectTraits(seed)), plain(owl.selectTraits(seed, 2)));
   assert.equal(owl.renderSvg(seed), owl.renderSvg(seed, 2));
   assert.notEqual(owl.renderSvg(seed, 1), owl.renderSvg(seed, 2));
-  assert.throws(() => owl.spec(3), /Unsupported Hex Owl version/i);
-  assert.throws(() => owl.resolveTraits(seed, {}, 3), /Unsupported Hex Owl version/i);
-  assert.throws(() => owl.renderWithTraits(seed, { version: 3 }, 3), /Unsupported Hex Owl version/i);
+  assert.throws(() => owl.spec(4), /Unsupported Hex Owl version/i);
+  assert.throws(() => owl.resolveTraits(seed, {}, 4), /Unsupported Hex Owl version/i);
+  assert.throws(() => owl.renderWithTraits(seed, { version: 4 }, 4), /Unsupported Hex Owl version/i);
 });
 
 test("fixed seeds are byte-stable across fresh renderer contexts", async () => {
@@ -1754,4 +1760,111 @@ test("mountBase installs the exact shared path once, mounts all brow subpaths, a
   assert.equal(await retrying.mountBase(retryDocument), false);
   assert.equal(await retrying.mountBase(retryDocument), true);
   assert.equal(attempts, 2, "A failed mount must clear its cached promise so reconnect can retry.");
+});
+
+test("V3 exposes the exact provenance-only Camp Hexadecibel grammar", async () => {
+  const owl = await renderer();
+  const spec = owl.spec(3);
+  assert.equal(owl.VERSION, 2, "Ordinary unversioned generation must remain on frozen V2.");
+  assert.equal(owl.CAMP_VERSION, 3);
+  assert.equal(spec.id, "camp-hexadecibel-v3");
+  assert.equal(spec.specialEligibility.campOnlyOrdinaryWeight, 0);
+  assert.equal(spec.specialEligibility.assignment, "physical-camp-hexlace-provenance");
+  assert.equal(spec.specialEligibility.tradeable, false);
+  assert.deepEqual(plain(spec.mandatory), { ringMode: "hexadecibel-vortex" });
+  assert.deepEqual(plain(spec.rarities[0]), {
+    id: "camp-hexadecibel", name: "Camp Hexadecibel", weight: 0, ordinaryWeight: 0, level: 3,
+    budget: 12, focalCap: 2, heroFloor: 1, supportCap: 2, treatmentCap: 5,
+    assignment: "provenance-path-required", initialRun: "about 20-25",
+    supply: "unlimited, provenance-gated", tradeable: false, hexadex: "collectible"
+  });
+  const catalogue = catalogueValue(owl, 3);
+  assert.deepEqual(plain(categoryOptions(catalogue, "palette").map(item => [item.id, item.weight, item.tokens])), [
+    ["uv-green", 30, { face: "#29e07d", shadow: "#0a5c33", highlight: "#eafff2", focal: "#c8ff3d", ring: "#35f58c", beam: "#52ffa1" }],
+    ["uv-yellow", 14, { face: "#e9e13c", shadow: "#665f0e", highlight: "#fefce8", focal: "#ffd21f", ring: "#f5ee55", beam: "#fff36b" }],
+    ["uv-magenta", 15, { face: "#f24fd0", shadow: "#6d0f57", highlight: "#ffe9fa", focal: "#ff7ade", ring: "#ff66d9", beam: "#ff8ce4" }],
+    ["uv-orange", 14, { face: "#ff8f2e", shadow: "#6e3505", highlight: "#fff1e0", focal: "#ffc14d", ring: "#ffa04a", beam: "#ffb066" }],
+    ["uv-violet", 15, { face: "#a45cff", shadow: "#3c1670", highlight: "#f1e7ff", focal: "#c99bff", ring: "#b374ff", beam: "#c08aff" }],
+    ["uv-blue", 12, { face: "#3fa9ff", shadow: "#0e3a66", highlight: "#e4f3ff", focal: "#7cd0ff", ring: "#55b6ff", beam: "#79c8ff" }]
+  ]);
+  assert.deepEqual(plain(categoryOptions(catalogue, "ringStyle").map(item => [item.id, item.weight, item.cost])), [
+    ["solid", 24, 0], ["fine", 12, 1], ["beat-dash", 16, 1],
+    ["dotted", 10, 1], ["comet-dash", 12, 1], ["filament-lines", 26, 1]
+  ]);
+  assert.deepEqual(plain(categoryOptions(catalogue, "brow").map(item => [item.id, item.weight, item.cost])), [
+    ["original-crown", 22, 0], ["crown-gem", 30, 1], ["hex-crest", 48, 1]
+  ]);
+  assert.deepEqual(plain(categoryOptions(catalogue, "eyes").map(item => [item.id, item.weight, item.cost])), [
+    ["original-eyes", 22, 0], ["festival-eye-wells", 30, 1], ["uv-eye-wells", 48, 1]
+  ]);
+  assert.deepEqual(plain(categoryOptions(catalogue, "beak").map(item => [item.id, item.weight, item.cost])), [
+    ["original-beak", 24, 0], ["amber-shard", 30, 1], ["hex-facet", 46, 1]
+  ]);
+  assert.deepEqual(plain(categoryOptions(catalogue, "marking").map(item => [item.id, item.weight, item.cost, item.hero === true])), [
+    ["clean-face", 24, 0, false], ["moon-freckles", 30, 1, false],
+    ["hexlace-freckles", 46, 1, false], ["uv-honeycomb", 0, 3, true]
+  ]);
+  assert.deepEqual(plain(categoryOptions(catalogue, "aura").map(item => [item.id, item.weight, item.cost, item.hero === true])), [
+    ["quiet-aura", 1, 0, false], ["radial-glow", 10, 2, true],
+    ["stardust", 15, 2, true], ["camp-beacon", 45, 2, true]
+  ]);
+});
+
+test("V3 seed streams enforce the camp hero floor, second-hero chance, support cap, and budget", async () => {
+  const owl = await renderer();
+  let secondHeroes = 0;
+  let honeycomb = 0;
+  const palettes = new Set();
+  for (let index = 0; index < 5000; index += 1) {
+    const resolved = owl.selectTraits(`camp-v3-distribution-${index}`, 3);
+    assert.equal(resolved.version, 3);
+    assert.equal(resolved.rarity.id, "camp-hexadecibel");
+    assert.equal(resolved.ringMode.id, "hexadecibel-vortex");
+    assert.ok(resolved.heroCount >= 1 && resolved.heroCount <= 2);
+    assert.ok(resolved.supportCount <= 2);
+    assert.ok(resolved.cost <= 12);
+    assert.equal(validationIsValid(owl.validateTraits(resolved, 3)), true);
+    palettes.add(resolved.palette.id);
+    if (resolved.heroCount === 2) secondHeroes += 1;
+    if (resolved.marking.id === "uv-honeycomb") honeycomb += 1;
+  }
+  assert.deepEqual([...palettes].sort(), ["uv-blue", "uv-green", "uv-magenta", "uv-orange", "uv-violet", "uv-yellow"]);
+  assert.ok(secondHeroes / 5000 > 0.09 && secondHeroes / 5000 < 0.15, `Second-hero rate was ${secondHeroes / 5000}.`);
+  assert.ok(honeycomb / 5000 > 0.24 && honeycomb / 5000 < 0.34, `Honeycomb rate was ${honeycomb / 5000}.`);
+  assert.equal(owl.selectTraits("ordinary-default-stays-v2").version, 2);
+});
+
+test("every V3 camp trait can be forced and renders with exact Vortex and overlay geometry", async () => {
+  const owl = await renderer();
+  const catalogue = catalogueValue(owl, 3);
+  for (const category of ["palette", "ringMode", "ringStyle", "direction", "brow", "eyes", "beak", "marking", "aura"]) {
+    for (const option of categoryOptions(catalogue, category)) {
+      const id = rawOptionId(option);
+      const resolved = owl.resolveTraits(`camp-v3-force-${category}-${id}`, { overrides: { [category]: id } }, 3);
+      assert.equal(resolved.selectionIds[category], id, `${category}.${id} was replaced.`);
+      assert.equal(validationIsValid(owl.validateTraits(resolved, 3)), true);
+      assert.equal(owl.renderWithTraits(resolved.seed, resolved, 3), owl.renderWithTraits(resolved.seed, resolved, 3));
+    }
+  }
+
+  const seed = "camp-v3-exact-art";
+  const resolved = owl.resolveTraits(seed, { overrides: {
+    palette: "uv-violet", direction: "clockwise", ringStyle: "filament-lines",
+    brow: "hex-crest", eyes: "uv-eye-wells", beak: "hex-facet",
+    marking: "hexlace-freckles", aura: "camp-beacon"
+  } }, 3);
+  const svg = owl.renderWithTraits(seed, resolved, 3);
+  assert.match(svg, /^<svg\b[^>]*data-hex-owl-version="3"[^>]*data-rarity="camp-hexadecibel"/);
+  assert.match(svg, /<circle cx="50" cy="50" r="26\.4" fill="#0b0c15"\/>/);
+  assert.match(svg, /<circle cx="34\.8890" cy="52\.4455" r="4\.6"/);
+  assert.match(svg, /<circle cx="65\.1840" cy="52\.4455" r="4\.6"/);
+  assert.match(svg, /data-ring="outer" data-rotation="30" data-radius="49\.22"/);
+  assert.match(svg, /data-ring="middle-outer" data-rotation="40" data-radius="43\.37"/);
+  assert.match(svg, /data-ring="middle-inner" data-rotation="50" data-radius="38\.09"/);
+  assert.match(svg, /data-ring="inner" data-rotation="60" data-radius="33\.33"/);
+  assert.equal((svg.match(/data-ring="/g) || []).length, 8, "Filament Lines must draw two strokes for each Vortex ring.");
+  assert.match(svg, /points="50\.9750,24\.2113 51\.9500,25\.9000 50\.9750,27\.5887 49\.0250,27\.5887 48\.0500,25\.9000 49\.0250,24\.2113"/);
+  assert.match(svg, /<circle cx="50" cy="58\.15" r="3\.1" fill="#c08aff" opacity="\.14"\/>/);
+  assert.equal((svg.match(/stroke="#f1e7ff" stroke-width="\.22"/g) || []).length, 6);
+  assert.equal((svg.match(/data-layer="/g) || []).length, 12);
 });

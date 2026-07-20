@@ -543,7 +543,8 @@
       connectCode = "";
     }
     const physical = Boolean(identity && identity.isPhysical !== false);
-    if (elements.swapOpen) elements.swapOpen.hidden = navigator.onLine === false || !physical;
+    const campOwl = identity?.owl?.version === 3;
+    if (elements.swapOpen) elements.swapOpen.hidden = navigator.onLine === false || !physical || campOwl;
     if (elements.releaseOpen) elements.releaseOpen.hidden = !physical;
     if (elements.manageSection) {
       elements.manageSection.hidden = !physical;
@@ -683,6 +684,10 @@
   async function saveName() {
     const name = elements.nameInput.value.trim();
     if (!name) { feedback("Please enter a name."); return; }
+    if (editorMode === "enable" && mySets().length === 0) {
+      feedback("Save at least one set before choosing your sharing name.");
+      return;
+    }
     elements.nameSave.disabled = true;
     try {
       if (editorMode === "enable") {
@@ -986,7 +991,9 @@
 
   function renderTradeDialog(mode = loadTradeMode()) {
     const online = navigator.onLine !== false;
-    if (elements.swapOpen) elements.swapOpen.hidden = !online;
+    const identity = loadIdentity();
+    const campOwl = identity?.owl?.version === 3;
+    if (elements.swapOpen) elements.swapOpen.hidden = !online || !identity || identity.isPhysical === false || campOwl;
     if (!mode) return;
     elements.swapCreate.hidden = Boolean(mode.matched);
     elements.swapAccept.hidden = !mode.matched;
@@ -1004,7 +1011,7 @@
 
   function startTradeMode() {
     const identity = loadIdentity();
-    if (navigator.onLine === false || !identity || identity.isPhysical === false) return;
+    if (navigator.onLine === false || !identity || identity.isPhysical === false || identity.owl?.version === 3) return;
     const mode = { startedAt: Date.now(), targetReadId: "", matched: false, confirmed: false };
     saveTradeMode(mode);
     renderTradeDialog(mode);

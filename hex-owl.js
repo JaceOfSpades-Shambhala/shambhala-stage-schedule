@@ -1,4 +1,5 @@
-// Hex Owl renderer, frozen festival edition V1 plus versioned V2.
+// Hex Owl renderer, frozen festival editions V1/V2 plus the provenance-only
+// Camp Hexadecibel V3 grammar.
 //
 // V1 deliberately keeps the persisted identity contract unchanged: an Owl is
 // still identified by its seed and version. Its manifest and rendering path
@@ -8,8 +9,9 @@
 
   const V1_VERSION = 1;
   const VERSION = 2;
+  const CAMP_VERSION = 3;
   const HEX_SEED = /^[0-9a-f]{32}$/i;
-  const OWL_ASSET = "./hex-owl-base.svg?v=67";
+  const OWL_ASSET = "./hex-owl-base.svg?v=68";
   const SHARED_MARK_ID = "hex-owl-shared-mark";
   const BROW_MARK_IDS = {
     lower: SHARED_MARK_ID + "-brow-lower",
@@ -491,7 +493,129 @@
       rarities: V2_RARITIES
     }
   });
-  const SPECS = deepFreeze({ [V1_VERSION]: V1_SPEC, [VERSION]: V2_SPEC });
+
+  const V3_TIER = deepFreeze({
+    id: "camp-hexadecibel",
+    name: "Camp Hexadecibel",
+    weight: 0,
+    ordinaryWeight: 0,
+    level: 3,
+    budget: 12,
+    focalCap: 2,
+    heroFloor: 1,
+    supportCap: 2,
+    treatmentCap: 5,
+    assignment: "provenance-path-required",
+    initialRun: "about 20-25",
+    supply: "unlimited, provenance-gated",
+    tradeable: false,
+    hexadex: "collectible"
+  });
+  const V3_PALETTES = deepFreeze([
+    { id: "uv-green", name: "UV Green", weight: 30, cost: 0, focal: false, hero: false, campOnly: true,
+      tokens: { face: "#29e07d", shadow: "#0a5c33", highlight: "#eafff2", focal: "#c8ff3d", ring: "#35f58c", beam: "#52ffa1" } },
+    { id: "uv-yellow", name: "UV Yellow", weight: 14, cost: 0, focal: false, hero: false, campOnly: true,
+      tokens: { face: "#e9e13c", shadow: "#665f0e", highlight: "#fefce8", focal: "#ffd21f", ring: "#f5ee55", beam: "#fff36b" } },
+    { id: "uv-magenta", name: "UV Magenta", weight: 15, cost: 0, focal: false, hero: false, campOnly: true,
+      tokens: { face: "#f24fd0", shadow: "#6d0f57", highlight: "#ffe9fa", focal: "#ff7ade", ring: "#ff66d9", beam: "#ff8ce4" } },
+    { id: "uv-orange", name: "UV Orange", weight: 14, cost: 0, focal: false, hero: false, campOnly: true,
+      tokens: { face: "#ff8f2e", shadow: "#6e3505", highlight: "#fff1e0", focal: "#ffc14d", ring: "#ffa04a", beam: "#ffb066" } },
+    { id: "uv-violet", name: "UV Violet", weight: 15, cost: 0, focal: false, hero: false, campOnly: true,
+      tokens: { face: "#a45cff", shadow: "#3c1670", highlight: "#f1e7ff", focal: "#c99bff", ring: "#b374ff", beam: "#c08aff" } },
+    { id: "uv-blue", name: "UV Blue", weight: 12, cost: 0, focal: false, hero: false, campOnly: true,
+      tokens: { face: "#3fa9ff", shadow: "#0e3a66", highlight: "#e4f3ff", focal: "#7cd0ff", ring: "#55b6ff", beam: "#79c8ff" } }
+  ]);
+  const V3_RING_MODES = deepFreeze([
+    { id: "hexadecibel-vortex", name: "Hexadecibel Vortex", weight: 100, cost: 2, focal: false, hero: false, campOnly: true, shape: "hex", twistDeg: 10 }
+  ]);
+  const V3_RING_STYLES = deepFreeze([
+    { id: "solid", name: "Solid Portal", weight: 24, cost: 0, focal: false, hero: false, widthFactor: 1, dash: "", linecap: "round" },
+    { id: "fine", name: "Fine Lines", weight: 12, cost: 1, focal: false, hero: false, widthFactor: 0.56, dash: "", linecap: "round" },
+    { id: "beat-dash", name: "Beat Dash", weight: 16, cost: 1, focal: false, hero: false, widthFactor: 0.72, dash: "2.20 1.10", linecap: "round" },
+    { id: "dotted", name: "Dotted Signal", weight: 10, cost: 1, focal: false, hero: false, widthFactor: 0.72, dash: "0.01 2.10", linecap: "round" },
+    { id: "comet-dash", name: "Comet Dash", weight: 12, cost: 1, focal: false, hero: false, widthFactor: 0.72, dash: "3.60 1.20 0.70 1.20", linecap: "round" },
+    { id: "filament-lines", name: "Filament Lines", weight: 26, cost: 1, focal: false, hero: false, campOnly: true, widthFactor: 0.34, dash: "", linecap: "round", double: true }
+  ]);
+  const V3_DIRECTIONS = deepFreeze([
+    { id: "clockwise", name: "Clockwise", weight: 50, cost: 0, focal: false, hero: false },
+    { id: "counter-clockwise", name: "Counter-clockwise", weight: 50, cost: 0, focal: false, hero: false }
+  ]);
+  const V3_BROWS = deepFreeze([
+    { id: "original-crown", name: "Original Brow", weight: 22, cost: 0, focal: false, hero: false, safeZone: "brows" },
+    { id: "crown-gem", name: "Top-ridge Gem", weight: 30, cost: 1, focal: false, hero: false, safeZone: "brows" },
+    { id: "hex-crest", name: "Hex Crest", weight: 48, cost: 1, focal: false, hero: false, campOnly: true, safeZone: "brows" }
+  ]);
+  const V3_EYES = deepFreeze([
+    { id: "original-eyes", name: "Original Shambhala", weight: 22, cost: 0, focal: false, hero: false, safeZone: "eyes" },
+    { id: "festival-eye-wells", name: "Festival Eye Wells", weight: 30, cost: 1, focal: false, hero: false, safeZone: "eyeFields" },
+    { id: "uv-eye-wells", name: "UV Eye Wells", weight: 48, cost: 1, focal: false, hero: false, campOnly: true, safeZone: "eyeFields" }
+  ]);
+  const V3_BEAKS = deepFreeze([
+    { id: "original-beak", name: "Original Beak", weight: 24, cost: 0, focal: false, hero: false, safeZone: "beak" },
+    { id: "amber-shard", name: "Amber Shard", weight: 30, cost: 1, focal: false, hero: false, safeZone: "beak" },
+    { id: "hex-facet", name: "Hex Facet", weight: 46, cost: 1, focal: false, hero: false, campOnly: true, safeZone: "beak" }
+  ]);
+  const V3_MARKINGS = deepFreeze([
+    { id: "clean-face", name: "Clean Face", weight: 24, cost: 0, focal: false, hero: false, safeZone: "face" },
+    { id: "moon-freckles", name: "Moon Freckles", weight: 30, cost: 1, focal: false, hero: false, safeZone: "cheeks" },
+    { id: "hexlace-freckles", name: "Hexlace Freckles", weight: 46, cost: 1, focal: false, hero: false, campOnly: true, safeZone: "cheeks" },
+    { id: "uv-honeycomb", name: "UV Honeycomb", weight: 0, cost: 3, focal: true, hero: true, campOnly: true, safeZone: "face" }
+  ]);
+  const V3_AURAS = deepFreeze([
+    { id: "quiet-aura", name: "Quiet", weight: 1, cost: 0, focal: false, hero: false, safeZone: "outer" },
+    { id: "radial-glow", name: "Portal Halo", weight: 10, cost: 2, focal: true, hero: true, safeZone: "outer" },
+    { id: "stardust", name: "Stardust", weight: 15, cost: 2, focal: true, hero: true, safeZone: "outer" },
+    { id: "camp-beacon", name: "Camp Beacon", weight: 45, cost: 2, focal: true, hero: true, campOnly: true, safeZone: "outer" }
+  ]);
+  const V3_CATEGORIES = deepFreeze({
+    palette: V3_PALETTES,
+    ringMode: V3_RING_MODES,
+    ringStyle: V3_RING_STYLES,
+    direction: V3_DIRECTIONS,
+    brow: V3_BROWS,
+    eyes: V3_EYES,
+    beak: V3_BEAKS,
+    marking: V3_MARKINGS,
+    aura: V3_AURAS
+  });
+  const V3_CATEGORY_KEYS = deepFreeze(["ringMode", "ringStyle", "direction", "brow", "eyes", "beak", "marking", "aura"]);
+  const V3_COST_KEYS = deepFreeze(["ringMode", "ringStyle", "brow", "eyes", "beak", "marking", "aura"]);
+  const V3_SUPPORT_KEYS = deepFreeze(["ringStyle", "brow", "eyes", "beak", "marking"]);
+  const V3_SUPPORT_ORDERS = deepFreeze([
+    ["ringStyle", "marking", "eyes", "brow", "beak"],
+    ["marking", "ringStyle", "brow", "eyes", "beak"],
+    ["eyes", "brow", "ringStyle", "marking", "beak"],
+    ["brow", "beak", "marking", "ringStyle", "eyes"]
+  ]);
+  const V3_HERO_POOL = deepFreeze([
+    { category: "aura", id: "camp-beacon", weight: 44 },
+    { category: "marking", id: "uv-honeycomb", weight: 20 },
+    { category: "aura", id: "stardust", weight: 20 },
+    { category: "aura", id: "radial-glow", weight: 16 }
+  ]);
+  const V3_LAYER_ORDER = deepFreeze([
+    "background", "aura", "portal-rings", "ring-glow", "owl-backdrop",
+    "base-disc", "eyes", "owl-base", "honeycomb", "brows", "facial-details", "beak"
+  ]);
+  const V3_SPEC = deepFreeze({
+    id: "camp-hexadecibel-v3",
+    version: CAMP_VERSION,
+    grammarVersion: CAMP_VERSION,
+    status: "provenance-only",
+    frozenAt: "2026-07-19",
+    rarityWeights: { "camp-hexadecibel": 0 },
+    budgets: { "camp-hexadecibel": 12 },
+    rarities: [V3_TIER],
+    paletteFamilies: [],
+    palettes: V3_PALETTES,
+    geometry: GEOMETRY,
+    layerOrder: V3_LAYER_ORDER,
+    mandatory: { ringMode: "hexadecibel-vortex" },
+    heroPool: V3_HERO_POOL,
+    specialEligibility: { campOnlyOrdinaryWeight: 0, assignment: "physical-camp-hexlace-provenance", tradeable: false },
+    catalogue: { categories: V3_CATEGORIES, paletteFamilies: [], rarities: [V3_TIER] }
+  });
+  const SPECS = deepFreeze({ [V1_VERSION]: V1_SPEC, [VERSION]: V2_SPEC, [CAMP_VERSION]: V3_SPEC });
 
   function hashWords(value) {
     const words = [0x811c9dc5, 0x9e3779b9, 0x85ebca6b, 0xc2b2ae35];
@@ -1132,6 +1256,179 @@
     return resolveTraitsV2(seed, {}, VERSION);
   }
 
+  function selectionTotalsV3(state) {
+    let cost = 0;
+    let heroCount = 0;
+    let supportCount = 0;
+    V3_COST_KEYS.forEach(key => {
+      const option = state[key];
+      cost += Number(option?.cost || 0);
+      if (option?.hero) heroCount += 1;
+      if (V3_SUPPORT_KEYS.includes(key) && Number(option?.cost || 0) > 0 && !option?.hero) supportCount += 1;
+    });
+    const treatmentCount = 1 + heroCount + supportCount;
+    return { cost, focalCount: heroCount, heroCount, supportCount, treatmentCount };
+  }
+
+  function finalizeTraitsV3(normalized, state, palette, issues, repairs) {
+    const totals = selectionTotalsV3(state);
+    const selectionIds = { palette: palette.id };
+    V3_CATEGORY_KEYS.forEach(key => { selectionIds[key] = state[key].id; });
+    selectionIds.accessory = V2_ACCESSORIES[0].id;
+    const rings = deepFreeze({
+      id: state.ringMode.id,
+      name: state.ringMode.name,
+      colors: deepFreeze([palette.tokens.ring, palette.tokens.ring, palette.tokens.ring, palette.tokens.ring]),
+      multicolor: false
+    });
+    const heroes = [];
+    if (state.aura.hero) heroes.push(state.aura.name);
+    if (state.marking.hero) heroes.push(state.marking.name);
+    return deepFreeze({
+      version: CAMP_VERSION,
+      seed: normalized,
+      tier: V3_TIER,
+      rarity: V3_TIER,
+      palette,
+      face: palette,
+      rings,
+      ringMode: state.ringMode,
+      ringStyle: state.ringStyle,
+      direction: state.direction,
+      ringDirection: state.direction.name,
+      brow: state.brow,
+      eyes: state.eyes,
+      beak: state.beak,
+      marking: state.marking,
+      accessory: V2_ACCESSORIES[0],
+      aura: state.aura,
+      heroes: deepFreeze(heroes),
+      cost: totals.cost,
+      budget: V3_TIER.budget,
+      focalCount: totals.focalCount,
+      focalCap: V3_TIER.focalCap,
+      heroCount: totals.heroCount,
+      supportCount: totals.supportCount,
+      treatmentCount: totals.treatmentCount,
+      selectionIds: deepFreeze(selectionIds),
+      issues: deepFreeze(issues.slice()),
+      repairs: deepFreeze(repairs.slice())
+    });
+  }
+
+  function resolveTraitsV3(seed, options, version) {
+    const resolvedVersion = version === undefined ? CAMP_VERSION : Number(version);
+    if (resolvedVersion !== CAMP_VERSION) throw new Error("Unsupported Hex Owl version: " + version);
+    const normalized = normalizeSeed(seed);
+    const config = options && typeof options === "object" ? options : {};
+    const overrides = config.overrides && typeof config.overrides === "object" ? config.overrides : config;
+    const issues = [];
+    const repairs = [];
+    const forced = new Set();
+    const state = {
+      ringMode: V3_RING_MODES[0],
+      ringStyle: V3_RING_STYLES[0],
+      direction: V3_DIRECTIONS[0],
+      brow: V3_BROWS[0],
+      eyes: V3_EYES[0],
+      beak: V3_BEAKS[0],
+      marking: V3_MARKINGS[0],
+      aura: V3_AURAS[0]
+    };
+
+    let palette = findByIdOrName(V3_PALETTES, overrides.palette || overrides.face);
+    if (palette) {
+      forced.add("palette");
+    } else {
+      if ((overrides.palette || overrides.face) && String(overrides.palette || overrides.face).toLowerCase() !== "auto") {
+        const message = "Unknown palette override was replaced with the seeded palette.";
+        issues.push(message);
+        repairs.push(message);
+      }
+      palette = weighted(V3_PALETTES, categoryRandom(normalized, resolvedVersion, "palette"));
+    }
+
+    const requestedDirection = overrides.direction !== undefined ? overrides.direction : overrides.ringDirection;
+    let direction = findByIdOrName(V3_DIRECTIONS, requestedDirection);
+    if (direction) {
+      forced.add("direction");
+    } else {
+      if (requestedDirection && String(requestedDirection).toLowerCase() !== "auto") {
+        const message = "Unknown direction override was replaced with the seeded direction.";
+        issues.push(message);
+        repairs.push(message);
+      }
+      direction = roll(normalized, resolvedVersion, "direction") < 0.5 ? V3_DIRECTIONS[0] : V3_DIRECTIONS[1];
+    }
+    state.direction = direction;
+
+    ["ringMode", "ringStyle", "brow", "eyes", "beak", "marking", "aura"].forEach(category => {
+      const supplied = overrides[category];
+      if (supplied === undefined || supplied === null || supplied === "" || String(supplied).toLowerCase() === "auto") return;
+      const candidate = findByIdOrName(V3_CATEGORIES[category], supplied);
+      if (!candidate) {
+        const message = "Unknown " + category + " override was ignored.";
+        issues.push(message);
+        repairs.push(message);
+        return;
+      }
+      state[category] = candidate;
+      forced.add(category);
+    });
+
+    if (!forced.has("ringMode")) {
+      state.ringMode = weighted(V3_RING_MODES, categoryRandom(normalized, resolvedVersion, "ring-mode"));
+    }
+
+    let heroCategories = ["aura", "marking"].filter(category => state[category].hero);
+    if (heroCategories.length < V3_TIER.heroFloor) {
+      const first = weighted(V3_HERO_POOL.filter(entry => !forced.has(entry.category)), categoryRandom(normalized, resolvedVersion, "hero-1"));
+      if (first) {
+        state[first.category] = findByIdOrName(V3_CATEGORIES[first.category], first.id);
+        heroCategories.push(first.category);
+      }
+    }
+    if (heroCategories.length === 1 && roll(normalized, resolvedVersion, "hero-second") < 0.12) {
+      const second = weighted(
+        V3_HERO_POOL.filter(entry => entry.category !== heroCategories[0] && !forced.has(entry.category)),
+        categoryRandom(normalized, resolvedVersion, "hero-2")
+      );
+      if (second) {
+        const prior = state[second.category];
+        state[second.category] = findByIdOrName(V3_CATEGORIES[second.category], second.id);
+        if (selectionTotalsV3(state).cost > V3_TIER.budget) state[second.category] = prior;
+        else heroCategories.push(second.category);
+      }
+    }
+
+    const supportOrder = V3_SUPPORT_ORDERS[
+      Math.floor(roll(normalized, resolvedVersion, "support-order") * V3_SUPPORT_ORDERS.length) % V3_SUPPORT_ORDERS.length
+    ];
+    supportOrder.forEach(category => {
+      if (forced.has(category) || state[category].hero || Number(state[category].cost || 0) > 0) return;
+      if (selectionTotalsV3(state).supportCount >= V3_TIER.supportCap) return;
+      const candidate = weighted(
+        V3_CATEGORIES[category].filter(item => Number(item.cost) > 0 && !item.hero),
+        categoryRandom(normalized, resolvedVersion, "support-" + category)
+      );
+      if (!candidate) return;
+      const prior = state[category];
+      state[category] = candidate;
+      if (selectionTotalsV3(state).cost > V3_TIER.budget) state[category] = prior;
+    });
+
+    const totals = selectionTotalsV3(state);
+    if (totals.cost > V3_TIER.budget) issues.push("Trait cost exceeds the tier budget.");
+    if (totals.heroCount > V3_TIER.focalCap) issues.push("Hero trait count exceeds the tier cap.");
+    if (totals.heroCount < V3_TIER.heroFloor) issues.push("A camp Owl carries at least one hero trait.");
+    if (totals.supportCount > V3_TIER.supportCap) issues.push("Support trait count exceeds the tier cap.");
+    return finalizeTraitsV3(normalized, state, palette, issues, repairs);
+  }
+
+  function selectTraitsV3(seed) {
+    return resolveTraitsV3(seed, {}, CAMP_VERSION);
+  }
+
   function selectTraitsV1(seed) {
     return resolveTraitsV1(seed, {}, V1_VERSION);
   }
@@ -1258,6 +1555,42 @@
       computedHeroes,
       computedSupports,
       computedTreatments
+    });
+  }
+
+  function validateTraitsV3(traits) {
+    const issues = [];
+    if (!traits || typeof traits !== "object") {
+      return deepFreeze({ valid: false, issues: ["Traits are missing."], repairs: [] });
+    }
+    const rarity = findByIdOrName([V3_TIER], traits.rarity || traits.tier);
+    if (!rarity) issues.push("Rarity is not the Camp Hexadecibel tier.");
+    const palette = findByIdOrName(V3_PALETTES, traits.palette || traits.face);
+    if (!palette) issues.push("Palette is not in the V3 camp manifest.");
+    const chosen = [];
+    V3_CATEGORY_KEYS.forEach(category => {
+      const supplied = traits[category] || (category === "direction" ? traits.ringDirection : null);
+      const option = findByIdOrName(V3_CATEGORIES[category], supplied);
+      if (!option) issues.push(category + " is not in the V3 camp manifest.");
+      else chosen.push({ category, option });
+    });
+    const state = Object.fromEntries(chosen.map(item => [item.category, item.option]));
+    const totals = selectionTotalsV3(state);
+    if (state.ringMode?.id !== "hexadecibel-vortex") issues.push("Camp Hexadecibel requires the Hexadecibel Vortex.");
+    if (totals.cost > V3_TIER.budget) issues.push("Trait cost exceeds the tier budget.");
+    if (totals.heroCount > V3_TIER.focalCap) issues.push("Hero trait count exceeds the tier cap.");
+    if (totals.heroCount < V3_TIER.heroFloor) issues.push("Camp Hexadecibel requires at least one hero trait.");
+    if (totals.supportCount > V3_TIER.supportCap) issues.push("Support trait count exceeds the tier cap.");
+    if (totals.treatmentCount > V3_TIER.treatmentCap) issues.push("Visible treatment count exceeds the tier cap.");
+    return deepFreeze({
+      valid: issues.length === 0,
+      issues,
+      repairs: Array.isArray(traits.repairs) ? traits.repairs.slice() : [],
+      computedCost: totals.cost,
+      computedFocals: totals.focalCount,
+      computedHeroes: totals.heroCount,
+      computedSupports: totals.supportCount,
+      computedTreatments: totals.treatmentCount
     });
   }
 
@@ -1683,6 +2016,229 @@
       definitions + body + "</svg>";
   }
 
+  const V3_HEX_DIRECTIONS = deepFreeze([
+    [0, -1],
+    [0.8660254037844386, -0.5],
+    [0.8660254037844386, 0.5],
+    [0, 1],
+    [-0.8660254037844386, 0.5],
+    [-0.8660254037844386, -0.5]
+  ]);
+  const V3_ROTATIONS = deepFreeze({
+    0: [1, 0],
+    10: [0.984807753012208, 0.17364817766693033],
+    20: [0.9396926207859084, 0.3420201433256687],
+    30: [0.8660254037844386, 0.5],
+    40: [0.766044443118978, 0.6427876096865394],
+    50: [0.6427876096865394, 0.766044443118978],
+    60: [0.5, 0.8660254037844386]
+  });
+  const V3_BEACON_DIRECTIONS = deepFreeze([
+    [0.5, -0.8660254037844386], [0.8660254037844386, -0.5], [1, 0],
+    [0.8660254037844386, 0.5], [0.5, 0.8660254037844386], [0, 1],
+    [-0.5, 0.8660254037844386], [-0.8660254037844386, 0.5], [-1, 0],
+    [-0.8660254037844386, -0.5], [-0.5, -0.8660254037844386], [0, -1]
+  ]);
+
+  function unitVectorV3(turn) {
+    const pi = 3.141592653589793;
+    const halfPi = 1.5707963267948966;
+    let angle = Number(turn) * 6.283185307179586;
+    if (angle > pi) angle -= 6.283185307179586;
+    let cosineSign = 1;
+    if (angle > halfPi) {
+      angle = pi - angle;
+      cosineSign = -1;
+    } else if (angle < -halfPi) {
+      angle = -pi - angle;
+      cosineSign = -1;
+    }
+    const squared = angle * angle;
+    const sine = angle * (1 + squared * (-1 / 6 + squared * (1 / 120 + squared * (-1 / 5040 + squared * (1 / 362880 + squared * (-1 / 39916800 + squared / 6227020800))))));
+    const cosine = cosineSign * (1 + squared * (-1 / 2 + squared * (1 / 24 + squared * (-1 / 720 + squared * (1 / 40320 + squared * (-1 / 3628800 + squared / 479001600))))));
+    return [cosine, sine];
+  }
+
+  function hexPointsV3(cx, cy, radius, rotation) {
+    const basis = V3_ROTATIONS[Math.abs(rotation)] || V3_ROTATIONS[0];
+    const sine = rotation < 0 ? -basis[1] : basis[1];
+    return V3_HEX_DIRECTIONS.map(([x, y]) => {
+      const rotatedX = x * basis[0] - y * sine;
+      const rotatedY = x * sine + y * basis[0];
+      return (cx + radius * rotatedX).toFixed(4) + "," + (cy + radius * rotatedY).toFixed(4);
+    }).join(" ");
+  }
+
+  function auraSvgV3(traits, ids) {
+    const tokens = traits.palette.tokens;
+    if (traits.aura.id === "radial-glow") {
+      return '<circle cx="50" cy="50" r="41" fill="none" stroke="' + tokens.ring + '" stroke-width="8" opacity=".10"/>' +
+        '<circle cx="50" cy="50" r="41" fill="none" stroke="' + tokens.ring + '" stroke-width="3.5" opacity=".18"/>';
+    }
+    if (traits.aura.id === "stardust") {
+      const random = categoryRandom(traits.seed, CAMP_VERSION, "stardust-field");
+      let dots = "";
+      for (let index = 0; index < 16; index += 1) {
+        const direction = unitVectorV3(random());
+        const radius = 40 + random() * 8;
+        dots += '<circle cx="' + (50 + radius * direction[0]).toFixed(2) + '" cy="' + (50 + radius * direction[1]).toFixed(2) +
+          '" r="' + (0.3 + random() * 0.35).toFixed(2) + '" fill="' + tokens.highlight + '" opacity="' + (0.45 + random() * 0.45).toFixed(2) + '"/>';
+      }
+      return dots;
+    }
+    if (traits.aura.id === "camp-beacon") {
+      let rays = '<circle cx="50" cy="50" r="49.5" fill="url(#' + ids.beacon + ')"/>';
+      for (let index = 0; index < 12; index += 1) {
+        const direction = V3_BEACON_DIRECTIONS[index];
+        const long = index % 2 === 0;
+        const inner = long ? 45.2 : 46.4;
+        const outer = long ? 49.3 : 48.3;
+        rays += '<line x1="' + (50 + inner * direction[0]).toFixed(2) + '" y1="' + (50 + inner * direction[1]).toFixed(2) +
+          '" x2="' + (50 + outer * direction[0]).toFixed(2) + '" y2="' + (50 + outer * direction[1]).toFixed(2) +
+          '" stroke="' + tokens.beam + '" stroke-width="' + (long ? 0.7 : 0.45) + '" stroke-linecap="round" opacity="' + (long ? 0.6 : 0.32) + '"/>';
+      }
+      return rays;
+    }
+    return "";
+  }
+
+  function ringsSvgV3(traits) {
+    const tokens = traits.palette.tokens;
+    const direction = traits.direction.id === "counter-clockwise" ? -1 : 1;
+    return GEOMETRY.rings.map((ring, index) => {
+      const width = (ring.strokeWidth * traits.ringStyle.widthFactor).toFixed(3);
+      const dash = traits.ringStyle.dash ? ' stroke-dasharray="' + traits.ringStyle.dash + '"' : "";
+      const radii = traits.ringStyle.double ? [ring.radius + 0.42, ring.radius - 0.42] : [ring.radius];
+      return radii.map((radius, lineIndex) => {
+        const opacity = lineIndex === 0 ? [0.55, 0.68, 0.82, 0.95][index] : Number(([0.55, 0.68, 0.82, 0.95][index] * 0.8).toFixed(2));
+        const rotation = 30 + direction * index * 10;
+        return '<polygon data-ring="' + ring.id + '" data-rotation="' + rotation + '" data-radius="' + radius.toFixed(2) +
+          '" points="' + hexPointsV3(50, 50, radius, rotation) + '" fill="none" stroke="' + tokens.ring +
+          '" stroke-width="' + width + '" stroke-linejoin="round" stroke-linecap="round"' + dash + ' opacity="' + opacity + '"/>';
+      }).join("");
+    }).join("");
+  }
+
+  function eyesSvgV3(traits, ids) {
+    if (traits.eyes.id === "original-eyes") return "";
+    const gradient = traits.eyes.id === "festival-eye-wells" ? ids.festivalWell : ids.uvWell;
+    return '<circle cx="34.8890" cy="52.4455" r="4.6" fill="url(#' + gradient + ')"/>' +
+      '<circle cx="65.1840" cy="52.4455" r="4.6" fill="url(#' + gradient + ')"/>';
+  }
+
+  function honeycombSvgV3(traits, ids) {
+    if (traits.marking.id !== "uv-honeycomb") return "";
+    const tokens = traits.palette.tokens;
+    const random = categoryRandom(traits.seed, CAMP_VERSION, "honeycomb-cells");
+    const cellRadius = 2.55;
+    const xStep = cellRadius * 1.7320508075688772;
+    const yStep = cellRadius * 1.5;
+    let cells = "";
+    for (let row = -10; row <= 10; row += 1) {
+      const cy = 50 + row * yStep;
+      if (Math.abs(cy - 50) > 25.5) continue;
+      const offset = row % 2 !== 0 ? xStep / 2 : 0;
+      for (let column = -7; column <= 7; column += 1) {
+        const cx = 50 + column * xStep + offset;
+        if (Math.hypot(cx - 50, cy - 50) > 24.4) continue;
+        const charged = random() < 0.14;
+        cells += '<polygon points="' + hexPointsV3(cx, cy, cellRadius - 0.3, 30) + '" fill="' + (charged ? tokens.beam : "none") +
+          '"' + (charged ? ' fill-opacity=".2"' : "") + ' stroke="' + tokens.beam + '" stroke-width="' + (charged ? ".26" : ".2") +
+          '" stroke-linejoin="round" opacity="' + (charged ? ".75" : ".38") + '"/>';
+      }
+    }
+    return '<g mask="url(#' + ids.combMask + ')">' + cells + "</g>";
+  }
+
+  function browSvgV3(traits) {
+    const tokens = traits.palette.tokens;
+    if (traits.brow.id === "crown-gem") {
+      return '<polygon points="50,24.35 51.25,25.9 50,27.45 48.75,25.9" fill="' + tokens.focal + '"/>';
+    }
+    if (traits.brow.id === "hex-crest") {
+      return '<polygon points="' + hexPointsV3(50, 25.9, 1.95, 30) + '" fill="none" stroke="' + tokens.focal + '" stroke-width=".34" stroke-linejoin="round"/>' +
+        '<polygon points="' + hexPointsV3(50, 25.9, 1.15, 40) + '" fill="none" stroke="' + tokens.highlight + '" stroke-width=".28" stroke-linejoin="round" opacity=".92"/>';
+    }
+    return "";
+  }
+
+  function facialDetailsSvgV3(traits) {
+    if (traits.marking.id !== "moon-freckles" && traits.marking.id !== "hexlace-freckles") return "";
+    const tokens = traits.palette.tokens;
+    const offsets = [[-1.7, -0.5, 0.85], [0.1, 0.9, 0.6], [1.8, -0.1, 0.75]];
+    const centres = [[41.4, 65.4], [58.6, 65.4]];
+    return centres.map(centre => offsets.map(offset => {
+      const cx = centre[0] + offset[0];
+      const cy = centre[1] + offset[1];
+      if (traits.marking.id === "moon-freckles") {
+        return '<circle cx="' + cx + '" cy="' + cy + '" r=".45" fill="' + tokens.highlight + '" opacity=".85"/>';
+      }
+      return '<polygon points="' + hexPointsV3(cx, cy, offset[2], 30) + '" fill="none" stroke="' + tokens.highlight + '" stroke-width=".22" stroke-linejoin="round" opacity=".85"/>';
+    }).join("")).join("");
+  }
+
+  function beakSvgV3(traits) {
+    const tokens = traits.palette.tokens;
+    if (traits.beak.id === "amber-shard") {
+      return '<polygon points="50,55.95 51.15,56.55 51.15,59.45 50,60.3 48.85,59.45 48.85,56.55" fill="#f5bf4f" opacity=".95"/>' +
+        '<line x1="50" y1="55.95" x2="50" y2="60.3" stroke="' + tokens.shadow + '" stroke-width=".18" opacity=".55"/>';
+    }
+    if (traits.beak.id === "hex-facet") {
+      let spokes = "";
+      [[1, 0], [-0.5, 0.8660254037844386], [-0.5, -0.8660254037844386]].forEach(direction => {
+        spokes += '<line x1="50" y1="58.15" x2="' + (50 + 1.9 * direction[0]).toFixed(3) + '" y2="' + (58.15 + 1.9 * direction[1]).toFixed(3) +
+          '" stroke="' + tokens.highlight + '" stroke-width=".2" opacity=".8"/>';
+      });
+      return '<circle cx="50" cy="58.15" r="3.1" fill="' + tokens.beam + '" opacity=".14"/>' +
+        '<polygon points="' + hexPointsV3(50, 58.15, 1.9, 30) + '" fill="#0b0c15" fill-opacity=".55" stroke="' + tokens.focal + '" stroke-width=".3" stroke-linejoin="round"/>' +
+        spokes + '<circle cx="50" cy="58.15" r=".34" fill="' + tokens.beam + '"/>';
+    }
+    return "";
+  }
+
+  function renderResolvedV3(traits) {
+    const signature = ["v3", "palette"].concat(V3_CATEGORY_KEYS)
+      .map(key => key === "v3" ? key : traits.selectionIds[key])
+      .join("|");
+    const idRoot = "hex-owl-v3-" + traits.seed.slice(0, 12) + "-" + hashWords(signature).slice(0, 8);
+    const ids = {
+      background: idRoot + "-background",
+      beacon: idRoot + "-beacon",
+      vortexGlow: idRoot + "-vortex-glow",
+      backdrop: idRoot + "-backdrop",
+      festivalWell: idRoot + "-festival-well",
+      uvWell: idRoot + "-uv-well",
+      combFade: idRoot + "-comb-fade",
+      combMask: idRoot + "-comb-mask"
+    };
+    const tokens = traits.palette.tokens;
+    const definitions = '<defs>' +
+      '<radialGradient id="' + ids.background + '" cx="30%" cy="20%" r="85%"><stop offset="0%" stop-color="' + tokens.shadow + '" stop-opacity=".5"/><stop offset="100%" stop-color="' + tokens.shadow + '" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="' + ids.beacon + '"><stop offset="55%" stop-color="' + tokens.beam + '" stop-opacity="0"/><stop offset="88%" stop-color="' + tokens.beam + '" stop-opacity=".14"/><stop offset="100%" stop-color="' + tokens.beam + '" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="' + ids.vortexGlow + '"><stop offset="0%" stop-color="' + tokens.ring + '" stop-opacity=".13"/><stop offset="100%" stop-color="' + tokens.ring + '" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="' + ids.backdrop + '"><stop offset="0%" stop-color="' + tokens.face + '" stop-opacity=".15"/><stop offset="100%" stop-color="' + tokens.face + '" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="' + ids.festivalWell + '"><stop offset="0%" stop-color="' + tokens.focal + '"/><stop offset="62%" stop-color="' + tokens.focal + '" stop-opacity=".55"/><stop offset="100%" stop-color="' + tokens.shadow + '"/></radialGradient>' +
+      '<radialGradient id="' + ids.uvWell + '"><stop offset="0%" stop-color="' + tokens.beam + '"/><stop offset="62%" stop-color="' + tokens.beam + '" stop-opacity=".55"/><stop offset="100%" stop-color="' + tokens.shadow + '"/></radialGradient>' +
+      '<radialGradient id="' + ids.combFade + '"><stop offset="0%" stop-color="#fff"/><stop offset="58%" stop-color="#fff"/><stop offset="100%" stop-color="#fff" stop-opacity=".12"/></radialGradient>' +
+      '<mask id="' + ids.combMask + '"><circle cx="50" cy="50" r="26" fill="url(#' + ids.combFade + ')"/></mask></defs>';
+    const body =
+      layer("background", '<rect width="100" height="100" fill="#0b0c15"/><rect width="100" height="100" fill="url(#' + ids.background + ')"/>') +
+      layer("aura", auraSvgV3(traits, ids), ' data-aura="' + traits.aura.id + '"') +
+      layer("portal-rings", ringsSvgV3(traits), ' data-direction="' + traits.direction.id + '"') +
+      layer("ring-glow", '<circle cx="50" cy="50" r="30" fill="url(#' + ids.vortexGlow + ')"/>') +
+      layer("owl-backdrop", '<circle cx="50" cy="50" r="27.5" fill="url(#' + ids.backdrop + ')"/>') +
+      layer("base-disc", '<circle cx="50" cy="50" r="26.4" fill="#0b0c15"/>') +
+      layer("eyes", eyesSvgV3(traits, ids)) +
+      layer("owl-base", '<use href="#' + SHARED_MARK_ID + '" fill="' + tokens.face + '" transform="' + OWL_TRANSFORM + '"/>') +
+      layer("honeycomb", honeycombSvgV3(traits, ids)) +
+      layer("brows", browSvgV3(traits)) +
+      layer("facial-details", facialDetailsSvgV3(traits)) +
+      layer("beak", beakSvgV3(traits));
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Camp Hexadecibel Owl" preserveAspectRatio="xMidYMid meet" data-hex-owl-version="3" data-rarity="camp-hexadecibel" data-cost="' + traits.cost + '" data-heroes="' + traits.heroCount + '" data-supports="' + traits.supportCount + '">' +
+      '<title>Camp Hexadecibel Owl, 2026 V3 edition</title><desc>Provenance-only Hex Owl with UV traits and the mandatory Hexadecibel Vortex.</desc>' +
+      definitions + body + "</svg>";
+  }
+
   function checkedVersion(value) {
     const resolved = value === undefined ? VERSION : Number(value);
     if (!SPECS[resolved]) throw new Error("Unsupported Hex Owl version: " + value);
@@ -1691,24 +2247,30 @@
 
   function resolveTraits(seed, options, version) {
     const resolvedVersion = checkedVersion(version === undefined ? options?.version : version);
-    return resolvedVersion === V1_VERSION
-      ? resolveTraitsV1(seed, options, resolvedVersion)
-      : resolveTraitsV2(seed, options, resolvedVersion);
+    if (resolvedVersion === V1_VERSION) return resolveTraitsV1(seed, options, resolvedVersion);
+    if (resolvedVersion === VERSION) return resolveTraitsV2(seed, options, resolvedVersion);
+    return resolveTraitsV3(seed, options, resolvedVersion);
   }
 
   function selectTraits(seed, version) {
     const resolvedVersion = checkedVersion(version);
-    return resolvedVersion === V1_VERSION ? selectTraitsV1(seed) : selectTraitsV2(seed);
+    if (resolvedVersion === V1_VERSION) return selectTraitsV1(seed);
+    if (resolvedVersion === VERSION) return selectTraitsV2(seed);
+    return selectTraitsV3(seed);
   }
 
   function validateTraits(traits, version) {
     const resolvedVersion = checkedVersion(version === undefined ? traits?.version : version);
-    return resolvedVersion === V1_VERSION ? validateTraitsV1(traits) : validateTraitsV2(traits);
+    if (resolvedVersion === V1_VERSION) return validateTraitsV1(traits);
+    if (resolvedVersion === VERSION) return validateTraitsV2(traits);
+    return validateTraitsV3(traits);
   }
 
   function renderResolved(traits) {
     const resolvedVersion = checkedVersion(traits?.version);
-    return resolvedVersion === V1_VERSION ? renderResolvedV1(traits) : renderResolvedV2(traits);
+    if (resolvedVersion === V1_VERSION) return renderResolvedV1(traits);
+    if (resolvedVersion === VERSION) return renderResolvedV2(traits);
+    return renderResolvedV3(traits);
   }
 
   function renderWithTraits(seed, traitsOrOptions, version) {
@@ -1757,7 +2319,9 @@
 
   const API = deepFreeze({
     VERSION,
+    CAMP_VERSION,
     SPEC: V2_SPEC,
+    CAMP_SPEC: V3_SPEC,
     SPECS,
     normalizeSeed,
     randomSeed,

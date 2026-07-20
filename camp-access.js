@@ -471,15 +471,19 @@
     try {
       const draft = traitsFromControls();
       const originalSvg = window.HexOwl.renderSvg(owl.seed, owl.version);
-      const previewSvg = window.HexOwl.renderWithTraits(owl.seed, { overrides: draft, freestyle: true }, owl.version);
+      const resolvedPreview = window.HexOwl.resolveTraits?.(owl.seed, { overrides: draft, freestyle: true }, owl.version);
+      const previewSvg = window.HexOwl.renderWithTraits(owl.seed, resolvedPreview || { overrides: draft, freestyle: true }, owl.version);
       mountPreview(elements.traitOriginal, originalSvg, "camp-original");
       mountPreview(elements.traitPreview, previewSvg, "camp-preview");
       const count = Object.keys(draft).length;
-      const repairs = window.HexOwl.resolveTraits?.(owl.seed, { overrides: draft, freestyle: true }, owl.version)?.repairs || [];
+      const repairs = resolvedPreview?.repairs || [];
+      const issues = resolvedPreview?.issues || [];
       if (elements.traitPreviewStatus) {
-        elements.traitPreviewStatus.textContent = count === 0
-          ? "Showing the original Owl on both sides."
-          : `${count} freestyle ${count === 1 ? "choice" : "choices"} applied with no rarity, weight, or combination limits.${repairs.length ? ` ${repairs.length} unknown or disabled ${repairs.length === 1 ? "choice was" : "choices were"} ignored.` : ""}`;
+        elements.traitPreviewStatus.textContent = owl.version === 3
+          ? `${count === 0 ? "Showing the original Camp Hexadecibel Owl." : `${count} ${count === 1 ? "choice" : "choices"} applied.`} Cost ${resolvedPreview?.cost ?? 0} of ${resolvedPreview?.budget ?? 12}; ${resolvedPreview?.heroCount ?? 0} ${(resolvedPreview?.heroCount ?? 0) === 1 ? "hero" : "heroes"}, ${resolvedPreview?.supportCount ?? 0} supports.${issues.length ? ` ${issues.join(" ")}` : " All tier constraints are satisfied."}`
+          : (count === 0
+            ? "Showing the original Owl on both sides."
+            : `${count} freestyle ${count === 1 ? "choice" : "choices"} applied with no rarity, weight, or combination limits.${repairs.length ? ` ${repairs.length} unknown or disabled ${repairs.length === 1 ? "choice was" : "choices were"} ignored.` : ""}`);
       }
     } catch {
       if (elements.traitPreviewStatus) elements.traitPreviewStatus.textContent = "This preview could not be drawn.";
