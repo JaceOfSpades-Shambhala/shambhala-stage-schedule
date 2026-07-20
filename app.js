@@ -23,11 +23,18 @@
     setList: document.querySelector("#set-list"),
     noResults: document.querySelector("#no-results"),
     search: document.querySelector("#artist-search"),
+    searchResults: document.querySelector("#search-results"),
+    searchResultsStatus: document.querySelector("#search-results-status"),
+    searchNoResults: document.querySelector("#search-no-results"),
     campLocation: document.querySelector("#camp-location-link"),
+    livePanel: document.querySelector(".live-panel"),
     nowPlaying: document.querySelector("#now-playing"),
     nowPlayingLabel: document.querySelector("#now-playing-label"),
     nowPlayingTitle: document.querySelector("#now-playing-title"),
     nowPlayingDetails: document.querySelector("#now-playing-details"),
+    freshness: document.querySelector("#schedule-freshness"),
+    freshnessLabel: document.querySelector("#schedule-freshness-label"),
+    stickyNow: document.querySelector("#sticky-now-button"),
     scheduleVersion: document.querySelector("#schedule-version"),
     updateBanner: document.querySelector("#update-banner")
   };
@@ -56,6 +63,7 @@
   function clearSearch() {
     appState.term = "";
     elements.search.value = "";
+    renderSearch();
   }
 
   function parseSetTime(time) {
@@ -271,7 +279,7 @@
     return matches;
   }
 
-  function appendSet({ time, artist, day, stage, cancelled = false, isCurrent = false, state = "", sub = "", progress = null }) {
+  function appendSet({ time, artist, day, stage, cancelled = false, isCurrent = false, state = "", sub = "", progress = null }, target = elements.setList) {
     const item = document.createElement("li");
     item.className = "set";
     item.classList.toggle("set-cancelled", cancelled);
@@ -279,7 +287,7 @@
     if (state) item.classList.add(`set-${state}`);
     // A timeline node is drawn only in the day/stage view (which passes a
     // state); search results stay as flat rows.
-    if (state) {
+    if (state && target === elements.setList) {
       const node = document.createElement("span");
       node.className = "set-node";
       node.setAttribute("aria-hidden", "true");
@@ -327,7 +335,7 @@
       details.append(meta);
     }
     item.append(timeElement, details);
-    elements.setList.append(item);
+    target.append(item);
   }
 
   function upNextLabel(minutes) {
@@ -350,10 +358,10 @@
     const art = document.createElement("img");
     art.id = "stage-mark";
     art.className = "stage-mark";
-    art.src = `stage-names/${appState.stage}.png?v=68`;
+    art.src = `stage-names/${appState.stage}.png?v=71`;
     art.alt = stageLabel;
-    art.width = 150;
-    art.height = 64;
+    art.width = 170;
+    art.height = 68;
     art.dataset.stage = appState.stage;
     art.addEventListener("error", () => {
       const fallback = document.createElement("h2");
@@ -369,22 +377,11 @@
   function renderSchedule() {
     const stageLabel = titleCaseStage(appState.stage);
     const entries = data[appState.day]?.[appState.stage] || [];
-    const term = appState.term.trim();
-    document.body.className = `stage-${appState.stage}`;
+    STAGES.forEach(stage => document.body.classList.remove(`stage-${stage.id}`));
+    document.body.classList.add(`stage-${appState.stage}`);
     setStageMarkArt(stageLabel);
     elements.scheduleDay.textContent = appState.day.toUpperCase();
     elements.setList.innerHTML = "";
-    if (term) {
-      const matches = getGlobalMatches(term);
-      elements.scheduleDayRule.hidden = true;
-      elements.scheduleNote.hidden = false;
-      elements.scheduleNote.textContent = `${matches.length} matching set${matches.length === 1 ? "" : "s"} across all listed stages and days.`;
-      elements.noResults.textContent = "No matching artist was found across the listed stages and days.";
-      elements.setList.classList.remove("timeline");
-      matches.forEach(appendSet);
-      elements.noResults.hidden = matches.length !== 0;
-      return;
-    }
     const status = getNowPlayingStatus(appState.stage);
     const current = ["active", "final"].includes(status.type) ? status.current : null;
     const next = status.next || null;
@@ -430,6 +427,50 @@
     });
   }
 
+  function renderSearch() {
+    if (!elements.searchResults) return;
+    const term = appState.term.trim();
+    elements.searchResults.innerHTML = "";
+    elements.searchResults.hidden = !term;
+    elements.searchResultsStatus.hidden = !term;
+    elements.searchNoResults.hidden = true;
+    if (!term) {
+      elements.searchResultsStatus.textContent = "";
+      return;
+    }
+    const matches = getGlobalMatches(term);
+    matches.forEach(match => {
+      const status = getNowPlayingStatus(match.stageId);
+      const current = ["active", "final"].includes(status.type) ? status.current : null;
+      const next = status.next || null;
+      const timeline = buildStageTimeline(match.stageId);
+      const index = timeline.findIndex(entry => entry.day === match.day && entry.time === match.time && entry.artist === match.artist);
+      const entry = index === -1 ? null : timeline[index];
+      const nowKey = nowToKey(status.now);
+      const isCurrent = Boolean(!match.cancelled && current && current.day === match.day && current.time === match.time && current.artist === match.artist);
+      const isNext = Boolean(!match.cancelled && next && next.day === match.day && next.time === match.time && next.artist === match.artist);
+      let state = "up";
+      let sub = "";
+      let progress = null;
+      if (match.cancelled) state = "cancelled";
+      else if (isCurrent) {
+        state = "now";
+        const end = scheduledEnd(entry, timeline, index);
+        if (end) {
+          const span = end.key - entry.key;
+          progress = span > 0 ? Math.max(0, Math.min(100, Math.round((nowKey - entry.key) / span * 100))) : null;
+          sub = `ON NOW - ENDS ${end.time}`;
+        } else sub = "ON NOW";
+      } else if (isNext) {
+        state = "next";
+        sub = upNextLabel(next.key - nowKey);
+      } else if (entry && entry.key <= nowKey) state = "done";
+      appendSet({ ...match, isCurrent, state, sub, progress }, elements.searchResults);
+    });
+    elements.searchResultsStatus.textContent = `${matches.length} matching set${matches.length === 1 ? "" : "s"} across every stage and day.`;
+    elements.searchNoResults.hidden = matches.length !== 0;
+  }
+
   function setNowPlayingDetails(parts) {
     elements.nowPlayingDetails.textContent = "";
     parts.forEach(part => {
@@ -449,13 +490,15 @@
     if (status.type === "active") {
       elements.nowPlayingLabel.textContent = "ON NOW";
       elements.nowPlayingTitle.textContent = status.current.artist;
-      setNowPlayingDetails([`Started at ${status.current.time} - Up next: `, { tag: "strong", className: "now-playing-next", text: status.next.artist }, ` at ${status.next.time}`]);
+      const remaining = Math.max(0, status.end.key - nowToKey(status.now));
+      setNowPlayingDetails([`${titleCaseStage(appState.stage)} · Ends ${status.end.time} · ${remaining} min left`, " · Up next: ", { tag: "strong", className: "now-playing-next", text: status.next.artist }, ` at ${status.next.time}`]);
       return;
     }
     if (status.type === "final") {
       elements.nowPlayingLabel.textContent = "FINAL LISTED SET";
       elements.nowPlayingTitle.textContent = status.current.artist;
-      setNowPlayingDetails([`Started at ${status.current.time} - ends ${status.end.time} (inferred from the printed schedule).`]);
+      const remaining = Math.max(0, status.end.key - nowToKey(status.now));
+      setNowPlayingDetails([`${titleCaseStage(appState.stage)} · Ends ${status.end.time} · ${remaining} min left`]);
       return;
     }
     if (status.type === "cancelled") {
@@ -488,6 +531,7 @@
     }
     lastObservedFestivalDay = currentDay;
     renderSchedule();
+    renderSearch();
     renderNowPlaying();
   }
 
@@ -505,9 +549,70 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-metadata.js?v=68";
+  const SCHEDULE_ASSET = "schedule-metadata.js?v=71";
+  const FRESHNESS_ASSET = "schedule-freshness.json";
+  const FRESHNESS_KEY = "shambhala-schedule-refreshed-at";
+  const FRESH_THRESHOLD_MS = 15 * 60 * 1000;
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
   let updateAvailable = false;
+  let lastScheduleRefresh = 0;
+
+  function readStoredFreshness() {
+    try {
+      const value = Number(localStorage.getItem(FRESHNESS_KEY));
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    } catch { return 0; }
+  }
+
+  function rememberFreshness(value) {
+    if (!Number.isFinite(value) || value <= lastScheduleRefresh) return;
+    lastScheduleRefresh = value;
+    try { localStorage.setItem(FRESHNESS_KEY, String(value)); } catch {}
+    renderFreshness();
+  }
+
+  function relativeFreshness(ageMs) {
+    const minutes = Math.max(1, Math.floor(ageMs / 60000));
+    if (minutes < 60) return `UPDATED ${minutes} MIN AGO`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `UPDATED ${hours} HR AGO`;
+    const days = Math.floor(hours / 24);
+    return `UPDATED ${days} DAY${days === 1 ? "" : "S"} AGO`;
+  }
+
+  function renderFreshness() {
+    if (!elements.freshness || !elements.freshnessLabel) return;
+    if (navigator.onLine === false) {
+      elements.freshness.dataset.state = "offline";
+      elements.freshnessLabel.textContent = "OFFLINE";
+      return;
+    }
+    if (!lastScheduleRefresh) {
+      elements.freshness.dataset.state = "checking";
+      elements.freshnessLabel.textContent = "CHECKING";
+      return;
+    }
+    const age = Math.max(0, Date.now() - lastScheduleRefresh);
+    elements.freshness.dataset.state = age < FRESH_THRESHOLD_MS ? "fresh" : "stale";
+    elements.freshnessLabel.textContent = age < FRESH_THRESHOLD_MS ? "FRESH" : relativeFreshness(age);
+  }
+
+  async function hydrateCachedFreshness() {
+    rememberFreshness(readStoredFreshness());
+    if (!("caches" in window)) return renderFreshness();
+    try {
+      const marker = await caches.match(FRESHNESS_ASSET);
+      if (marker?.ok) {
+        const value = Number((await marker.json())?.updatedAt);
+        if (Number.isFinite(value)) rememberFreshness(value);
+      } else {
+        const cachedSchedule = await caches.match(SCHEDULE_ASSET);
+        const cachedDate = Date.parse(cachedSchedule?.headers.get("date") || "");
+        if (Number.isFinite(cachedDate)) rememberFreshness(cachedDate);
+      }
+    } catch {}
+    renderFreshness();
+  }
 
   function renderScheduleVersion() {
     if (!elements.scheduleVersion) return;
@@ -546,6 +651,7 @@
       if (currentVersion) {
         const response = await fetch(SCHEDULE_ASSET, { cache: "no-cache" });
         if (response.ok) {
+          rememberFreshness(Date.now());
           const latest = (await response.text()).match(/SCHEDULE_VERSION\s*=\s*["']([^"']+)["']/)?.[1];
           if (latest && latest !== currentVersion) return showUpdateBanner();
         }
@@ -561,26 +667,42 @@
     } catch {}
   }
 
-  elements.search.addEventListener("input", event => { appState.term = event.target.value || ""; renderSchedule(); });
-  elements.search.addEventListener("search", event => { appState.term = event.target.value || ""; renderSchedule(); });
+  elements.search.addEventListener("input", event => { appState.term = event.target.value || ""; renderSearch(); });
+  elements.search.addEventListener("search", event => { appState.term = event.target.value || ""; renderSearch(); });
   window.addEventListener("hashchange", () => {
     const stage = STAGES.find(item => item.id === safeDecodeHash().toLowerCase());
     if (stage && stage.id !== appState.stage) switchStage(stage.id);
   });
   document.addEventListener("visibilitychange", () => {
+    document.body.classList.toggle("is-page-hidden", document.hidden);
     if (document.hidden) return;
     renderLiveStatus();
     checkForScheduleUpdate();
   });
   elements.updateBanner?.addEventListener("click", () => window.location.reload());
+  window.addEventListener("online", () => { renderFreshness(); checkForScheduleUpdate(); });
+  window.addEventListener("offline", renderFreshness);
+  elements.stickyNow?.addEventListener("click", () => {
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    elements.nowPlaying?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  });
 
   getInitialState();
   updateUrl();
   lastObservedFestivalDay = getCurrentFestivalDay();
   navigator.storage?.persist?.().catch(() => {});
   updateCampLocationLink();
+  document.querySelector("#hexlaces")?.after(document.querySelector("#my-hexlace"));
   renderScheduleVersion();
+  hydrateCachedFreshness();
   render();
+  if (elements.nowPlaying && elements.stickyNow && "IntersectionObserver" in window) {
+    const observer = new IntersectionObserver(entries => {
+      const entry = entries[0];
+      elements.stickyNow.hidden = entry.isIntersecting || entry.boundingClientRect.top > 0;
+    }, { threshold: 0 });
+    observer.observe(elements.nowPlaying);
+  }
   // Warm the decoded-image cache for the other stage marks so the first tap on
   // each stage pill after a cold start swaps the header art without a blank
   // frame. The files are already SW-precached; this only pays the decode cost.
@@ -588,10 +710,11 @@
     STAGES.forEach(stage => {
       if (stage.id === appState.stage) return;
       const img = new Image();
-      img.src = `stage-names/${stage.id}.png?v=68`;
+      img.src = `stage-names/${stage.id}.png?v=71`;
     });
   }, 1500);
   window.setInterval(renderLiveStatus, 30000);
+  window.setInterval(renderFreshness, 60000);
   window.setTimeout(checkForScheduleUpdate, 8000);
   window.setInterval(checkForScheduleUpdate, UPDATE_CHECK_INTERVAL_MS);
   async function registerPeriodicSync() {
@@ -607,6 +730,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=68").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=71").then(registerPeriodicSync).catch(() => {});
   });
 })();

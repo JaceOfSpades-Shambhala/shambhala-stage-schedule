@@ -95,22 +95,22 @@ test("a successful network response remains preferred", async () => {
 });
 
 test("a failed optional precache asset does not block the offline shell install", async () => {
-  const added = await runInstall({ rejectedOptionalAsset: "./stage-names/amp.png?v=68" });
+  const added = await runInstall({ rejectedOptionalAsset: "./stage-names/amp.png?v=71" });
   assert.ok(added.includes("./index.html"));
   assert.ok(added.includes("./hex-owl-playground.html"));
-  assert.ok(added.includes("./camp-access.js?v=68"));
-  assert.ok(added.includes("./hexlaces.js?v=68"));
-  assert.ok(added.includes("./hexlace-compare.js?v=68"));
-  assert.ok(added.includes("./hex-owl.js?v=68"));
-  assert.ok(added.includes("./hex-owl-base.svg?v=68"));
-  assert.ok(added.includes("./hexadex.js?v=68"));
-  assert.equal(added.includes("./stage-names/amp.png?v=68"), false);
-  assert.ok(added.includes("./stage-names/fractal-forest.png?v=68"));
+  assert.ok(added.includes("./camp-access.js?v=71"));
+  assert.ok(added.includes("./hexlaces.js?v=71"));
+  assert.ok(added.includes("./hexlace-compare.js?v=71"));
+  assert.ok(added.includes("./hex-owl.js?v=71"));
+  assert.ok(added.includes("./hex-owl-base.svg?v=71"));
+  assert.ok(added.includes("./hexadex.js?v=71"));
+  assert.equal(added.includes("./stage-names/amp.png?v=71"), false);
+  assert.ok(added.includes("./stage-names/fractal-forest.png?v=71"));
 });
 
 test("background refresh is schedule-only and cache cleanup is app-scoped", async () => {
   const source = await readFile(new URL("../sw.js", import.meta.url), "utf8");
-  assert.match(source, /REFRESH_ASSETS = \["\.\/schedule-data\.js\?v=68", "\.\/schedule-metadata\.js\?v=68"\]/);
+  assert.match(source, /REFRESH_ASSETS = \["\.\/schedule-data\.js\?v=71", "\.\/schedule-metadata\.js\?v=71"\]/);
   assert.match(source, /key\.startsWith\(CACHE_PREFIX\)/);
   assert.match(source, /OPTIONAL_CACHE_TIMEOUT_MS/);
   assert.match(source, /request\.mode === "navigate"/);

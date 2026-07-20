@@ -609,25 +609,28 @@ test("retired sticker-like, pinpoint, face-glow, and accessory traits do not ret
   assert.doesNotMatch(legacyCatalogue, /pattern.*(?:halo|pulse|moon)/);
 });
 
-test("the versioned public API keeps V1/V2 frozen, V2 ordinary, and V3 provenance-only", async () => {
+test("the versioned public API keeps legacy grammars frozen behind one current tiered generator", async () => {
   const owl = await renderer();
   for (const name of ["normalizeSeed", "randomSeed", "selectTraits", "traitNames", "renderSvg", "mountBase", "hydrate",
     "spec", "catalogue", "resolveTraits", "validateTraits", "renderWithTraits"]) {
     assert.equal(typeof owl[name], "function", `HexOwl.${name} must remain public.`);
   }
-  assert.equal(owl.VERSION, 2);
-  assert.deepEqual(Object.keys(owl.SPECS), ["1", "2", "3"]);
+  assert.equal(owl.VERSION, 4);
+  assert.deepEqual(Object.keys(owl.SPECS), ["1", "2", "3", "4"]);
   assert.equal(owl.SPECS[1].id, "hex-owl-v1");
   assert.equal(owl.SPECS[1].version, 1);
   assert.equal(owl.SPECS[1].status, "frozen");
   assert.equal(owl.SPECS[2].id, "hex-owl-v2");
   assert.equal(owl.SPECS[2].version, 2);
-  assert.equal(owl.SPECS[2].status, "current");
+  assert.equal(owl.SPECS[2].status, "frozen");
   assert.equal(owl.SPECS[3].id, "camp-hexadecibel-v3");
   assert.equal(owl.SPECS[3].version, 3);
   assert.equal(owl.SPECS[3].status, "provenance-only");
-  assert.equal(owl.SPEC, owl.SPECS[2]);
-  assert.equal(owl.spec(), owl.SPECS[2]);
+  assert.equal(owl.SPECS[4].id, "hex-owl-2026");
+  assert.equal(owl.SPECS[4].status, "current");
+  assert.equal(owl.SPECS[4].specialEligibility.campTier, "camp-hexadecibel");
+  assert.equal(owl.SPEC, owl.SPECS[4]);
+  assert.equal(owl.spec(), owl.SPECS[4]);
   assert.equal(owl.spec(1), owl.SPECS[1]);
   assert.equal(owl.spec(3), owl.SPECS[3]);
   for (const version of [1, 2, 3]) {
@@ -640,13 +643,19 @@ test("the versioned public API keeps V1/V2 frozen, V2 ordinary, and V3 provenanc
     if (version !== 3) expectedCategories.push("accessory");
     assert.deepEqual(Object.keys(spec.catalogue.categories).sort(), expectedCategories.sort());
   }
-  assert.equal(owl.catalogue(), owl.SPECS[2].catalogue, "The unversioned catalogue follows current V2.");
+  assert.equal(owl.catalogue(), owl.SPECS[4].catalogue, "The ordinary catalogue stays public-only.");
+  assert.deepEqual(plain(owl.catalogue().rarities.map(rarity => rarity.id)), ["common", "rare", "legendary"]);
+  const campCatalogue = owl.catalogue({ version: 4, campAccess: true });
+  assert.deepEqual(plain(campCatalogue.rarities.map(rarity => rarity.id)), ["common", "rare", "legendary", "camp-hexadecibel"]);
+  assert.ok(categoryOptions(campCatalogue, "palette").some(item => item.id === "uv-green"));
+  assert.equal(categoryOptions(owl.catalogue(), "palette").some(item => item.id === "uv-green"), false);
   assertDeepFrozen(owl, "HexOwl");
   assertDeepFrozen(owl.SPEC, "HexOwl.SPEC");
   assertDeepFrozen(owl.SPECS, "HexOwl.SPECS");
   assertDeepFrozen(owl.catalogue(1), "HexOwl.catalogue(1)");
   assertDeepFrozen(owl.catalogue(2), "HexOwl.catalogue(2)");
   assertDeepFrozen(owl.catalogue(3), "HexOwl.catalogue(3)");
+  assertDeepFrozen(campCatalogue, "HexOwl privileged V4 catalogue");
 
   const seed = "00112233445566778899aabbccddeeff";
   for (const version of [1, 2, 3]) {
@@ -658,12 +667,23 @@ test("the versioned public API keeps V1/V2 frozen, V2 ordinary, and V3 provenanc
     assert.equal(owl.renderSvg(seed, version), owl.renderWithTraits(seed, resolved, version));
     assert.deepEqual(plain(owl.traitNames(seed, version)), plain(owl.traitNames(seed, version)));
   }
-  assert.deepEqual(plain(owl.selectTraits(seed)), plain(owl.selectTraits(seed, 2)));
-  assert.equal(owl.renderSvg(seed), owl.renderSvg(seed, 2));
+  const currentPublic = owl.selectTraits(seed);
+  const currentCamp = owl.selectTraits(seed, { version: 4, tier: "camp-hexadecibel" });
+  assert.equal(currentPublic.version, 4);
+  assert.equal(currentPublic.tier, "public");
+  assert.equal(currentCamp.version, 4);
+  assert.equal(currentCamp.tier, "camp-hexadecibel");
+  assert.deepEqual(plain(currentPublic.selectionIds), plain(owl.selectTraits(seed, 2).selectionIds));
+  assert.deepEqual(plain(currentCamp.selectionIds), plain(owl.selectTraits(seed, 3).selectionIds));
+  assert.equal(owl.renderSvg(seed), owl.renderSvg(seed, 2).replace('data-hex-owl-version="2"', 'data-hex-owl-version="4"'));
+  assert.equal(
+    owl.renderSvg(seed, { version: 4, tier: "camp-hexadecibel" }),
+    owl.renderSvg(seed, 3).replace('data-hex-owl-version="3"', 'data-hex-owl-version="4"')
+  );
   assert.notEqual(owl.renderSvg(seed, 1), owl.renderSvg(seed, 2));
-  assert.throws(() => owl.spec(4), /Unsupported Hex Owl version/i);
-  assert.throws(() => owl.resolveTraits(seed, {}, 4), /Unsupported Hex Owl version/i);
-  assert.throws(() => owl.renderWithTraits(seed, { version: 4 }, 4), /Unsupported Hex Owl version/i);
+  assert.throws(() => owl.spec(5), /Unsupported Hex Owl version/i);
+  assert.throws(() => owl.resolveTraits(seed, {}, 5), /Unsupported Hex Owl version/i);
+  assert.throws(() => owl.renderWithTraits(seed, { version: 5 }, 5), /Unsupported Hex Owl version/i);
 });
 
 test("fixed seeds are byte-stable across fresh renderer contexts", async () => {
@@ -1765,7 +1785,7 @@ test("mountBase installs the exact shared path once, mounts all brow subpaths, a
 test("V3 exposes the exact provenance-only Camp Hexadecibel grammar", async () => {
   const owl = await renderer();
   const spec = owl.spec(3);
-  assert.equal(owl.VERSION, 2, "Ordinary unversioned generation must remain on frozen V2.");
+  assert.equal(owl.VERSION, 4, "Ordinary and camp Owls must share one current identity version.");
   assert.equal(owl.CAMP_VERSION, 3);
   assert.equal(spec.id, "camp-hexadecibel-v3");
   assert.equal(spec.specialEligibility.campOnlyOrdinaryWeight, 0);
@@ -1831,7 +1851,9 @@ test("V3 seed streams enforce the camp hero floor, second-hero chance, support c
   assert.deepEqual([...palettes].sort(), ["uv-blue", "uv-green", "uv-magenta", "uv-orange", "uv-violet", "uv-yellow"]);
   assert.ok(secondHeroes / 5000 > 0.09 && secondHeroes / 5000 < 0.15, `Second-hero rate was ${secondHeroes / 5000}.`);
   assert.ok(honeycomb / 5000 > 0.24 && honeycomb / 5000 < 0.34, `Honeycomb rate was ${honeycomb / 5000}.`);
-  assert.equal(owl.selectTraits("ordinary-default-stays-v2").version, 2);
+  const ordinary = owl.selectTraits("ordinary-default-stays-public");
+  assert.equal(ordinary.version, 4);
+  assert.equal(ordinary.tier, "public");
 });
 
 test("every V3 camp trait can be forced and renders with exact Vortex and overlay geometry", async () => {

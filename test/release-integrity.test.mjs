@@ -13,26 +13,26 @@ test("release assets and service-worker precache use one version and include bot
   ]);
   const releaseSources = [html, serviceWorker, css, manifest, app, hexOwl, playground];
   const referencedVersions = new Set(releaseSources.flatMap(source => [...source.matchAll(/\?v=(\d+)/g)].map(match => match[1])));
-  assert.deepEqual([...referencedVersions], ["68"], "Every release asset query must use exactly v68.");
-  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "68", "The Pages release marker must be v68.");
-  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "68", "The service-worker cache must be v68.");
-  assert.match(readme, /authoritative deployed version[^\n]*\bv68\b/i);
-  assert.match(handoff, /current release \*\*v68\*\*/i);
-  assert.match(handoff, /release bumps ONE version number everywhere \(v68 at the time of writing\)/);
-  assert.match(serviceWorker, /InterVariable\.woff2\?v=68/);
-  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=68/);
-  assert.match(css, /InterVariable\.woff2\?v=68/);
-  assert.match(css, /InterVariable-Italic\.woff2\?v=68/);
-  assert.match(serviceWorker, /schedule-metadata\.js\?v=68/);
-  assert.match(serviceWorker, /undo\.js\?v=68/);
-  assert.match(serviceWorker, /camp-access\.js\?v=68/);
-  assert.match(serviceWorker, /hexlace-compare\.js\?v=68/);
-  assert.match(serviceWorker, /hex-owl\.js\?v=68/);
-  assert.match(serviceWorker, /hex-owl-base\.svg\?v=68/);
+  assert.deepEqual([...referencedVersions], ["71"], "Every release asset query must use exactly v71.");
+  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "71", "The Pages release marker must be v71.");
+  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "71", "The service-worker cache must be v71.");
+  assert.match(readme, /authoritative deployed version[^\n]*\bv71\b/i);
+  assert.match(handoff, /current release \*\*v71\*\*/i);
+  assert.match(handoff, /release bumps ONE version number everywhere \(v71 at the time of writing\)/);
+  assert.match(serviceWorker, /InterVariable\.woff2\?v=71/);
+  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=71/);
+  assert.match(css, /InterVariable\.woff2\?v=71/);
+  assert.match(css, /InterVariable-Italic\.woff2\?v=71/);
+  assert.match(serviceWorker, /schedule-metadata\.js\?v=71/);
+  assert.match(serviceWorker, /undo\.js\?v=71/);
+  assert.match(serviceWorker, /camp-access\.js\?v=71/);
+  assert.match(serviceWorker, /hexlace-compare\.js\?v=71/);
+  assert.match(serviceWorker, /hex-owl\.js\?v=71/);
+  assert.match(serviceWorker, /hex-owl-base\.svg\?v=71/);
   assert.match(serviceWorker, /hex-owl-playground\.html/);
-  assert.match(serviceWorker, /hexadex\.js\?v=68/);
-  assert.match(hexOwl, /hex-owl-base\.svg\?v=68/);
-  assert.match(playground, /hex-owl\.js\?v=68/);
+  assert.match(serviceWorker, /hexadex\.js\?v=71/);
+  assert.match(hexOwl, /hex-owl-base\.svg\?v=71/);
+  assert.match(playground, /hex-owl\.js\?v=71/);
 });
 
 test("schedule and overlap policy stay explicit", async () => {
@@ -43,7 +43,6 @@ test("schedule and overlap policy stay explicit", async () => {
   assert.match(metadata, /SCHEDULE_FINAL_END_TIMES/);
   assert.match(metadata, /https:\/\/www\.shambhalamusicfestival\.com\/lineup/);
   assert.match(planner, /MIN_OVERLAP_MINUTES\s*=\s*15/);
-  assert.match(planner, /LIVE_GROUP_WINDOW_MINUTES\s*=\s*20/);
   assert.match(planner, /overlapMinutes\(a, b\)\s*>=\s*MIN_OVERLAP_MINUTES/);
   assert.match(app, /timeline\.push\(\{ \.\.\.entry, cancelled: isCancelledSet\(entry\) \}\)/);
   assert.match(metadata, /SCHEDULE_CANCELLATIONS/);
@@ -54,8 +53,17 @@ test("schedule and overlap policy stay explicit", async () => {
   assert.match(planner, /isCancelledSet\(item\) && !hasSet\(item\)/);
   assert.match(hexlaces, /ping\.type === "set" && isCancelledSet\(ping\)/);
   assert.match(styles, /\.cancelled-badge/);
-  assert.match(planner, /window\.confirm\(`Are you sure you want to clear all/);
   assert.match(planner, /window\.showUndo/);
+  assert.match(planner, /if \(list === elements\.scheduleList\) row\.append\(button\)/);
+  assert.match(styles, /#set-list\.timeline \.set-node \{ display: block; \}/);
+  assert.doesNotMatch(styles, /(?<!search-results )\.set-next \{[^}]*box-shadow:/);
+  assert.match(styles, /\.search-results \.set-next \{/);
+  assert.match(styles, /\.overlap-badge \{[^}]*pointer-events: auto;/);
+  assert.match(planner, /badge\.addEventListener\("click", event => \{[\s\S]*?toggleOverlap\(itemKey\)/);
+  assert.match(planner, /Playing at \$\{stageName\} - Ends at \$\{formatTimelineTime\(current\.end\)\}/);
+  assert.match(planner, /Up next \$\{formatStartsIn\(current\.match\.key - nowKey\)/);
+  assert.match(styles, /\.planner-set-now \{[^}]*var\(--accent\)/);
+  assert.doesNotMatch(planner, /renderUpNext|LIVE_GROUP_WINDOW_MINUTES/);
 });
 
 test("deployment checks verify the exact Pages marker and deployed Worker revision", async () => {
@@ -71,11 +79,17 @@ test("deployment checks verify the exact Pages marker and deployed Worker revisi
 });
 
 test("schedule filters use ordinary toggle buttons rather than an incomplete tabs pattern", async () => {
-  const [html, app, install] = await Promise.all([read("index.html"), read("app.js"), read("install.js")]);
+  const [html, app, install, styles] = await Promise.all([read("index.html"), read("app.js"), read("install.js"), read("styles.css")]);
   assert.doesNotMatch(html, /role="tablist"|role="tabpanel"/);
   assert.doesNotMatch(app, /setAttribute\("role", "tab"\)/);
   assert.match(app, /aria-pressed/);
+  assert.ok(html.indexOf('id="day-tabs"') < html.indexOf('id="stage-tabs"'), "Day controls must precede stage controls.");
+  assert.doesNotMatch(html, /<p class="control-label">(?:Stage|Day)<\/p>/);
+  assert.ok(html.indexOf('id="stage-tabs"') < html.indexOf('id="stage-mark-header"'), "Stage art must sit between the filters and schedule.");
+  assert.match(app, /observer\.observe\(elements\.nowPlaying\)/);
+  assert.doesNotMatch(styles, /\.now-playing \{[^}]*position: sticky;/);
   assert.match(install, /platform === "MacIntel".*maxTouchPoints > 1/);
+  assert.match(install, /beforeinstallprompt[\s\S]*button\.hidden = false/);
   assert.match(install, /Connect to the internet once before installing/);
   assert.match(install, /isFirefoxAndroid/);
   assert.match(install, /open the browser menu, tap Install/);
@@ -110,19 +124,16 @@ test("Hexlace coordination and closed-friend rendering safeguards stay enabled",
   assert.match(html, /id="hexlace-compare-next"/);
   assert.match(hexlaces, /window\.HexlaceCompare\.sharedSets/);
   assert.match(hexlaces, /compareDayIndex = Math\.max\(0, days\.indexOf\(selectedComparisonDay\(\)\)\)/);
-  assert.match(html, /id="hexlace-swap-open"[^>]*hidden/);
   assert.match(html, /id="hexlace-admin-section"[^>]*hidden/);
-  assert.match(hexlaces, /elements\.swapOpen\.hidden = navigator\.onLine === false \|\| !physical/);
-  assert.match(coordinator, /trade\.targetReadId !== body\.requesterReadId/);
-  assert.match(coordinator, /record\.trade\.confirmed/);
+  assert.doesNotMatch(html, /id="hexlace-swap-open"|id="hexlace-swap-dialog"|Trade Hexlaces/);
+  assert.doesNotMatch(hexlaces, /loadTradeMode\(\) && tapToken/);
   assert.match(worker, /parts\[2\] === "release"/);
   assert.match(worker, /parts\[0\] === "profiles".*parts\[2\] === "hexadex"/);
   assert.match(html, /id="hexadex-open"/);
-  assert.match(html, /id="hex-owl-card"/);
+  assert.doesNotMatch(html, /id="hex-owl-card"/);
   assert.match(hexlaces, /params\.get\("tap"\)/);
   assert.match(hexlaces, /function shareUrl\(readId\)[\s\S]*\?f=\$\{readId\}/);
   assert.match(hexlaces, /writeTag\(tapUrl\(identity\.readId, identity\.tapToken\)\)/);
-  assert.match(hexlaces, /body: JSON\.stringify\(\{ targetReadId, targetTapToken \}\)/);
   assert.match(hexlaces, /if \(group\.open\) populateSetRows\(\)/);
 });
 
@@ -131,9 +142,11 @@ test("ordinary schedule and footer copy stay concise", async () => {
   const footer = html.match(/<footer>[\s\S]*?<\/footer>/)?.[0] || "";
   assert.doesNotMatch(html, /Unofficial guide|Made as a fan project|coarse location ping/);
   assert.doesNotMatch(app, /Unofficial guide/);
-  assert.match(html, /class="offline-ready">Offline ready after first online load</);
+  assert.doesNotMatch(html, /class="offline-ready"/);
+  assert.match(html, /id="schedule-freshness"/);
+  assert.match(app, /FRESH_THRESHOLD_MS = 15 \* 60 \* 1000/);
   assert.match(html, /A fan project for Shambhala 2026/);
-  assert.match(html, /<section class="planner-ping"[\s\S]*?<\/section>\s*<p class="planner-ping-footer">Friends and setlist sharing use your display name, saved sets, and optional pings\. <strong>It does not collect precise location\.<\/strong><\/p>/);
+  assert.match(html, /class="hexlace-privacy">Sharing publishes your chosen name, saved sets, and optional ping\. It does not collect precise location\.<\/p>/);
   assert.doesNotMatch(html, /planner-ping-privacy/);
   assert.doesNotMatch(footer, /setlist sharing|precise location/);
   assert.match(app, /elements\.scheduleNote\.hidden = true/);
@@ -143,11 +156,18 @@ test("Hex Owl and Hexadex discovery UI stays wired to the chosen handoff", async
   const [html, css, hexadex, hexlaces] = await Promise.all([
     read("index.html"), read("styles.css"), read("hexadex.js"), read("hexlaces.js")
   ]);
-  assert.match(html, /<button id="hex-owl-card"[^>]*type="button"/);
-  assert.match(html, /id="hex-owl-rarity"/);
+  assert.doesNotMatch(html, /id="hex-owl-card"|id="hex-owl-rarity"/);
   assert.match(html, /id="hexadex-avatar"/);
   assert.match(html, /<span class="control-label">Friends<\/span>[\s\S]*id="hexlace-count"[^>]*>0 Friends<\/span>/);
-  assert.match(html, /<summary><strong>Share with friends<\/strong><\/summary>[\s\S]*class="hexlace-section-subheading">QR, link, display name/);
+  assert.match(html, /id="planner-share-dialog"[\s\S]*id="hexlace-qr"[\s\S]*id="hexlace-share-link"/);
+  assert.match(html, /id="planner-sharing-identity"[\s\S]*id="hexlace-rename"/);
+  assert.match(html, /id="hexlace-enable"[^>]*>Set a username<\/button>/);
+  assert.match(html, /class="hexlace-name-edit-label">Username<\/span>/);
+  assert.doesNotMatch(html, /Sharing as|Set my sharing name/);
+  assert.match(html, /<details id="planner"[^>]*planner-collapsible[\s\S]*<summary class="planner-heading hexlace-panel-summary">/);
+  assert.ok(html.indexOf('</summary>') < html.indexOf('id="hexlace-enable"'));
+  assert.doesNotMatch(html, /id="planner-clear"|Clear all|id="planner-up-next"|planner-live-now|planner-live-next/);
+  assert.match(html, /class="hexlace-summary-title-row">[\s\S]*My Hexlace[\s\S]*id="hexlace-state"/);
   assert.doesNotMatch(html, /<summary><span><strong>(?:Share with friends|Connect the installed app|Manage Hexlace|Admin options)/);
   assert.match(html, /<h2 id="hexadex-dialog-title">Hexadex<\/h2>/);
   assert.match(html, /Gotta scan em all/);
@@ -158,5 +178,5 @@ test("Hex Owl and Hexadex discovery UI stays wired to the chosen handoff", async
   assert.match(hexadex, /elements\.grid\.append\(ghostSlot\(\), ghostSlot\(true\)\)/);
   assert.match(hexadex, /Travels with your physical Hexlace, always\./);
   assert.match(css, /\.hexadex-detail-art \{[^}]*width: min\(15rem, 70vw\)[^}]*border-radius: 1rem/);
-  assert.match(css, /body \{[^}]*background: radial-gradient\(circle at 30% -8%, color-mix\(in srgb, var\(--accent\) 15%, #14152a\) 0, #111321 46%, #090a12 100%\)/);
+  assert.match(css, /body \{[\s\S]*background: radial-gradient\(circle at 50% -12%, color-mix\(in srgb, var\(--accent\) 13%, #17192b\) 0, #111321 38%, #090a12 100%\)/);
 });

@@ -302,6 +302,10 @@
     return window.Hexadex?.loadProfile?.() || null;
   }
 
+  function isCampOwl(owl) {
+    return owl?.tier === "camp-hexadecibel" || owl?.version === 3;
+  }
+
   function optionList(items) {
     return (Array.isArray(items) ? items : [])
       .filter(item => item && item.enabled !== false && (item.id != null || item.value != null))
@@ -342,8 +346,8 @@
     const owl = profile?.owl;
     if (!owl?.seed || !Number.isSafeInteger(owl.version) || !window.HexOwl?.catalogue || !window.HexOwl?.selectTraits) return [];
     try {
-      const catalogue = window.HexOwl.catalogue(owl.version);
-      const original = window.HexOwl.selectTraits(owl.seed, owl.version);
+      const catalogue = window.HexOwl.catalogue({ ...owl, campAccess: true });
+      const original = window.HexOwl.selectTraits(owl.seed, owl);
       const next = [];
       const rarityOptions = optionList(catalogue?.rarities);
       if (rarityOptions.length > 1) {
@@ -407,6 +411,7 @@
       profile?.profileId || "",
       profile?.owl?.seed || "",
       profile?.owl?.version || 0,
+      profile?.owl?.tier || "",
       activeTraits
     ]);
     if (!force && signature === editorSignature && elements.traitControls.childElementCount > 0) return;
@@ -470,16 +475,16 @@
     if (!owl?.seed || !window.HexOwl?.renderSvg || !window.HexOwl?.renderWithTraits) return;
     try {
       const draft = traitsFromControls();
-      const originalSvg = window.HexOwl.renderSvg(owl.seed, owl.version);
-      const resolvedPreview = window.HexOwl.resolveTraits?.(owl.seed, { overrides: draft, freestyle: true }, owl.version);
-      const previewSvg = window.HexOwl.renderWithTraits(owl.seed, resolvedPreview || { overrides: draft, freestyle: true }, owl.version);
+      const originalSvg = window.HexOwl.renderSvg(owl.seed, owl);
+      const resolvedPreview = window.HexOwl.resolveTraits?.(owl.seed, { overrides: draft, freestyle: true }, owl);
+      const previewSvg = window.HexOwl.renderWithTraits(owl.seed, resolvedPreview || { overrides: draft, freestyle: true }, owl);
       mountPreview(elements.traitOriginal, originalSvg, "camp-original");
       mountPreview(elements.traitPreview, previewSvg, "camp-preview");
       const count = Object.keys(draft).length;
       const repairs = resolvedPreview?.repairs || [];
       const issues = resolvedPreview?.issues || [];
       if (elements.traitPreviewStatus) {
-        elements.traitPreviewStatus.textContent = owl.version === 3
+        elements.traitPreviewStatus.textContent = isCampOwl(resolvedPreview)
           ? `${count === 0 ? "Showing the original Camp Hexadecibel Owl." : `${count} ${count === 1 ? "choice" : "choices"} applied.`} Cost ${resolvedPreview?.cost ?? 0} of ${resolvedPreview?.budget ?? 12}; ${resolvedPreview?.heroCount ?? 0} ${(resolvedPreview?.heroCount ?? 0) === 1 ? "hero" : "heroes"}, ${resolvedPreview?.supportCount ?? 0} supports.${issues.length ? ` ${issues.join(" ")}` : " All tier constraints are satisfied."}`
           : (count === 0
             ? "Showing the original Owl on both sides."
@@ -515,6 +520,7 @@
         headers: { "X-Profile-Key": profile.profileKey }
       });
       if (!result.ok) return false;
+      if (result.body?.owl) window.Hexadex?.setOwl?.(result.body.owl);
       savedTraits = result.body?.traits && typeof result.body.traits === "object" ? result.body.traits : {};
       traitsLoaded = true;
       applyTraitsToOwnOwl();
@@ -537,6 +543,7 @@
         body: JSON.stringify({ traits: traitsFromControls() })
       });
       if (!result.ok) throw new Error("save failed");
+      if (result.body?.owl) window.Hexadex?.setOwl?.(result.body.owl);
       savedTraits = result.body?.traits || {};
       traitsLoaded = true;
       applyTraitsToOwnOwl();

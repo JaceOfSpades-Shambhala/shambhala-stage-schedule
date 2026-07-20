@@ -46,7 +46,11 @@ const VALID_PING_LOCATIONS = new Set(["camp", "river", "vendors"]);
 const MIN_KEY_LENGTH = 16;
 const READ_ID_LENGTH = 8;
 const PROFILE_ID_LENGTH = 16;
-const CAMP_OWL_VERSION = 3;
+const OWL_VERSION = 4;
+const LEGACY_CAMP_OWL_VERSION = 3;
+const PUBLIC_OWL_TIER = "public";
+const CAMP_OWL_TIER = "camp-hexadecibel";
+const PUBLIC_OWL_RARITIES = new Set(["common", "rare", "legendary"]);
 const VALID_DAYS = new Set(["Thursday", "Friday", "Saturday", "Sunday"]);
 const VALID_STAGE_IDS = new Set(["amp", "fractal-forest", "grove", "living-room", "pagoda", "secret-garden", "village"]);
 const CAMP_ROLES = new Set(["member", "admin"]);
@@ -179,14 +183,17 @@ function cleanOwl(value) {
   const number = Number(value.number);
   const createdAt = Number(value.createdAt);
   const season = Number(value.season);
-  if (!/^[0-9a-f]{32}$/.test(seed) || !Number.isSafeInteger(version) || version < 1
+  if (!/^[0-9a-f]{32}$/.test(seed) || !Number.isSafeInteger(version) || version < 1 || version > OWL_VERSION
     || !Number.isSafeInteger(number) || number < 1 || !Number.isSafeInteger(createdAt) || createdAt < 1
     || !Number.isSafeInteger(season) || season < 2026) return null;
-  // Public reads must never send an old renderer version back to a client.
-  // V1 and V2 share the same immutable identity fields, so V2 regenerates the
-  // Owl deterministically from this unchanged seed and number.
+  // Public reads normalize all legacy identities into one current generator.
+  // The tier selects the frozen public or camp grammar without changing the
+  // seed, number, mint time, season, or resulting appearance.
+  const tier = version === LEGACY_CAMP_OWL_VERSION || value.tier === CAMP_OWL_TIER
+    ? CAMP_OWL_TIER
+    : PUBLIC_OWL_TIER;
   const adminTraits = cleanAdminTraits(value.adminTraits);
-  return { seed, version: version === 1 ? 2 : version, number, createdAt, season,
+  return { seed, version: OWL_VERSION, tier, number, createdAt, season,
     ...(Object.keys(adminTraits).length ? { adminTraits } : {}) };
 }
 
@@ -203,14 +210,21 @@ async function initializeProfile(env, profileId, profileKey) {
   if (!response.ok) throw new HttpError(response.status, "The Hex Owl profile could not be initialized.");
 }
 
-async function qualifyProfile(env, { profileId, profileKey, eligible, claimedReadId = "", tagOwl = null, version = 2 }) {
+async function qualifyProfile(env, { profileId, profileKey, eligible, claimedReadId = "", tagOwl = null, tier = PUBLIC_OWL_TIER, version }) {
   await initializeProfile(env, profileId, profileKey);
   if (cleanOwl(tagOwl) && claimedReadId) {
     const adopted = await callOwlProfile(env, profileId, "/adopt", { profileKey, owl: cleanOwl(tagOwl), claimedReadId });
     if (!adopted.ok) throw new HttpError(adopted.status, "The Hex Owl could not be synchronized.");
     return cleanOwl((await adopted.json()).owl);
   }
-  const response = await callOwlProfile(env, profileId, "/qualify", { profileKey, eligible, version, ...(claimedReadId ? { claimedReadId } : {}) });
+  const requestedTier = tier === CAMP_OWL_TIER || version === LEGACY_CAMP_OWL_VERSION ? CAMP_OWL_TIER : PUBLIC_OWL_TIER;
+  const response = await callOwlProfile(env, profileId, "/qualify", {
+    profileKey,
+    eligible,
+    version: OWL_VERSION,
+    tier: requestedTier,
+    ...(claimedReadId ? { claimedReadId } : {})
+  });
   if (!response.ok) throw new HttpError(response.status, "The Hex Owl could not be assigned.");
   return cleanOwl((await response.json()).owl);
 }
@@ -630,9 +644,18 @@ export default {
         if (!validProfileCredentials(profileId, profileKey)) return json({ error: "Not found." }, 404);
         if (request.method === "GET") {
           const response = await callOwlProfile(env, profileId, "/admin-traits/read", { profileKey });
-          return relayInternal(response, data => authorized.access.role === "admin"
-            ? data
-            : { ...data, traits: memberOwlTraits(data?.traits) });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) return json({ error: data.error || "Owl traits could not be loaded." }, response.status);
+          const owl = cleanOwl(data.owl);
+          if (owl && isReadId(data.claimedReadId) && hasHexlaceCoordinator(env)) {
+            const assigned = await callHexlaceCoordinator(env, data.claimedReadId, "/owl/assign", { profileId, profileKey, owl });
+            if (!assigned.ok) console.error("Camp Owl synchronization failed while loading traits", { profileId, readId: data.claimedReadId, status: assigned.status });
+          }
+          return json({
+            ...data,
+            ...(owl ? { owl } : {}),
+            traits: authorized.access.role === "admin" ? cleanAdminTraits(data.traits) : memberOwlTraits(data.traits)
+          });
         }
         if (request.method === "PUT") {
           const limited = await enforceRateLimit(request, env, "updateIp");
@@ -644,9 +667,20 @@ export default {
           if (authorized.access.role !== "admin" && traitKeys.some(key => !MEMBER_OWL_TRAIT_KEYS.has(key))) {
             return json({ error: "Admin access is required for one or more of these Owl traits." }, 403);
           }
+          const requestedRarity = typeof body?.traits?.rarity === "string" ? body.traits.rarity : "";
+          const tier = requestedRarity === CAMP_OWL_TIER
+            ? CAMP_OWL_TIER
+            : (PUBLIC_OWL_RARITIES.has(requestedRarity) ? PUBLIC_OWL_TIER : undefined);
           const path = authorized.access.role === "admin" ? "/admin-traits/write" : "/admin-traits/write-member";
-          const response = await callOwlProfile(env, profileId, path, { profileKey, traits: body?.traits });
-          return relayInternal(response);
+          const response = await callOwlProfile(env, profileId, path, { profileKey, traits: body?.traits, ...(tier ? { tier } : {}) });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) return json({ error: data.error || "Owl traits could not be saved." }, response.status);
+          const owl = cleanOwl(data.owl);
+          if (owl && isReadId(data.claimedReadId) && hasHexlaceCoordinator(env)) {
+            const assigned = await callHexlaceCoordinator(env, data.claimedReadId, "/owl/assign", { profileId, profileKey, owl });
+            if (!assigned.ok) return json({ error: "The saved Owl could not be synchronized to its Hexlace. Try saving again." }, 503);
+          }
+          return json({ ...data, ...(owl ? { owl } : {}) }, response.status);
         }
       }
 
@@ -819,7 +853,7 @@ export default {
                 ...credentials,
                 eligible: true,
                 claimedReadId: readId,
-                version: CAMP_OWL_VERSION
+                tier: CAMP_OWL_TIER
               });
               const assigned = await callHexlaceCoordinator(env, readId, "/owl/assign", { ...credentials, owl });
               if (!assigned.ok) return json({ error: "The Camp Hexadecibel Owl could not be attached to this Hexlace." }, 503);

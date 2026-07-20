@@ -10,28 +10,28 @@ https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 
 Hex Owl visual playground: [open the live playground](https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/hex-owl-playground.html). It is a standalone developer tool for previewing deterministic Owl seeds, traits, palettes, and contact sheets.
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v68 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v71 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
 Schedule and planning:
 
 - Stage and day filtering across seven stages, with automatic current-day selection and a Today marker (calendar-accurate, independent of stage)
-- Global artist search across all stages and days
-- Stage-specific Now Playing card using Salmo, BC time, with up-next and starts-in timing, current-set highlight, and early-morning rollover (a Friday-list 2:00 AM set counts as Saturday morning but stays in Friday's schedule)
-- My Set List planner (phone-local): tap-to-add, collapsible day groups, a live "Now / Up next from your sets" block, overlap flagging between saved sets (inferred set lengths, 20-minute tolerance), Share button (native share sheet with clipboard fallback), 100-set cap
+- Global artist search below the selected schedule, with the same ended/current/up-next treatments as ordinary stage rows
+- Compact stage-specific Now Playing display using Salmo, BC time, with a cached-data freshness state, time remaining, and early-morning rollover (a Friday-list 2:00 AM set counts as Saturday morning but stays in Friday's schedule)
+- My Set List planner (phone-local): tap-to-add, a collapsible planner with collapsible day groups, palette-linked current-set rows, compact row-level up-next timing, visible overlap buttons, centralized QR/link sharing, and a 100-set cap
 - Fast stage/day switching without browser snapshot transitions
 
 Hexlaces (live set-list sharing):
 
-- Every sharer gets a permanent read-only link (`?f=<id>`) carried on their NFC tag and shown as an always-visible QR; opening it collects their live list into a "Friend's sets collected" panel that auto-refreshes (open/foreground/every 5 min) and stays readable offline
-- Editable display name; publishing is automatic and debounced, queued while offline
-- Passive pings: one tap on a saved set invites friends to meet there, while a nested location picker offers 30/60/90-minute availability at camp, the river, or vendors; pings expire automatically and never send notifications
+- Every sharer gets a permanent read-only link (`?f=<id>`) carried on their NFC tag and available with its QR from the My Set List Share dialog; opening it collects their live list into a collapsible Friends panel that auto-refreshes (open/foreground/every 5 min) and stays readable offline
+- The editable display name is prompted prominently above the list before sharing; publishing is automatic and debounced, queued while offline
+- Passive pings live in one My Ping picker: choose camp, river, vendors, or enter saved-set selection mode and tap the meeting set; pings expire automatically and never send notifications
 - Giveaway tags with claim tokens: opening one quietly records the local scan time, works offline, and lets the earliest scan own the Hexlace once signal returns (contention closes seven days after the first claim)
-- My Hexlace can be released for the next scanner without erasing the owner's saved sets; physical tag trades are online-only and require both owners to enter trade mode, tap each other's tags, and confirm the reciprocal match
+- My Hexlace can be released for the next scanner without erasing the owner's saved sets; people who want to exchange tags can release them and claim each other's physical Hexlace
 - A named profile with at least one saved set receives one deterministic, numbered Hex Owl. The renderer reuses the exact supplied Shambhala Owl vector as one cached base, then adds lightweight deterministic SVG traits; changing a display name never changes the Owl
 - Verified camp members and admins can freely customize their own Hex Owl from dropdowns covering every currently enabled trait, without rarity, weight, mandatory-language, or combination limits; the immutable original and a live customized preview are shown side by side
-- A physical Hexlace and its Hex Owl trade together, always. Release is the only temporary separation: the profile retains its Owl while the tag becomes unclaimed, so reclaiming does not mint a replacement
+- Release temporarily separates a Hexlace from its profile: the profile retains its Owl while the tag becomes unclaimed, so reclaiming does not mint a replacement
 - Tap-specific physical Hexlace URLs add Owls to a private, multi-year Hexadex with broad festival/year context only. Shared links and QR codes still collect set lists but cannot collect Owls
 - On iOS 17.2+, a claimed Hexlace, saved sets, and collected-friend ids follow into a newly installed Home Screen app through a retry-safe 24-hour handoff; a compact connection code inside My Hexlace is the fallback when iOS does not copy the automatic cookie
 - Safari and the installed app retain the same ownership secret and periodically pull authenticated owner state, so online edits synchronize without revoking either context; collected-friend ids remain private and their public lists are fetched normally
@@ -68,7 +68,7 @@ https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#secret-garden
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/#village
 ```
 
-Shared links and QR codes use `?f=<readId>`. Physical Hexlaces use `?f=<readId>&tap=<token>`; an unclaimed tag also carries `&claim=<token>`. The tap token is required for Hexadex collection and trade, so an ordinary shared link cannot impersonate a physical tap. All URLs fit comfortably on NTAG213 tags.
+Shared links and QR codes use `?f=<readId>`. Physical Hexlaces use `?f=<readId>&tap=<token>`; an unclaimed tag also carries `&claim=<token>`. The tap token is required for Hexadex collection, so an ordinary shared link cannot impersonate a physical tap. All URLs fit comfortably on NTAG213 tags.
 
 ## Files
 
@@ -79,7 +79,7 @@ Shared links and QR codes use `?f=<readId>`. Physical Hexlaces use `?f=<readId>&
 - `scripts/validate-schedule.mjs` — schedule safety check for day/stage IDs, time format, duplicate rows, empty stage arrays, and overnight rollover order
 - `app.js` — tabs, search, Now Playing, preview mode, update checks, service-worker registration
 - `planner.js` — My Set List planner, overlap detection, day grouping
-- `hexlaces.js` — live sharing: identity, publishing, collecting, claims, releases, and reciprocal physical-tag trades
+- `hexlaces.js` — live sharing: identity, publishing, collecting, claims, releases, pings, and friend comparison
 - `hex-owl-base.svg` / `hex-owl.js` / `hex-owl-playground.html` — exact supplied Owl vector, frozen deterministic overlay renderer, and standalone seed/trait gallery
 - `hexadex.js` — private profile cache, tap-only collection queue, Hexadex grid, and reveal UI
 - `qrcode.js` — vendored qrcode-generator 1.4.4 (pinned)

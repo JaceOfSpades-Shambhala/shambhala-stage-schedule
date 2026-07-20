@@ -7,6 +7,8 @@
   const CACHE_KEY = "shambhala-hexadex-cache";
   const PENDING_KEY = "shambhala-hexadex-pending";
   const API_TIMEOUT_MS = 12000;
+  const OWL_VERSION = 4;
+  const CAMP_OWL_TIER = "camp-hexadecibel";
 
   const elements = {
     own: document.querySelector("#hex-owl-card"),
@@ -65,19 +67,20 @@
 
   function validOwl(owl) {
     return Boolean(owl && /^[0-9a-f]{32}$/i.test(owl.seed || "")
-      && Number.isSafeInteger(owl.version) && owl.version > 0
+      && Number.isSafeInteger(owl.version) && owl.version > 0 && owl.version <= OWL_VERSION
       && Number.isSafeInteger(owl.number) && owl.number > 0);
   }
 
-  function regenerateV1Owl(owl) {
+  function normalizeOwlIdentity(owl) {
     if (!validOwl(owl)) return null;
-    return owl.version === 1 ? { ...owl, version: 2 } : owl;
+    const tier = owl.version === 3 || owl.tier === CAMP_OWL_TIER ? CAMP_OWL_TIER : "public";
+    return owl.version === OWL_VERSION && owl.tier === tier ? owl : { ...owl, version: OWL_VERSION, tier };
   }
 
   function loadProfile() {
     const profile = readJson(PROFILE_KEY, null);
     if (!profile || typeof profile.profileId !== "string" || typeof profile.profileKey !== "string") return null;
-    const owl = regenerateV1Owl(profile.owl);
+    const owl = normalizeOwlIdentity(profile.owl);
     if (owl !== profile.owl) {
       profile.owl = owl;
       writeJson(PROFILE_KEY, profile);
@@ -92,7 +95,7 @@
       current.profileId = data.profileId;
       current.profileKey = data.profileKey;
     }
-    if (validOwl(data.owl)) current.owl = regenerateV1Owl(data.owl);
+    if (validOwl(data.owl)) current.owl = normalizeOwlIdentity(data.owl);
     if (!current.profileId || !current.profileKey) return null;
     writeJson(PROFILE_KEY, current);
     renderOwn();
@@ -104,7 +107,7 @@
     if (!validOwl(owl)) return loadProfile();
     const current = loadProfile();
     if (!current) return null;
-    current.owl = regenerateV1Owl(owl);
+    current.owl = normalizeOwlIdentity(owl);
     writeJson(PROFILE_KEY, current);
     renderOwn();
     return current;
@@ -132,8 +135,8 @@
     if (!container || !validOwl(owl) || !window.HexOwl) return;
     const overrides = owl.adminTraits && typeof owl.adminTraits === "object" ? owl.adminTraits : null;
     container.innerHTML = overrides && window.HexOwl.renderWithTraits
-      ? window.HexOwl.renderWithTraits(owl.seed, { overrides, freestyle: true }, owl.version)
-      : window.HexOwl.renderSvg(owl.seed, owl.version);
+      ? window.HexOwl.renderWithTraits(owl.seed, { overrides, freestyle: true }, owl)
+      : window.HexOwl.renderSvg(owl.seed, owl);
     void window.HexOwl.hydrate?.(container);
   }
 
@@ -141,7 +144,7 @@
     if (!validOwl(owl) || !window.HexOwl) return {};
     try {
       if (owl.adminTraits && typeof owl.adminTraits === "object" && window.HexOwl.resolveTraits) {
-        const traits = window.HexOwl.resolveTraits(owl.seed, { overrides: owl.adminTraits, freestyle: true }, owl.version);
+        const traits = window.HexOwl.resolveTraits(owl.seed, { overrides: owl.adminTraits, freestyle: true }, owl);
         return {
           "Eye style": traits.eyes.name,
           "Owl colour": traits.palette.name,
@@ -157,7 +160,7 @@
           Edition: "2026"
         };
       }
-      return window.HexOwl.traitNames(owl.seed, owl.version) || {};
+      return window.HexOwl.traitNames(owl.seed, owl) || {};
     } catch {
       return {};
     }
@@ -168,7 +171,7 @@
     if (!Array.isArray(entries)) return [];
     let changed = false;
     const migrated = entries.filter(entry => entry && validOwl(entry.owl)).map(entry => {
-      const owl = regenerateV1Owl(entry.owl);
+      const owl = normalizeOwlIdentity(entry.owl);
       if (owl !== entry.owl) {
         changed = true;
         return { ...entry, owl };
@@ -181,7 +184,7 @@
 
   function mergeEntry(entry) {
     if (!entry || !validOwl(entry.owl)) return false;
-    entry = { ...entry, owl: regenerateV1Owl(entry.owl) };
+    entry = { ...entry, owl: normalizeOwlIdentity(entry.owl) };
     const entries = cachedEntries();
     const index = entries.findIndex(item => item.owl.number === entry.owl.number);
     if (index >= 0) entries[index] = { ...entries[index], ...entry, firstCollectedAt: entries[index].firstCollectedAt || entry.firstCollectedAt };
@@ -246,9 +249,16 @@
   }
 
   function renderOwn(name = "") {
-    if (!elements.own) return;
     const profile = loadProfile();
     const hasOwnOwl = validOwl(profile?.owl);
+    if (!elements.own) {
+      if (elements.openAvatar) {
+        elements.openAvatar.hidden = !hasOwnOwl;
+        if (hasOwnOwl) putOwl(elements.openAvatar, profile.owl);
+      }
+      renderCount();
+      return;
+    }
     elements.own.hidden = !hasOwnOwl;
     if (elements.openAvatar) elements.openAvatar.hidden = !hasOwnOwl;
     if (!hasOwnOwl) {
@@ -269,7 +279,7 @@
   function renderCount() {
     const profile = loadProfile();
     const total = cachedEntries().length + (validOwl(profile?.owl) ? 1 : 0);
-    if (elements.open) elements.open.hidden = !validOwl(profile?.owl) && total === 0;
+    if (elements.open) elements.open.hidden = false;
     if (elements.count) elements.count.textContent = String(total);
   }
 

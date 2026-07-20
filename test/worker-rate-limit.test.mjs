@@ -816,7 +816,8 @@ test("a named browser profile is created with its first saved set and one stable
   const identity = await created.json();
   assert.equal(identity.isPhysical, false);
   assert.match(identity.owl.seed, /^[0-9a-f]{32}$/);
-  assert.equal(identity.owl.version, 2);
+  assert.equal(identity.owl.version, 4);
+  assert.equal(identity.owl.tier, "public");
   assert.equal(identity.owl.number, 1);
 
   const renamed = await worker.fetch(makeRequest(`/lists/${identity.readId}`, {
@@ -839,7 +840,7 @@ test("a named browser profile is created with its first saved set and one stable
   assert.equal(Object.hasOwn(publicBody, "hexadex"), false);
 });
 
-test("V1 Owls regenerate as V2 across profile, Hexadex, physical tag, and public reads", async () => {
+test("legacy Owls normalize into one current version without losing their public or camp appearance tier", async () => {
   const env = makeOwlEnv();
   const identity = await worker.fetch(makeRequest("/lists", {
     method: "POST", body: JSON.stringify({ name: "Migration Owl", sets: [QUALIFYING_SET], physical: true })
@@ -860,6 +861,15 @@ test("V1 Owls regenerate as V2 across profile, Hexadex, physical tag, and public
     festivalYear: 2026,
     lastSyncedAt: env.NOW_MS - 1
   });
+  await profileStorage.put("hexadex:legacy-camp", {
+    readId: "CAMPABCD",
+    name: "Legacy camp friend",
+    owl: { ...v1Owl, version: 3, number: v1Owl.number + 100 },
+    firstCollectedAt: env.NOW_MS - 2,
+    context: "Shambhala 2026",
+    festivalYear: 2026,
+    lastSyncedAt: env.NOW_MS - 2
+  });
 
   const tagStorage = env.HEXLACES.instances.get(identity.readId).ctx.storage;
   const tag = await tagStorage.get("record");
@@ -870,7 +880,8 @@ test("V1 Owls regenerate as V2 across profile, Hexadex, physical tag, and public
   await env.LISTS.put(`list:${identity.readId}`, JSON.stringify({ ...tag.list, owl: v1Owl }));
 
   const publicOwl = await worker.fetch(makeRequest(`/lists/${identity.readId}`), env).then(response => response.json()).then(body => body.owl);
-  assert.equal(publicOwl.version, 2);
+  assert.equal(publicOwl.version, 4);
+  assert.equal(publicOwl.tier, "public");
   assert.equal(publicOwl.seed, v1Owl.seed);
   assert.equal(publicOwl.number, v1Owl.number);
 
@@ -881,11 +892,17 @@ test("V1 Owls regenerate as V2 across profile, Hexadex, physical tag, and public
   const page = await worker.fetch(makeRequest(`/profiles/${identity.profileId}/hexadex`, {
     headers: { "X-Profile-Key": identity.profileKey }
   }), env).then(response => response.json());
-  assert.equal(page.owl.version, 2);
-  assert.equal(page.entries[0].owl.version, 2);
-  assert.equal((await profileStorage.get("profile")).owl.version, 2);
-  assert.equal((await profileStorage.get("hexadex:legacy")).owl.version, 2);
-  assert.equal((await tagStorage.get("record")).owl.version, 2);
+  assert.equal(page.owl.version, 4);
+  assert.equal(page.owl.tier, "public");
+  assert.equal(page.entries[0].owl.version, 4);
+  assert.ok(page.entries.some(entry => entry.owl.tier === "public"));
+  assert.ok(page.entries.some(entry => entry.owl.tier === "camp-hexadecibel"));
+  assert.equal((await profileStorage.get("profile")).owl.version, 4);
+  assert.equal((await profileStorage.get("profile")).owl.tier, "public");
+  assert.equal((await profileStorage.get("hexadex:legacy")).owl.version, 4);
+  assert.equal((await profileStorage.get("hexadex:legacy-camp")).owl.version, 4);
+  assert.equal((await profileStorage.get("hexadex:legacy-camp")).owl.tier, "camp-hexadecibel");
+  assert.equal((await tagStorage.get("record")).owl.version, 4);
 });
 
 test("concurrent browser updates retain one stable Owl number and seed", async () => {
@@ -1171,7 +1188,8 @@ test("camp access grants hashed roles, protects admin APIs, and permits own-Owl 
   assert.equal(memberClaim.status, 200);
   const memberClaimBody = await memberClaim.json();
   assert.equal(memberClaimBody.campAccess.role, "member");
-  assert.equal(memberClaimBody.owl.version, 3);
+  assert.equal(memberClaimBody.owl.version, 4);
+  assert.equal(memberClaimBody.owl.tier, "camp-hexadecibel");
   assert.equal(memberClaimBody.owl.number > 0, true);
   const publicCampOwl = await worker.fetch(makeRequest(`/lists/${memberTag.readId}`), env).then(response => response.json());
   assert.deepEqual(publicCampOwl.owl, memberClaimBody.owl);
@@ -1256,6 +1274,23 @@ test("camp access grants hashed roles, protects admin APIs, and permits own-Owl 
   assert.deepEqual((await publishedAdminOwl.json()).owl.adminTraits, { palette: "living-daylight", eyes: "sleepy-lids", aura: "quiet-aura", admin_glow: "ultraviolet" });
   const publicAdminOwl = await worker.fetch(makeRequest(`/lists/${admin.readId}`), env).then(response => response.json());
   assert.deepEqual(publicAdminOwl.owl.adminTraits, { palette: "living-daylight", eyes: "sleepy-lids", aura: "quiet-aura", admin_glow: "ultraviolet" });
+
+  const adminSelectsCampTier = await worker.fetch(makeRequest(`/profiles/${admin.profileId}/owl-admin-traits`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${adminAccessKey}`,
+      "X-Profile-Key": admin.profileKey
+    },
+    body: JSON.stringify({ traits: { rarity: "camp-hexadecibel", palette: "uv-green", eyes: "uv-eye-wells" } })
+  }), env);
+  assert.equal(adminSelectsCampTier.status, 200);
+  const campAdminOwl = (await adminSelectsCampTier.json()).owl;
+  assert.equal(campAdminOwl.version, 4);
+  assert.equal(campAdminOwl.tier, "camp-hexadecibel");
+  assert.equal(campAdminOwl.seed, admin.owl.seed);
+  assert.equal(campAdminOwl.number, admin.owl.number);
+  const collectedCampAdminOwl = await worker.fetch(makeRequest(`/lists/${admin.readId}`), env).then(response => response.json()).then(body => body.owl);
+  assert.deepEqual(collectedCampAdminOwl, campAdminOwl, "Saving the tier must synchronize the Owl carried by the physical Hexlace.");
 
   const memberEditsOwnOwl = await worker.fetch(makeRequest(`/profiles/${memberClaimBody.profileId}/owl-admin-traits`, {
     method: "PUT",

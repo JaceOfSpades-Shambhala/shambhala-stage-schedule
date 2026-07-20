@@ -1,17 +1,21 @@
-// Hex Owl renderer, frozen festival editions V1/V2 plus the provenance-only
-// Camp Hexadecibel V3 grammar.
+// Hex Owl renderer. V1/V2/V3 remain frozen compatibility grammars while every
+// current Owl uses one V4 identity contract with a public or Camp Hexadecibel
+// rarity tier.
 //
-// V1 deliberately keeps the persisted identity contract unchanged: an Owl is
-// still identified by its seed and version. Its manifest and rendering path
-// remain frozen byte-for-byte while new assignments use the V2 grammar.
+// The legacy manifests and rendering paths remain byte-stable for regression
+// and migration. Persistence normalizes current identities to V4; the tier
+// dispatches to the matching frozen roll grammar.
 (() => {
   "use strict";
 
   const V1_VERSION = 1;
-  const VERSION = 2;
+  const V2_VERSION = 2;
   const CAMP_VERSION = 3;
+  const VERSION = 4;
+  const PUBLIC_TIER = "public";
+  const CAMP_TIER = "camp-hexadecibel";
   const HEX_SEED = /^[0-9a-f]{32}$/i;
-  const OWL_ASSET = "./hex-owl-base.svg?v=68";
+  const OWL_ASSET = "./hex-owl-base.svg?v=71";
   const SHARED_MARK_ID = "hex-owl-shared-mark";
   const BROW_MARK_IDS = {
     lower: SHARED_MARK_ID + "-brow-lower",
@@ -475,8 +479,8 @@
   ]);
   const V2_SPEC = deepFreeze({
     id: "hex-owl-v2",
-    version: VERSION,
-    status: "current",
+    version: V2_VERSION,
+    status: "frozen",
     frozenAt: "2026-07-16",
     rarityWeights: { common: 50, rare: 30, legendary: 20 },
     budgets: { common: 3, rare: 7, legendary: 9 },
@@ -615,7 +619,62 @@
     specialEligibility: { campOnlyOrdinaryWeight: 0, assignment: "physical-camp-hexlace-provenance", tradeable: false },
     catalogue: { categories: V3_CATEGORIES, paletteFamilies: [], rarities: [V3_TIER] }
   });
-  const SPECS = deepFreeze({ [V1_VERSION]: V1_SPEC, [VERSION]: V2_SPEC, [CAMP_VERSION]: V3_SPEC });
+
+  function mergeCatalogueItems(publicItems, campItems) {
+    const merged = (publicItems || []).slice();
+    const ids = new Set(merged.map(item => item.id));
+    for (const item of campItems || []) {
+      if (!ids.has(item.id)) merged.push(item);
+    }
+    return deepFreeze(merged);
+  }
+
+  const V4_CAMP_CATEGORIES = deepFreeze(Object.fromEntries(
+    [...new Set(Object.keys(V2_CATEGORIES).concat(Object.keys(V3_CATEGORIES)))].map(key => [
+      key,
+      mergeCatalogueItems(V2_CATEGORIES[key], V3_CATEGORIES[key])
+    ])
+  ));
+  const V4_PUBLIC_CATALOGUE = deepFreeze({
+    categories: V2_CATEGORIES,
+    paletteFamilies: V2_PALETTE_FAMILIES,
+    rarities: V2_RARITIES
+  });
+  const V4_CAMP_CATALOGUE = deepFreeze({
+    categories: V4_CAMP_CATEGORIES,
+    paletteFamilies: V2_PALETTE_FAMILIES,
+    rarities: V2_RARITIES.concat([V3_TIER])
+  });
+  const V4_SPEC = deepFreeze({
+    id: "hex-owl-2026",
+    version: VERSION,
+    status: "current",
+    frozenAt: "2026-07-20",
+    tiers: { public: PUBLIC_TIER, camp: CAMP_TIER },
+    defaultTier: PUBLIC_TIER,
+    rarityWeights: V2_SPEC.rarityWeights,
+    budgets: V2_SPEC.budgets,
+    rarities: V4_CAMP_CATALOGUE.rarities,
+    paletteFamilies: V2_SPEC.paletteFamilies,
+    palettes: V2_SPEC.palettes,
+    publicPaletteCount: V2_SPEC.publicPaletteCount,
+    geometry: V2_SPEC.geometry,
+    layerOrder: V2_SPEC.layerOrder,
+    specialEligibility: {
+      campTier: CAMP_TIER,
+      ordinaryWeight: 0,
+      assignment: "verified-camp-access-required",
+      tradeable: false
+    },
+    catalogue: V4_PUBLIC_CATALOGUE,
+    campCatalogue: V4_CAMP_CATALOGUE
+  });
+  const SPECS = deepFreeze({
+    [V1_VERSION]: V1_SPEC,
+    [V2_VERSION]: V2_SPEC,
+    [CAMP_VERSION]: V3_SPEC,
+    [VERSION]: V4_SPEC
+  });
 
   function hashWords(value) {
     const words = [0x811c9dc5, 0x9e3779b9, 0x85ebca6b, 0xc2b2ae35];
@@ -1069,7 +1128,7 @@
     selectionIds.palette = palette.id;
 
     return deepFreeze({
-      version: VERSION,
+      version: V2_VERSION,
       seed: normalized,
       palette,
       face: palette,
@@ -1133,8 +1192,8 @@
   }
 
   function resolveTraitsV2(seed, options, version) {
-    const resolvedVersion = version === undefined ? VERSION : Number(version);
-    if (resolvedVersion !== VERSION) throw new Error("Unsupported Hex Owl version: " + version);
+    const resolvedVersion = version === undefined ? V2_VERSION : Number(version);
+    if (resolvedVersion !== V2_VERSION) throw new Error("Unsupported Hex Owl version: " + version);
     const normalized = normalizeSeed(seed);
     const config = options && typeof options === "object" ? options : {};
     if (config.freestyle === true) return resolveFreestyleTraitsV2(normalized, config, resolvedVersion);
@@ -1253,7 +1312,7 @@
   }
 
   function selectTraitsV2(seed) {
-    return resolveTraitsV2(seed, {}, VERSION);
+    return resolveTraitsV2(seed, {}, V2_VERSION);
   }
 
   function selectionTotalsV3(state) {
@@ -2239,64 +2298,107 @@
       definitions + body + "</svg>";
   }
 
+  function checkedIdentity(value) {
+    const source = value && typeof value === "object" ? value : { version: value };
+    const resolved = source.version === undefined ? VERSION : Number(source.version);
+    if (!SPECS[resolved]) throw new Error("Unsupported Hex Owl version: " + source.version);
+    return {
+      version: resolved,
+      tier: source.tier === CAMP_TIER ? CAMP_TIER : PUBLIC_TIER,
+      campAccess: source.campAccess === true
+    };
+  }
+
   function checkedVersion(value) {
-    const resolved = value === undefined ? VERSION : Number(value);
-    if (!SPECS[resolved]) throw new Error("Unsupported Hex Owl version: " + value);
-    return resolved;
+    return checkedIdentity(value).version;
+  }
+
+  function requestedTier(options, identity) {
+    const config = options && typeof options === "object" ? options : {};
+    const overrides = config.overrides && typeof config.overrides === "object" ? config.overrides : config;
+    const supplied = config.rarity !== undefined ? config.rarity : overrides.rarity;
+    const rarity = supplied && typeof supplied === "object" ? supplied.id : supplied;
+    if (String(rarity || "").toLowerCase() === CAMP_TIER) return CAMP_TIER;
+    if (rarity !== undefined && rarity !== null && rarity !== "" && String(rarity).toLowerCase() !== "auto") return PUBLIC_TIER;
+    return identity.tier;
+  }
+
+  function wrapCurrentTraits(traits, tier) {
+    return deepFreeze({ ...traits, version: VERSION, tier });
+  }
+
+  function resolveTraitsV4(seed, options, identity) {
+    const tier = requestedTier(options, identity);
+    return tier === CAMP_TIER
+      ? wrapCurrentTraits(resolveTraitsV3(seed, options, CAMP_VERSION), CAMP_TIER)
+      : wrapCurrentTraits(resolveTraitsV2(seed, options, V2_VERSION), PUBLIC_TIER);
   }
 
   function resolveTraits(seed, options, version) {
-    const resolvedVersion = checkedVersion(version === undefined ? options?.version : version);
-    if (resolvedVersion === V1_VERSION) return resolveTraitsV1(seed, options, resolvedVersion);
-    if (resolvedVersion === VERSION) return resolveTraitsV2(seed, options, resolvedVersion);
-    return resolveTraitsV3(seed, options, resolvedVersion);
+    const identity = checkedIdentity(version === undefined ? options : version);
+    if (identity.version === V1_VERSION) return resolveTraitsV1(seed, options, V1_VERSION);
+    if (identity.version === V2_VERSION) return resolveTraitsV2(seed, options, V2_VERSION);
+    if (identity.version === CAMP_VERSION) return resolveTraitsV3(seed, options, CAMP_VERSION);
+    return resolveTraitsV4(seed, options, identity);
   }
 
   function selectTraits(seed, version) {
-    const resolvedVersion = checkedVersion(version);
-    if (resolvedVersion === V1_VERSION) return selectTraitsV1(seed);
-    if (resolvedVersion === VERSION) return selectTraitsV2(seed);
-    return selectTraitsV3(seed);
+    const identity = checkedIdentity(version);
+    if (identity.version === V1_VERSION) return selectTraitsV1(seed);
+    if (identity.version === V2_VERSION) return selectTraitsV2(seed);
+    if (identity.version === CAMP_VERSION) return selectTraitsV3(seed);
+    return identity.tier === CAMP_TIER
+      ? wrapCurrentTraits(selectTraitsV3(seed), CAMP_TIER)
+      : wrapCurrentTraits(selectTraitsV2(seed), PUBLIC_TIER);
   }
 
   function validateTraits(traits, version) {
-    const resolvedVersion = checkedVersion(version === undefined ? traits?.version : version);
-    if (resolvedVersion === V1_VERSION) return validateTraitsV1(traits);
-    if (resolvedVersion === VERSION) return validateTraitsV2(traits);
-    return validateTraitsV3(traits);
+    const identity = checkedIdentity(version === undefined ? traits : version);
+    if (identity.version === V1_VERSION) return validateTraitsV1(traits);
+    if (identity.version === V2_VERSION) return validateTraitsV2(traits);
+    if (identity.version === CAMP_VERSION) return validateTraitsV3(traits);
+    return requestedTier(traits, identity) === CAMP_TIER ? validateTraitsV3(traits) : validateTraitsV2(traits);
+  }
+
+  function renderResolvedV4(traits) {
+    const tier = requestedTier(traits, checkedIdentity(traits));
+    const legacyTraits = { ...traits, version: tier === CAMP_TIER ? CAMP_VERSION : V2_VERSION };
+    const svg = tier === CAMP_TIER ? renderResolvedV3(legacyTraits) : renderResolvedV2(legacyTraits);
+    return svg.replace(/data-hex-owl-version="[23]"/, 'data-hex-owl-version="4"');
   }
 
   function renderResolved(traits) {
-    const resolvedVersion = checkedVersion(traits?.version);
+    const resolvedVersion = checkedVersion(traits);
     if (resolvedVersion === V1_VERSION) return renderResolvedV1(traits);
-    if (resolvedVersion === VERSION) return renderResolvedV2(traits);
-    return renderResolvedV3(traits);
+    if (resolvedVersion === V2_VERSION) return renderResolvedV2(traits);
+    if (resolvedVersion === CAMP_VERSION) return renderResolvedV3(traits);
+    return renderResolvedV4(traits);
   }
 
   function renderWithTraits(seed, traitsOrOptions, version) {
-    const resolvedVersion = checkedVersion(version === undefined ? traitsOrOptions?.version : version);
+    const identity = checkedIdentity(version === undefined ? traitsOrOptions : version);
     let traits = traitsOrOptions;
     if (!traits || typeof traits !== "object" || !traits.palette || !traits.rarity || !traits.selectionIds) {
-      traits = resolveTraits(seed, traitsOrOptions || {}, resolvedVersion);
+      traits = resolveTraits(seed, traitsOrOptions || {}, identity);
     } else {
       const forced = {};
       Object.keys(traits.selectionIds || {}).forEach(key => { forced[key] = traits.selectionIds[key]; });
-      traits = resolveTraits(seed, { rarity: traits.rarity.id, overrides: forced, freestyle: traits.freestyle === true }, resolvedVersion);
+      traits = resolveTraits(seed, { rarity: traits.rarity.id, overrides: forced, freestyle: traits.freestyle === true }, identity);
     }
     return renderResolved(traits);
   }
 
   function renderSvg(seed, version) {
-    const resolvedVersion = checkedVersion(version);
-    return renderResolved(selectTraits(seed, resolvedVersion));
+    const identity = checkedIdentity(version);
+    return renderResolved(selectTraits(seed, identity));
   }
 
   function traitNames(seed, version) {
-    const traits = selectTraits(seed, checkedVersion(version));
+    const traits = selectTraits(seed, checkedIdentity(version));
     return deepFreeze({
       "Eye style": traits.eyes.name,
       "Owl colour": traits.palette.name,
-      Accessory: traits.accessory.name,
+      ...(traits.accessory ? { Accessory: traits.accessory.name } : {}),
       Aura: traits.aura.name,
       "Brow treatment": traits.brow.name,
       Beak: traits.beak.name,
@@ -2314,13 +2416,17 @@
   }
 
   function catalogue(version) {
-    return spec(version).catalogue;
+    const identity = checkedIdentity(version);
+    if (identity.version === VERSION && identity.campAccess) return V4_CAMP_CATALOGUE;
+    return SPECS[identity.version].catalogue;
   }
 
   const API = deepFreeze({
     VERSION,
     CAMP_VERSION,
-    SPEC: V2_SPEC,
+    PUBLIC_TIER,
+    CAMP_TIER,
+    SPEC: V4_SPEC,
     CAMP_SPEC: V3_SPEC,
     SPECS,
     normalizeSeed,

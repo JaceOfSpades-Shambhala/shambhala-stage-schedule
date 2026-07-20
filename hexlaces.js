@@ -65,6 +65,8 @@
     connectRedeem: document.querySelector("#hexlace-connect-redeem"),
     connectCancel: document.querySelector("#hexlace-connect-cancel"),
     mine: document.querySelector("#hexlace-mine"),
+    plannerIdentity: document.querySelector("#planner-sharing-identity"),
+    plannerShare: document.querySelector("#planner-share"),
     myName: document.querySelector("#hexlace-name"),
     state: document.querySelector("#hexlace-state"),
     stateLabel: document.querySelector("#hexlace-state-label"),
@@ -135,6 +137,10 @@
 
   // Unambiguous alphabet (no 0/O/1/l/I), matching the Worker's id style.
   const KEY_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
+
+  function isCampOwl(owl) {
+    return owl?.tier === "camp-hexadecibel" || owl?.version === 3;
+  }
   function randomKey(length) {
     const bytes = crypto.getRandomValues(new Uint8Array(length));
     let out = "";
@@ -357,7 +363,8 @@
   }
 
   function syncMyPanelOpen() {
-    if (editorMode) elements.myPanel.open = true;
+    // Name setup now lives at the top of My Set List. Do not open the separate
+    // management disclosure while the user edits that name.
   }
 
   function timeAgo(timestamp) {
@@ -532,6 +539,11 @@
     syncMyPanelOpen();
     elements.setup.hidden = Boolean(visibleIdentity) || editorMode === "enable" || editorMode === "claim";
     elements.mine.hidden = !visibleIdentity || editorMode === "claim";
+    if (elements.plannerIdentity) elements.plannerIdentity.hidden = !visibleIdentity || Boolean(editorMode);
+    if (elements.plannerShare) {
+      elements.plannerShare.disabled = !visibleIdentity;
+      elements.plannerShare.title = visibleIdentity ? "Open sharing options" : "Set a username first";
+    }
     elements.editor.hidden = !editorMode;
     elements.bringOver.hidden = !isStandalone() || Boolean(visibleIdentity);
     const canConnectApp = !isStandalone() && Boolean(visibleIdentity) && navigator.onLine !== false;
@@ -543,8 +555,6 @@
       connectCode = "";
     }
     const physical = Boolean(identity && identity.isPhysical !== false);
-    const campOwl = identity?.owl?.version === 3;
-    if (elements.swapOpen) elements.swapOpen.hidden = navigator.onLine === false || !physical || campOwl;
     if (elements.releaseOpen) elements.releaseOpen.hidden = !physical;
     if (elements.manageSection) {
       elements.manageSection.hidden = !physical;
@@ -685,7 +695,7 @@
     const name = elements.nameInput.value.trim();
     if (!name) { feedback("Please enter a name."); return; }
     if (editorMode === "enable" && mySets().length === 0) {
-      feedback("Save at least one set before choosing your sharing name.");
+      feedback("Save at least one set before choosing your username.");
       return;
     }
     elements.nameSave.disabled = true;
@@ -992,7 +1002,7 @@
   function renderTradeDialog(mode = loadTradeMode()) {
     const online = navigator.onLine !== false;
     const identity = loadIdentity();
-    const campOwl = identity?.owl?.version === 3;
+    const campOwl = isCampOwl(identity?.owl);
     if (elements.swapOpen) elements.swapOpen.hidden = !online || !identity || identity.isPhysical === false || campOwl;
     if (!mode) return;
     elements.swapCreate.hidden = Boolean(mode.matched);
@@ -1011,7 +1021,7 @@
 
   function startTradeMode() {
     const identity = loadIdentity();
-    if (navigator.onLine === false || !identity || identity.isPhysical === false || identity.owl?.version === 3) return;
+    if (navigator.onLine === false || !identity || identity.isPhysical === false || isCampOwl(identity.owl)) return;
     const mode = { startedAt: Date.now(), targetReadId: "", matched: false, confirmed: false };
     saveTradeMode(mode);
     renderTradeDialog(mode);
@@ -1425,7 +1435,16 @@
         renderCollected();
         feedback("Removed.");
       });
-      foot.append(updated, remove);
+      const actions = document.createElement("span");
+      actions.className = "hexlace-friend-actions";
+      const compare = document.createElement("button");
+      compare.type = "button";
+      compare.className = "planner-action hexlace-friend-compare";
+      compare.textContent = "Compare";
+      compare.setAttribute("aria-label", `Compare your plans with ${entry.name || "this friend"}`);
+      compare.addEventListener("click", () => openComparison(entry));
+      actions.append(compare, remove);
+      foot.append(updated, actions);
       group.append(foot);
 
       elements.list.append(group);
@@ -1503,10 +1522,6 @@
 
     friendOpenState.clear();
     const identity = loadIdentity();
-    if (identity && loadTradeMode() && tapToken && navigator.onLine !== false && readId !== identity.readId) {
-      await recordTradeTap(readId, tapToken);
-      return;
-    }
     if (identity && identity.readId === readId) {
       renderCollected();
       feedback("That's your own Hexlace.");
@@ -1609,7 +1624,7 @@
 
   // --- Wiring ---------------------------------------------------------------
 
-  elements.enable.addEventListener("click", () => openEditor("enable", "What name should friends see?", ""));
+  elements.enable.addEventListener("click", () => openEditor("enable", "What username should friends see?", ""));
   elements.bringOver.addEventListener("click", () => {
     elements.connectEditor.hidden = false;
     elements.connectInput.focus();
@@ -1623,7 +1638,7 @@
   elements.connectInput.addEventListener("keydown", event => {
     if (event.key === "Enter") redeemTransfer(elements.connectInput.value);
   });
-  elements.rename.addEventListener("click", () => openEditor("rename", "Update the name friends see:", loadIdentity()?.name || ""));
+  elements.rename.addEventListener("click", () => openEditor("rename", "Update your username:", loadIdentity()?.name || ""));
   elements.nameSave.addEventListener("click", saveName);
   elements.nameCancel.addEventListener("click", () => {
     closeEditor();
@@ -1699,8 +1714,8 @@
     if (!prepared) feedback("Connect to the internet before installing so your Hexlace can transfer.");
     return prepared;
   };
-  window.addEventListener("online", () => { syncMine(); refreshCollected(false); renderMine(); renderTradeDialog(); if (loadTradeMode()) pollTradeStatus(); });
-  window.addEventListener("offline", () => { renderMine(); renderTradeDialog(); });
+  window.addEventListener("online", () => { syncMine(); refreshCollected(false); renderMine(); });
+  window.addEventListener("offline", renderMine);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
     syncMine();
@@ -1722,7 +1737,7 @@
   renderMine();
   renderCollected();
   handleIncomingLink();
-  if (loadTradeMode()) pollTradeStatus();
+  try { localStorage.removeItem(TRADE_MODE_KEY); } catch {}
   flushPendingClaim();
   syncMine();
   window.setTimeout(() => refreshCollected(false), 2500);

@@ -15,7 +15,6 @@
   const PING_KEY = "shambhala-2026-ping";
   const IDENTITY_KEY = "shambhala-2026-hexlace-identity";
   const MIN_OVERLAP_MINUTES = 15;
-  const LIVE_GROUP_WINDOW_MINUTES = 20;
   const PING_LOCATIONS = {
     camp: { label: "Camp", status: "At camp" },
     river: { label: "River", status: "At the river" },
@@ -26,18 +25,14 @@
   const elements = {
     panel: document.querySelector("#planner"),
     scheduleList: document.querySelector("#set-list"),
+    searchList: document.querySelector("#search-results"),
     dayLabel: document.querySelector("#schedule-day"),
     list: document.querySelector("#planner-list"),
     empty: document.querySelector("#planner-empty"),
     count: document.querySelector("#planner-count"),
     share: document.querySelector("#planner-share"),
-    clear: document.querySelector("#planner-clear"),
+    shareDialog: document.querySelector("#planner-share-dialog"),
     feedback: document.querySelector("#planner-feedback"),
-    upNext: document.querySelector("#planner-up-next"),
-    liveNow: document.querySelector("#planner-live-now"),
-    liveNowList: document.querySelector("#planner-live-now-list"),
-    liveNext: document.querySelector("#planner-live-next"),
-    liveNextList: document.querySelector("#planner-live-next-list"),
     pingCurrent: document.querySelector("#planner-ping-current"),
     pingState: document.querySelector("#planner-ping-state"),
     pingStatus: document.querySelector("#planner-ping-status"),
@@ -47,7 +42,8 @@
     pingPicker: document.querySelector("#planner-ping-picker"),
     pingLocationOptions: document.querySelector("#planner-ping-location-options"),
     pingDurationOptions: document.querySelector("#planner-ping-duration-options"),
-    pingDurationLabel: document.querySelector("#planner-ping-duration-label")
+    pingDurationLabel: document.querySelector("#planner-ping-duration-label"),
+    pingSetInstruction: document.querySelector("#planner-ping-set-instruction")
   };
   if (!elements.panel || !elements.scheduleList) return;
 
@@ -380,12 +376,13 @@
     const saved = hasSet(item);
     button.textContent = saved ? "✓ Saved" : "+ Save";
     button.classList.toggle("is-added", saved);
+    button.setAttribute("aria-pressed", String(saved));
     button.setAttribute("aria-label", `${saved ? "Remove" : "Add"} ${item.artist} at ${item.time} from My Set List`);
     button.title = saved ? "Remove from My Set List" : "Add to My Set List";
   }
 
   function enhanceScheduleRows() {
-    elements.scheduleList.querySelectorAll(".set").forEach(row => {
+    [elements.scheduleList, elements.searchList].filter(Boolean).forEach(list => list.querySelectorAll(".set").forEach(row => {
       row.querySelector(".planner-add")?.remove();
       const item = itemFromRow(row);
       if (!item) return;
@@ -395,8 +392,9 @@
       button.className = "planner-add";
       setButtonState(button, item);
       button.addEventListener("click", () => hasSet(item) ? removeSet(item) : addSet(item));
-      row.append(button);
-    });
+      if (list === elements.scheduleList) row.append(button);
+      else row.prepend(button);
+    }));
   }
 
   function setFeedback(message) {
@@ -406,109 +404,13 @@
     setFeedback.timeout = window.setTimeout(() => { elements.feedback.textContent = ""; }, 2200);
   }
 
-  function liveEntry(artist, detailText, overlapAction = null) {
-    const wrap = document.createElement("div");
-    wrap.className = "planner-live-entry";
-    const copy = document.createElement("span");
-    copy.className = "planner-live-copy";
-    const title = document.createElement("strong");
-    title.className = "planner-live-title";
-    title.textContent = artist;
-    const details = document.createElement("span");
-    details.className = "planner-live-details";
-    details.textContent = detailText;
-    copy.append(title, details);
-    wrap.append(copy);
-    if (overlapAction) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "planner-live-overlap";
-      button.textContent = overlapAction.label;
-      button.setAttribute("aria-label", `${overlapAction.label}; open overlap timeline for ${overlapAction.item.artist}`);
-      button.addEventListener("click", () => openPlannerOverlap(overlapAction.item));
-      wrap.append(button);
-    }
-    return wrap;
-  }
-
-  function liveSummary(lead, mode, nowKey, overlaps) {
-    if (!lead) return null;
-    const conflicts = overlaps.get(setId(lead.item)) || [];
-    const nearby = conflicts.filter(entry => {
-      const startsAfterLead = entry.match.key - lead.match.key;
-      if (startsAfterLead < 0 || startsAfterLead > LIVE_GROUP_WINDOW_MINUTES) return false;
-      return mode === "now"
-        ? entry.match.key <= nowKey && nowKey < entry.end
-        : entry.match.key > nowKey;
-    });
-    const later = conflicts.filter(entry => entry.match.key - lead.match.key > LIVE_GROUP_WINDOW_MINUTES);
-    const groupSize = 1 + nearby.length;
-    const hasOverlap = conflicts.length > 0;
-    const action = hasOverlap ? {
-      item: lead.item,
-      label: groupSize > 1 ? "View overlap" : `+${later.length} overlap${later.length === 1 ? "" : "s"}`
-    } : null;
-
-    if (groupSize > 1) {
-      const timing = mode === "now"
-        ? `· ${later.length ? `+${later.length} later` : `playing within ${LIVE_GROUP_WINDOW_MINUTES} min`}`
-        : `· ${lead.item.time} · ${formatStartsIn(lead.match.key - nowKey).replace(/^Starts /, "")}`;
-      return liveEntry(`${groupSize} sets ${mode === "now" ? "now" : "up next"}`, timing, action);
-    }
-
-    const detail = mode === "now"
-      ? `· ${titleCaseStage(lead.item.stageId)} · until ${formatTimelineTime(lead.end)}`
-      : `· ${titleCaseStage(lead.item.stageId)} · ${lead.item.time} · ${formatStartsIn(lead.match.key - nowKey).replace(/^Starts /, "")}`;
-    return liveEntry(lead.item.artist, detail, later.length ? action : null);
-  }
-
-  function renderUpNext() {
-    if (!elements.upNext) return;
-    const now = getFestivalNow();
-    const nowKey = dateToSerial(now.date) * 1440 + now.minutes;
-    const timeline = savedTimeline();
-    const playing = timeline.filter(entry => entry.match.key <= nowKey && nowKey < entry.end);
-    const next = timeline.find(entry => entry.match.key > nowKey) || null;
-    const overlaps = findOverlaps(timeline);
-
-    elements.upNext.hidden = !playing.length && !next;
-    elements.upNext.dataset.state = playing.length ? "now" : "next";
-    elements.liveNow.hidden = !playing.length;
-    elements.liveNext.hidden = !next;
-
-    elements.liveNowList.innerHTML = "";
-    const nowSummary = liveSummary(playing[0], "now", nowKey, overlaps);
-    if (nowSummary) elements.liveNowList.append(nowSummary);
-
-    elements.liveNextList.innerHTML = "";
-    const nextSummary = liveSummary(next, "next", nowKey, overlaps);
-    if (nextSummary) elements.liveNextList.append(nextSummary);
-  }
-
   // Remembers days the user has manually opened or closed, so re-renders
-  // (add/remove/clear) don't fight their choice within a session.
+  // (add/remove) don't fight their choice within a session.
   const dayOpenState = new Map();
   let expandedKey = null;
   let pingPickerOpen = false;
   let pendingLocation = "";
-
-  function openPlannerOverlap(item) {
-    const itemKey = setId(item);
-    if (!(findOverlaps(savedTimeline()).get(itemKey)?.length)) return;
-    dayOpenState.set(item.day, true);
-    expandedKey = itemKey;
-    renderPlanner();
-    window.requestAnimationFrame(() => {
-      const toggle = Array.from(elements.list.querySelectorAll(".planner-overlap-toggle"))
-        .find(button => button.dataset.plannerKey === itemKey);
-      const timeline = toggle?.getAttribute("aria-controls")
-        ? document.getElementById(toggle.getAttribute("aria-controls"))
-        : null;
-      const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-      (timeline || toggle)?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
-      toggle?.focus({ preventScroll: true });
-    });
-  }
+  let selectingPingSet = false;
 
   function formatTimelineTime(key) {
     const minutes = ((key % 1440) + 1440) % 1440;
@@ -527,6 +429,7 @@
     elements.pingLocationOptions.hidden = !pingPickerOpen || Boolean(pendingLocation);
     elements.pingDurationOptions.hidden = !pingPickerOpen || !pendingLocation;
     elements.pingLocation.setAttribute("aria-expanded", String(pingPickerOpen));
+    if (elements.pingSetInstruction) elements.pingSetInstruction.hidden = !selectingPingSet;
     if (pendingLocation) elements.pingDurationLabel.textContent = `How long at ${PING_LOCATIONS[pendingLocation].label}?`;
     if (!ping) return;
     if (isPingLocation(ping.type)) {
@@ -552,7 +455,7 @@
   function toggleOverlap(itemKey) {
     expandedKey = expandedKey === itemKey ? null : itemKey;
     renderPlanner();
-    const toggle = Array.from(elements.list.querySelectorAll(".planner-overlap-toggle"))
+    const toggle = Array.from(elements.list.querySelectorAll(".planner-overlap-button"))
       .find(button => button.dataset.plannerKey === itemKey);
     toggle?.focus({ preventScroll: true });
   }
@@ -647,7 +550,7 @@
     return timeline;
   }
 
-  function buildSetRow(item, current, conflicts, rowIndex, activePing, nowKey) {
+  function buildSetRow(item, current, conflicts, rowIndex, nowKey, nextStartKey) {
     const itemKey = setId(item);
     const cancelled = isCancelledSet(item);
     const isExpanded = expandedKey === itemKey && conflicts.length > 0;
@@ -657,6 +560,12 @@
     const row = document.createElement("div");
     row.className = "planner-set";
     row.classList.toggle("planner-set-cancelled", cancelled);
+    const ended = Boolean(current?.end && current.end <= nowKey);
+    const playing = Boolean(!cancelled && current?.match && current.match.key <= nowKey && nowKey < current.end);
+    const upNext = Boolean(!cancelled && current?.match && current.match.key === nextStartKey);
+    row.classList.toggle("planner-set-ended", ended);
+    row.classList.toggle("planner-set-now", playing);
+    row.classList.toggle("planner-set-next", upNext);
     const time = document.createElement("span");
     time.className = "planner-time";
     time.textContent = item.time;
@@ -671,7 +580,16 @@
     meta.className = "planner-meta";
     const stage = document.createElement("span");
     stage.className = "planner-stage";
-    stage.textContent = titleCaseStage(item.stageId);
+    const stageName = titleCaseStage(item.stageId);
+    if (playing) {
+      stage.classList.add("planner-row-status", "is-now");
+      stage.textContent = `Playing at ${stageName} - Ends at ${formatTimelineTime(current.end)}`;
+    } else if (upNext) {
+      stage.classList.add("planner-row-status", "is-next");
+      stage.textContent = `Up next ${formatStartsIn(current.match.key - nowKey).replace(/^Starts /, "")} at ${stageName}`;
+    } else {
+      stage.textContent = stageName;
+    }
     meta.append(stage);
     if (cancelled) {
       const badge = document.createElement("span");
@@ -679,15 +597,30 @@
       badge.textContent = "Cancelled";
       meta.append(badge);
     }
-    if (conflicts.length) {
+    if (ended && !cancelled) {
       const badge = document.createElement("span");
-      badge.className = "overlap-badge";
+      badge.className = "ended-badge";
+      badge.textContent = "Ended";
+      meta.append(badge);
+    }
+    if (conflicts.length) {
+      const badge = document.createElement("button");
+      badge.type = "button";
+      badge.className = "overlap-badge planner-overlap-button";
+      badge.dataset.plannerKey = itemKey;
+      badge.setAttribute("aria-expanded", String(isExpanded));
+      badge.setAttribute("aria-controls", timelineId);
+      badge.setAttribute("aria-label", `${isExpanded ? "Hide" : "Show"} overlap details for ${item.artist}`);
       badge.append(`${conflicts.length} overlap${conflicts.length === 1 ? "" : "s"}`);
       const chevron = document.createElement("span");
       chevron.className = "overlap-chevron";
       chevron.textContent = "▾";
       chevron.setAttribute("aria-hidden", "true");
       badge.append(chevron);
+      badge.addEventListener("click", event => {
+        event.stopPropagation();
+        toggleOverlap(itemKey);
+      });
       meta.append(badge);
     }
     details.append(meta);
@@ -705,32 +638,23 @@
     });
     const actions = document.createElement("span");
     actions.className = "planner-row-actions";
-    const pingIsCurrent = pingMatchesSet(activePing, item);
-    const pingEnd = current?.match ? pingEndKey(current.match) : 0;
-    if (current?.match && nowKey < pingEnd) {
-      const meet = document.createElement("button");
-      meet.type = "button";
-      meet.className = "planner-ping-set";
-      meet.classList.toggle("is-active", pingIsCurrent);
-      meet.textContent = "Ping";
-      meet.setAttribute("aria-label", `${pingIsCurrent ? "Current ping" : "Ping friends to meet"} at ${titleCaseStage(item.stageId)} for ${item.artist}`);
-      meet.addEventListener("click", event => {
-        event.stopPropagation();
-        if (!pingIsCurrent) setSetPing(item);
-      });
-      actions.append(meet);
-    }
     actions.append(remove);
-    if (conflicts.length) {
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.className = "planner-overlap-toggle";
-      toggle.dataset.plannerKey = itemKey;
-      toggle.setAttribute("aria-expanded", String(isExpanded));
-      toggle.setAttribute("aria-controls", timelineId);
-      toggle.setAttribute("aria-label", `${isExpanded ? "Hide" : "Show"} overlap details for ${item.artist}`);
-      toggle.addEventListener("click", () => toggleOverlap(itemKey));
-      row.append(toggle);
+    if (selectingPingSet && current?.match && nowKey < current.end && !cancelled) {
+      row.classList.add("is-ping-choice");
+      row.tabIndex = 0;
+      row.setAttribute("role", "button");
+      row.setAttribute("aria-label", `Set a ping for ${item.artist} at ${titleCaseStage(item.stageId)}, ${item.time}`);
+      const choose = () => {
+        selectingPingSet = false;
+        setSetPing(item);
+      };
+      row.addEventListener("click", event => { if (!event.target.closest("button")) choose(); });
+      row.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          choose();
+        }
+      });
     }
     row.append(time, details, actions);
     wrap.append(row);
@@ -740,9 +664,9 @@
 
   function renderPlanner() {
     const sets = sortedSets();
-    const activePing = loadPing();
     const nowKey = festivalNowKey();
     const timeline = savedTimeline();
+    const nextStartKey = timeline.find(entry => entry.match.key > nowKey)?.match.key ?? null;
     const timelineById = new Map(timeline.map(entry => [setId(entry.item), entry]));
     const overlaps = findOverlaps(timeline);
     if (expandedKey && !(overlaps.get(expandedKey)?.length)) expandedKey = null;
@@ -750,16 +674,18 @@
     elements.list.innerHTML = "";
     elements.empty.hidden = sets.length > 0;
     elements.share.hidden = sets.length === 0;
-    elements.clear.hidden = sets.length === 0;
     renderPlannerPing();
-    renderUpNext();
     let rowIndex = 0;
     DAYS.forEach(day => {
       const daySets = sets.filter(item => item.day === day);
       if (!daySets.length) return;
+      const dayHasActiveSet = daySets.some(item => {
+        const entry = timelineById.get(setId(item));
+        return entry && ((entry.match.key <= nowKey && nowKey < entry.end) || entry.match.key === nextStartKey);
+      });
       const group = document.createElement("details");
       group.className = "planner-day";
-      group.open = dayOpenState.has(day) ? dayOpenState.get(day) : false;
+      group.open = selectingPingSet || (dayOpenState.has(day) ? dayOpenState.get(day) : dayHasActiveSet);
       group.addEventListener("toggle", () => dayOpenState.set(day, group.open));
       const summary = document.createElement("summary");
       summary.className = "planner-day-summary";
@@ -774,7 +700,7 @@
       list.className = "planner-day-list";
       daySets.forEach(item => {
         const itemKey = setId(item);
-        list.append(buildSetRow(item, timelineById.get(itemKey), overlaps.get(itemKey) || [], rowIndex, activePing, nowKey));
+        list.append(buildSetRow(item, timelineById.get(itemKey), overlaps.get(itemKey) || [], rowIndex, nowKey, nextStartKey));
         rowIndex += 1;
       });
       group.append(summary, list);
@@ -826,10 +752,19 @@
     copyPlanner(text);
   }
 
-  elements.share.addEventListener("click", sharePlanner);
+  elements.share.addEventListener("click", () => {
+    if (!hasSharingIdentity()) {
+      document.querySelector("#hexlace-enable")?.click();
+      setFeedback("Set a username before sharing your list.");
+      return;
+    }
+    if (typeof elements.shareDialog?.showModal === "function") elements.shareDialog.showModal();
+    else elements.shareDialog?.setAttribute("open", "");
+  });
   elements.pingLocation.addEventListener("click", () => {
     pingPickerOpen = !pingPickerOpen;
     pendingLocation = "";
+    selectingPingSet = false;
     renderPlannerPing();
     window.requestAnimationFrame(() => {
       if (pingPickerOpen) elements.pingLocationOptions.querySelector("button")?.focus();
@@ -837,6 +772,19 @@
     });
   });
   elements.pingLocationOptions.addEventListener("click", event => {
+    const setButton = event.target.closest("[data-ping-select-set]");
+    if (setButton) {
+      if (!savedTimeline().some(entry => festivalNowKey() < entry.end)) {
+        setFeedback(loadSets().length ? "No saved sets are still available to ping." : "Save a set before choosing it as a ping.");
+        return;
+      }
+      pingPickerOpen = false;
+      pendingLocation = "";
+      selectingPingSet = true;
+      renderPlanner();
+      window.requestAnimationFrame(() => elements.list.querySelector(".is-ping-choice")?.focus());
+      return;
+    }
     const button = event.target.closest("[data-ping-location]");
     if (!button) return;
     pendingLocation = button.dataset.pingLocation || "";
@@ -858,32 +806,18 @@
     savePing(null, "Ping ended.");
     window.requestAnimationFrame(() => elements.pingLocation.focus());
   });
-  elements.clear.addEventListener("click", () => {
-    const setCount = loadSets().length;
-    if (!window.confirm(`Are you sure you want to clear all ${setCount} saved set${setCount === 1 ? "" : "s"}?`)) return;
-    const hadSetPing = loadPing()?.type === "set";
-    saveSets([]);
-    if (hadSetPing) {
-      savePing(null, "Set list and ping cleared.");
-      enhanceScheduleRows();
-      return;
-    }
-    renderPlanner();
-    enhanceScheduleRows();
-    setFeedback("Cleared set list");
-  });
   new MutationObserver(() => enhanceScheduleRows()).observe(elements.scheduleList, { childList: true });
+  if (elements.searchList) new MutationObserver(() => enhanceScheduleRows()).observe(elements.searchList, { childList: true });
   window.addEventListener("hashchange", () => window.setTimeout(enhanceScheduleRows, 0));
   window.addEventListener("setlist-restored", () => {
     renderPlanner();
     enhanceScheduleRows();
   });
   window.addEventListener("ping-restored", () => renderPlanner());
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) renderUpNext(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) renderPlanner(); });
   renderPlanner();
   enhanceScheduleRows();
   window.setInterval(() => {
-    renderUpNext();
-    renderPlannerPing();
+    renderPlanner();
   }, 30000);
 })();

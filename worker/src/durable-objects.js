@@ -3,8 +3,10 @@ const HANDOFF_TTL_SECONDS = 24 * 60 * 60;
 const CLAIM_CONTENTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const TRADE_TTL_MS = 15 * 60 * 1000;
 const PROFILE_ID_LENGTH = 16;
-const OWL_VERSION = 2;
-const CAMP_OWL_VERSION = 3;
+const OWL_VERSION = 4;
+const LEGACY_CAMP_OWL_VERSION = 3;
+const PUBLIC_OWL_TIER = "public";
+const CAMP_OWL_TIER = "camp-hexadecibel";
 const OWL_SEASON = 2026;
 const HEXADEX_PAGE_SIZE = 24;
 const CAMP_ROLES = new Set(["member", "admin"]);
@@ -54,22 +56,26 @@ function validProfileCredentials(profileId, profileKey) {
 function validOwl(value) {
   return value && typeof value === "object"
     && /^[0-9a-f]{32}$/i.test(value.seed || "")
-    && Number.isSafeInteger(value.version) && value.version >= 1
+    && Number.isSafeInteger(value.version) && value.version >= 1 && value.version <= OWL_VERSION
     && Number.isSafeInteger(value.number) && value.number >= 1
     && Number.isSafeInteger(value.createdAt) && value.createdAt > 0
     && Number.isSafeInteger(value.season) && value.season >= 2026;
 }
 
-// V1 used the same durable identity fields as V2. Upgrading the recorded
-// renderer version therefore gives every existing Owl its V2 trait roll while
-// preserving the seed, global number, mint time, and festival season.
-function upgradeV1Owl(value) {
-  if (!validOwl(value) || value.version !== 1) return value;
-  return { ...value, version: OWL_VERSION };
+// V1/V2 use the public 2026 grammar and V3 uses the camp grammar. V4 stores
+// that distinction as a rarity tier instead of a separate generator version,
+// preserving the seed, number, mint time, season, and therefore appearance.
+function normalizeOwl(value) {
+  if (!validOwl(value)) return value;
+  const tier = value.version === LEGACY_CAMP_OWL_VERSION || value.tier === CAMP_OWL_TIER
+    ? CAMP_OWL_TIER
+    : PUBLIC_OWL_TIER;
+  if (value.version === OWL_VERSION && value.tier === tier) return value;
+  return { ...value, version: OWL_VERSION, tier };
 }
 
 function isCampOwl(value) {
-  return validOwl(value) && value.version === CAMP_OWL_VERSION;
+  return validOwl(value) && normalizeOwl(value).tier === CAMP_OWL_TIER;
 }
 
 function randomHex(byteLength) {
@@ -184,7 +190,7 @@ export class HexlaceCoordinator {
       this.record.profileKey ||= null;
       this.record.owl ||= null;
       this.record.tapToken ||= null;
-      const upgradedOwl = upgradeV1Owl(this.record.owl);
+      const upgradedOwl = normalizeOwl(this.record.owl);
       if (upgradedOwl !== this.record.owl) {
         this.record.owl = upgradedOwl;
         upgradedLegacyRecord = true;
@@ -372,11 +378,12 @@ export class HexlaceCoordinator {
       return json({ error: "Invalid Hex Owl profile." }, 403);
     }
     if (!validOwl(body.owl)) return json({ error: "Invalid Hex Owl assignment." }, 400);
+    const owl = normalizeOwl(body.owl);
     if (validOwl(this.record.owl)
-      && (this.record.owl.seed !== body.owl.seed || this.record.owl.number !== body.owl.number || this.record.owl.season !== body.owl.season)) {
+      && (this.record.owl.seed !== owl.seed || this.record.owl.number !== owl.number || this.record.owl.season !== owl.season)) {
       return json({ error: "This Hexlace already carries another Hex Owl." }, 409);
     }
-    this.record.owl = body.owl;
+    this.record.owl = owl;
     await this.commit();
     return json({ ok: true, owl: this.record.owl });
   }
@@ -770,7 +777,7 @@ export class HexOwlProfile {
     if (!this.record) return json({ error: "Profile not found." }, 404);
     if (!(await this.authorized(body.profileKey))) return json({ error: "Invalid profile key." }, 403);
     if (!cleanAdminTraits(this.record.adminTraits)) this.record.adminTraits = {};
-    await this.migrateV1Owls();
+    await this.migrateOwls();
     if (url.pathname === "/qualify") return this.qualify(body);
     if (url.pathname === "/adopt") return this.adopt(body);
     if (url.pathname === "/release") return this.release(body);
@@ -807,9 +814,9 @@ export class HexOwlProfile {
     return json({ ok: true, owl: null }, 201);
   }
 
-  async migrateV1Owls() {
+  async migrateOwls() {
     let changed = false;
-    const upgradedOwnOwl = upgradeV1Owl(this.record.owl);
+    const upgradedOwnOwl = normalizeOwl(this.record.owl);
     if (upgradedOwnOwl !== this.record.owl) {
       this.record.owl = upgradedOwnOwl;
       changed = true;
@@ -824,7 +831,7 @@ export class HexOwlProfile {
       });
       const updates = {};
       for (const [key, entry] of records) {
-        const upgradedOwl = upgradeV1Owl(entry?.owl);
+        const upgradedOwl = normalizeOwl(entry?.owl);
         if (upgradedOwl !== entry?.owl) {
           updates[key] = { ...entry, owl: upgradedOwl, festivalYear: upgradedOwl.season, context: `Shambhala ${upgradedOwl.season}` };
           changed = true;
@@ -842,7 +849,9 @@ export class HexOwlProfile {
   }
 
   async qualify(body) {
-    const requestedVersion = body.version === CAMP_OWL_VERSION ? CAMP_OWL_VERSION : OWL_VERSION;
+    const requestedTier = body.tier === CAMP_OWL_TIER || body.version === LEGACY_CAMP_OWL_VERSION
+      ? CAMP_OWL_TIER
+      : PUBLIC_OWL_TIER;
     if (!this.record.owl && body.eligible === true) {
       if (!this.env?.OWL_NUMBERS) return json({ error: "Hex Owl numbering is unavailable." }, 503);
       const allocation = await namedStub(this.env.OWL_NUMBERS, "global").fetch(new Request("https://owl-number.internal/allocate", {
@@ -854,14 +863,15 @@ export class HexOwlProfile {
       if (!allocation.ok || !Number.isSafeInteger(allocated.number)) return json({ error: "Hex Owl numbering is unavailable." }, 503);
       this.record.owl = {
         seed: randomHex(16),
-        version: requestedVersion,
+        version: OWL_VERSION,
+        tier: requestedTier,
         number: allocated.number,
         createdAt: nowMs(this.env),
         season: OWL_SEASON
       };
     } else if (validOwl(this.record.owl) && body.eligible === true
-      && requestedVersion === CAMP_OWL_VERSION && this.record.owl.version !== CAMP_OWL_VERSION) {
-      this.record.owl = { ...this.record.owl, version: CAMP_OWL_VERSION };
+      && requestedTier === CAMP_OWL_TIER && !isCampOwl(this.record.owl)) {
+      this.record.owl = { ...normalizeOwl(this.record.owl), tier: CAMP_OWL_TIER };
     }
     if (typeof body.claimedReadId === "string" && body.claimedReadId.length === 8) this.record.claimedReadId = body.claimedReadId;
     this.record.updatedAt = nowMs(this.env);
@@ -873,7 +883,7 @@ export class HexOwlProfile {
     if (!validOwl(body.owl) || typeof body.claimedReadId !== "string" || body.claimedReadId.length !== 8) {
       return json({ error: "Invalid Hex Owl assignment." }, 400);
     }
-    const owl = upgradeV1Owl(body.owl);
+    const owl = normalizeOwl(body.owl);
     const adoptedTraits = cleanAdminTraits(owl.adminTraits);
     if (adoptedTraits && Object.keys(adoptedTraits).length) this.record.adminTraits = adoptedTraits;
     if (body.tradeId && body.tradeId === this.record.lastTradeId && this.record.claimedReadId === body.claimedReadId) {
@@ -881,7 +891,8 @@ export class HexOwlProfile {
     }
     if (!body.tradeId && this.record.claimedReadId === body.claimedReadId
       && validOwl(this.record.owl) && this.record.owl.seed === owl.seed
-      && this.record.owl.version === owl.version && this.record.owl.number === owl.number) {
+      && this.record.owl.version === owl.version && this.record.owl.tier === owl.tier
+      && this.record.owl.number === owl.number) {
       return json({ ok: true, owl: owlWithAdminTraits(this.record.owl, this.record.adminTraits) });
     }
     this.record.owl = owl;
@@ -895,7 +906,7 @@ export class HexOwlProfile {
   async release(body) {
     if (body.owl != null && !validOwl(body.owl)) return json({ error: "Invalid Hex Owl." }, 400);
     if (validOwl(body.owl)) {
-      this.record.owl = upgradeV1Owl(body.owl);
+      this.record.owl = normalizeOwl(body.owl);
       const releasedTraits = cleanAdminTraits(body.owl.adminTraits);
       if (releasedTraits && Object.keys(releasedTraits).length) this.record.adminTraits = releasedTraits;
     }
@@ -910,16 +921,28 @@ export class HexOwlProfile {
   }
 
   readAdminTraits() {
-    return json({ traits: cleanAdminTraits(this.record.adminTraits) || {} });
+    return json({
+      traits: cleanAdminTraits(this.record.adminTraits) || {},
+      owl: owlWithAdminTraits(this.record.owl, this.record.adminTraits),
+      claimedReadId: this.record.claimedReadId
+    });
+  }
+
+  applyRequestedTier(tier) {
+    if (!validOwl(this.record.owl)) return;
+    if (tier === PUBLIC_OWL_TIER || tier === CAMP_OWL_TIER) {
+      this.record.owl = { ...normalizeOwl(this.record.owl), tier };
+    }
   }
 
   async writeAdminTraits(body) {
     const traits = cleanAdminTraits(body.traits);
     if (!traits) return json({ error: `Owl traits must contain at most ${MAX_ADMIN_TRAITS} simple values.` }, 400);
     this.record.adminTraits = traits;
+    this.applyRequestedTier(body.tier);
     this.record.updatedAt = nowMs(this.env);
     await this.ctx.storage.put("profile", this.record);
-    return json({ ok: true, traits });
+    return json({ ok: true, traits, owl: owlWithAdminTraits(this.record.owl, this.record.adminTraits), claimedReadId: this.record.claimedReadId });
   }
 
   async writeMemberTraits(body) {
@@ -931,9 +954,15 @@ export class HexOwlProfile {
     const current = cleanAdminTraits(this.record.adminTraits) || {};
     const adminOnlyTraits = Object.fromEntries(Object.entries(current).filter(([key]) => !MEMBER_OWL_TRAIT_KEYS.has(key)));
     this.record.adminTraits = { ...adminOnlyTraits, ...traits };
+    this.applyRequestedTier(body.tier);
     this.record.updatedAt = nowMs(this.env);
     await this.ctx.storage.put("profile", this.record);
-    return json({ ok: true, traits });
+    return json({
+      ok: true,
+      traits,
+      owl: owlWithAdminTraits(this.record.owl, this.record.adminTraits),
+      claimedReadId: this.record.claimedReadId
+    });
   }
 
   async addHexadex(body) {
@@ -947,7 +976,7 @@ export class HexOwlProfile {
     const indexKey = `hexadex-owl:${source.owl.number}`;
     const priorKey = await this.ctx.storage.get(indexKey);
     const prior = priorKey ? await this.ctx.storage.get(priorKey) : null;
-    const owl = upgradeV1Owl(source.owl);
+    const owl = normalizeOwl(source.owl);
     const firstCollectedAt = prior?.firstCollectedAt || (Number.isSafeInteger(source.firstCollectedAt) && source.firstCollectedAt > 0 ? source.firstCollectedAt : nowMs(this.env));
     const entry = {
       readId: source.readId,

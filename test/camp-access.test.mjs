@@ -81,21 +81,29 @@ test("regular page has no visible camp-access controls", async () => {
 });
 
 test("member and admin access expose the current Owl catalogue without disabled or fixed traits", async () => {
-  const owl = { seed: "0123456789abcdef0123456789abcdef", version: 2 };
+  const owl = { seed: "0123456789abcdef0123456789abcdef", version: 4, tier: "public" };
   const profile = { profileId: "profile-1", profileKey: "private-key", owl };
+  const catalogueInputs = [];
+  const selectionInputs = [];
   const HexOwl = {
-    catalogue: () => ({
-      rarities: [{ id: "common", name: "Common" }, { id: "rare", name: "Rare" }],
+    catalogue: identity => {
+      catalogueInputs.push(identity);
+      return {
+      rarities: [{ id: "common", name: "Common" }, { id: "rare", name: "Rare" }, { id: "camp-hexadecibel", name: "Camp Hexadecibel" }],
       categories: {
         palette: [{ id: "day", name: "Day" }, { id: "night", name: "Night" }, { id: "disabled", name: "Disabled", enabled: false }],
         eyes: [{ id: "open", name: "Open" }, { id: "sleepy", name: "Sleepy" }],
         accessory: [{ id: "none", name: "None" }]
       }
-    }),
-    selectTraits: () => ({
+    };
+    },
+    selectTraits: (seed, identity) => {
+      selectionInputs.push(identity);
+      return {
       rarity: { id: "common", name: "Common" },
       selectionIds: { palette: "day", eyes: "open", accessory: "none" }
-    })
+    };
+    }
   };
   const { access, adminPanel, traitSection } = await loadCampAccess(undefined, {
     Hexadex: { loadProfile: () => profile },
@@ -107,7 +115,11 @@ test("member and admin access expose the current Owl catalogue without disabled 
   assert.equal(adminPanel.hidden, true);
   assert.equal(traitSection.hidden, false);
   assert.deepEqual([...access.owlCustomizationDefinitions()].map(definition => definition.key), ["rarity", "palette", "eyes"]);
+  assert.deepEqual([...access.owlCustomizationDefinitions()[0].options].map(option => option.value), ["common", "rare", "camp-hexadecibel"]);
   assert.deepEqual([...access.owlCustomizationDefinitions()[1].options].map(option => option.value), ["day", "night"]);
+  assert.equal(catalogueInputs.at(-1).campAccess, true);
+  assert.equal(catalogueInputs.at(-1).tier, "public");
+  assert.equal(selectionInputs.at(-1), owl);
   access.registerOwlTraits({ key: "admin_glow", label: "Admin glow", options: ["quiet", "bright"] });
   assert.equal(access.owlCustomizationDefinitions().some(definition => definition.key === "admin_glow"), false);
 
