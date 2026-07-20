@@ -45,10 +45,6 @@
     count: document.querySelector("#hexlace-count"),
     list: document.querySelector("#hexlace-list"),
     empty: document.querySelector("#hexlace-empty"),
-    compareTools: document.querySelector("#hexlace-compare-tools"),
-    compareStart: document.querySelector("#hexlace-compare-start"),
-    comparePrompt: document.querySelector("#hexlace-compare-prompt"),
-    compareCancel: document.querySelector("#hexlace-compare-cancel"),
     compareDialog: document.querySelector("#hexlace-compare-dialog"),
     compareTitle: document.querySelector("#hexlace-compare-title"),
     compareUpdated: document.querySelector("#hexlace-compare-updated"),
@@ -115,6 +111,7 @@
   if (!elements.myPanel || !elements.panel) return;
 
   const friendOpenState = new Map();
+  const friendDayOpenState = new Map();
   let editorMode = "";
   let publishTimer = 0;
   let friendSyncTimer = 0;
@@ -131,7 +128,6 @@
   let connectCode = "";
   let tradePollTimer = 0;
   let collectedRenderSignature = "";
-  let compareSelecting = false;
   let comparedReadId = "";
   let compareDayIndex = 0;
 
@@ -355,11 +351,11 @@
     return identity;
   }
 
-  function feedback(message) {
+  function feedback(message, { persistent = false } = {}) {
     if (!elements.feedback) return;
     elements.feedback.textContent = message;
     window.clearTimeout(feedback.timeout);
-    feedback.timeout = window.setTimeout(() => { elements.feedback.textContent = ""; }, 3200);
+    if (!persistent) feedback.timeout = window.setTimeout(() => { elements.feedback.textContent = ""; }, 4200);
   }
 
   function syncMyPanelOpen() {
@@ -1283,57 +1279,25 @@
     }
   }
 
-  function setCompareSelecting(selecting) {
-    compareSelecting = Boolean(selecting);
-    collectedRenderSignature = "";
-    renderCollected();
-  }
-
   function openComparison(entry) {
     const days = window.HexlaceCompare.DAYS;
     comparedReadId = entry.readId;
     compareDayIndex = Math.max(0, days.indexOf(selectedComparisonDay()));
-    compareSelecting = false;
     collectedRenderSignature = "";
     renderCollected();
     renderComparison();
     showDialog(elements.compareDialog);
   }
 
-  function appendComparisonChoice(entry) {
-    const sets = Array.isArray(entry.sets) ? entry.sets : [];
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "hexlace-compare-friend";
-    button.disabled = Boolean(entry.pending && !entry.updated && !sets.length);
-    const name = document.createElement("strong");
-    name.textContent = entry.name || "Loading...";
-    const detail = document.createElement("span");
-    detail.textContent = entry.pending && !entry.updated
-      ? "Waiting for signal"
-      : `${sets.length} saved set${sets.length === 1 ? "" : "s"} · ${entry.updated ? `updated ${timeAgo(entry.updated)}` : "not loaded yet"}`;
-    button.append(name, detail);
-    button.addEventListener("click", () => openComparison(entry));
-    elements.list.append(button);
-  }
-
   function renderCollected() {
     const entries = loadCollected();
-    if (!entries.length) compareSelecting = false;
-    const signature = JSON.stringify([entries, [...friendOpenState], compareSelecting, mySets().length, Math.floor(Date.now() / 60000)]);
+    const signature = JSON.stringify([entries, [...friendOpenState], [...friendDayOpenState], mySets().length, Math.floor(Date.now() / 60000)]);
     if (signature === collectedRenderSignature) return;
     collectedRenderSignature = signature;
     elements.count.textContent = `${entries.length} Friend${entries.length === 1 ? "" : "s"}`;
     elements.empty.hidden = entries.length > 0;
-    elements.compareTools.hidden = entries.length === 0;
-    elements.compareStart.hidden = compareSelecting;
-    elements.comparePrompt.hidden = !compareSelecting;
     elements.list.innerHTML = "";
     entries.forEach(entry => {
-      if (compareSelecting) {
-        appendComparisonChoice(entry);
-        return;
-      }
       const group = document.createElement("details");
       group.className = "planner-day hexlace-friend";
       group.open = friendOpenState.has(entry.readId) ? friendOpenState.get(entry.readId) : false;
@@ -1373,33 +1337,60 @@
         group.append(stale);
       }
 
-      const list = document.createElement("ol");
-      list.className = "planner-day-list";
+      const list = document.createElement("div");
+      list.className = "hexlace-friend-days";
       function populateSetRows() {
         if (list.dataset.populated === "true") return;
         list.dataset.populated = "true";
-        sets.forEach(item => {
-          const row = document.createElement("li");
-          row.className = "planner-set";
-          const time = document.createElement("span");
-          time.className = "planner-time";
-          time.textContent = item.time || "";
-          const details = document.createElement("span");
-          details.className = "planner-details";
-          const artist = document.createElement("span");
-          artist.className = "planner-artist";
-          artist.textContent = item.artist || "";
-          const meta = document.createElement("span");
-          meta.className = "planner-meta";
-          meta.textContent = `${item.day || ""} - ${stageLabel(item.stageId)}`;
-          appendCancellationBadge(row, meta, item);
-          details.append(artist, meta);
-          row.append(time, details);
-          list.append(row);
+        const configuredDays = window.HexlaceCompare?.DAYS || [];
+        const savedDays = [...new Set(sets.map(item => item?.day).filter(Boolean))];
+        const days = [
+          ...configuredDays.filter(day => savedDays.includes(day)),
+          ...savedDays.filter(day => !configuredDays.includes(day))
+        ];
+        const defaultDay = days.includes(selectedComparisonDay()) ? selectedComparisonDay() : days[0];
+        days.forEach(day => {
+          const daySets = sets.filter(item => item?.day === day);
+          const dayGroup = document.createElement("details");
+          dayGroup.className = "planner-day hexlace-friend-day";
+          const openKey = `${entry.readId}:${day}`;
+          dayGroup.open = friendDayOpenState.has(openKey) ? friendDayOpenState.get(openKey) : day === defaultDay;
+          dayGroup.addEventListener("toggle", () => friendDayOpenState.set(openKey, dayGroup.open));
+
+          const daySummary = document.createElement("summary");
+          daySummary.className = "planner-day-summary";
+          const dayName = document.createElement("span");
+          dayName.className = "planner-day-name";
+          dayName.textContent = day;
+          const dayCount = document.createElement("span");
+          dayCount.className = "planner-day-count";
+          dayCount.textContent = `${daySets.length} set${daySets.length === 1 ? "" : "s"}`;
+          daySummary.append(dayName, dayCount);
+
+          const dayList = document.createElement("ol");
+          dayList.className = "planner-day-list";
+          daySets.forEach(item => {
+            const row = document.createElement("li");
+            row.className = "planner-set hexlace-friend-set";
+            const details = document.createElement("span");
+            details.className = "planner-details";
+            const artist = document.createElement("span");
+            artist.className = "planner-artist";
+            artist.textContent = item.artist || "";
+            const meta = document.createElement("span");
+            meta.className = "planner-meta";
+            meta.textContent = `${item.time || ""} on ${day} - ${stageLabel(item.stageId)}`;
+            appendCancellationBadge(row, meta, item);
+            details.append(artist, meta);
+            row.append(details);
+            dayList.append(row);
+          });
+          dayGroup.append(daySummary, dayList);
+          list.append(dayGroup);
         });
         if (!sets.length && !entry.pending) {
-          const note = document.createElement("li");
-          note.className = "planner-set hexlace-empty-note";
+          const note = document.createElement("p");
+          note.className = "planner-empty hexlace-empty-note";
           note.textContent = entry.missing ? "This Hexlace has expired or was removed." : "No sets saved yet.";
           list.append(note);
         }
@@ -1431,6 +1422,7 @@
         saveCollected(previousEntries.filter(other => other.readId !== entry.readId));
         friendCollectionChanged();
         friendOpenState.delete(entry.readId);
+        [...friendDayOpenState.keys()].filter(key => key.startsWith(`${entry.readId}:`)).forEach(key => friendDayOpenState.delete(key));
         collectedRenderSignature = "";
         renderCollected();
         feedback("Removed.");
@@ -1576,7 +1568,7 @@
 
   async function writeTag(url) {
     try {
-      feedback("Hold a tag against the back of your phone...");
+      feedback("Hold a tag against the back of your phone...", { persistent: true });
       await new NDEFReader().write({ records: [{ recordType: "url", data: url }] });
       feedback("Tag written!");
       return true;
@@ -1666,8 +1658,6 @@
   elements.swapCreateButton?.addEventListener("click", startTradeMode);
   elements.swapAcceptButton?.addEventListener("click", confirmTrade);
   elements.swapCancel?.addEventListener("click", cancelTrade);
-  elements.compareStart?.addEventListener("click", () => setCompareSelecting(true));
-  elements.compareCancel?.addEventListener("click", () => setCompareSelecting(false));
   elements.comparePrevious?.addEventListener("click", () => {
     compareDayIndex = Math.max(0, compareDayIndex - 1);
     renderComparison();

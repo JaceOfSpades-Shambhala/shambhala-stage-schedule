@@ -318,18 +318,11 @@
         <div class="hexlace-tools-row">
           <button id="hexadex-open" class="hexadex-open hexadex-open-prominent" type="button"><span id="hexadex-avatar" class="hexadex-open-avatar" aria-hidden="true" hidden></span><span class="hexadex-open-copy"><span class="hexadex-open-label">Open the Hexadex</span><span class="hexadex-open-progress"><span id="hexadex-count" class="hexadex-count">0</span> owls found</span></span></button>
         </div>
-        <div id="hexlace-compare-tools" class="hexlace-compare-tools" hidden>
-          <button id="hexlace-compare-start" class="planner-action hexlace-compare-start" type="button">Compare plans</button>
-          <div id="hexlace-compare-prompt" class="hexlace-compare-prompt" hidden>
-            <strong>Choose a friend</strong>
-            <button id="hexlace-compare-cancel" class="hexlace-text-action" type="button">Cancel</button>
-          </div>
-        </div>
         <div id="hexlace-list" class="hexlace-list"></div>
         <p id="hexlace-empty" class="planner-empty">No friends' sets collected yet</p>
       </div>
     </details>
-    <p id="hexlace-feedback" class="planner-feedback hexlace-feedback" role="status" aria-live="polite"></p>
+    <p id="hexlace-feedback" class="planner-feedback hexlace-feedback" role="status" aria-live="polite" aria-atomic="true"></p>
 
     <dialog id="hexadex-dialog" class="hexlace-dialog hexadex-dialog" aria-labelledby="hexadex-dialog-title">
       <form method="dialog" class="hexlace-dialog-card hexadex-dialog-card">

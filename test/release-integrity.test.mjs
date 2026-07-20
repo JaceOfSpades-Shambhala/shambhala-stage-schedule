@@ -96,9 +96,9 @@ test("schedule filters use ordinary toggle buttons rather than an incomplete tab
 });
 
 test("Hexlace coordination and closed-friend rendering safeguards stay enabled", async () => {
-  const [config, coordinator, hexlaces, worker, html] = await Promise.all([
+  const [config, coordinator, hexlaces, worker, html, css] = await Promise.all([
     read("wrangler.jsonc"), read("worker/src/durable-objects.js"), read("hexlaces.js"),
-    read("worker/src/index.js"), read("index.html")
+    read("worker/src/index.js"), read("index.html"), read("styles.css")
   ]);
   assert.match(config, /"name": "HEXLACES", "class_name": "HexlaceCoordinator"/);
   assert.match(config, /"name": "RATE_LIMITS", "class_name": "RateLimitCoordinator"/);
@@ -118,12 +118,17 @@ test("Hexlace coordination and closed-friend rendering safeguards stay enabled",
   assert.match(hexlaces, /elements\.connectSection\.hidden = !canConnectApp/);
   assert.match(hexlaces, /!isStandalone\(\).*navigator\.onLine !== false/);
   assert.match(html, /id="hexlace-bring-over"/);
-  assert.match(html, /id="hexlace-compare-start"/);
+  assert.doesNotMatch(html, /id="hexlace-compare-start"|id="hexlace-compare-prompt"/);
   assert.match(html, /id="hexlace-compare-dialog"/);
   assert.match(html, /id="hexlace-compare-previous"/);
   assert.match(html, /id="hexlace-compare-next"/);
   assert.match(hexlaces, /window\.HexlaceCompare\.sharedSets/);
   assert.match(hexlaces, /compareDayIndex = Math\.max\(0, days\.indexOf\(selectedComparisonDay\(\)\)\)/);
+  assert.match(hexlaces, /dayGroup\.className = "planner-day hexlace-friend-day"/);
+  assert.match(hexlaces, /`\$\{item\.time \|\| ""\} on \$\{day\} - \$\{stageLabel\(item\.stageId\)\}`/);
+  assert.doesNotMatch(hexlaces, /compareSelecting|appendComparisonChoice/);
+  assert.match(css, /\.planner-set\.hexlace-friend-set \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(css, /\.hexlace-feedback:not\(:empty\) \{[^}]*position: fixed/);
   assert.match(html, /id="hexlace-admin-section"[^>]*hidden/);
   assert.doesNotMatch(html, /id="hexlace-swap-open"|id="hexlace-swap-dialog"|Trade Hexlaces/);
   assert.doesNotMatch(hexlaces, /loadTradeMode\(\) && tapToken/);
