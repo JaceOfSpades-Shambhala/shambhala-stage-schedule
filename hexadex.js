@@ -469,15 +469,22 @@
   async function syncPending() {
     const profile = loadProfile();
     if (!profile || navigator.onLine === false) return;
-    const remaining = [];
+    const succeeded = [];
     for (const item of pendingCollections()) {
       try {
-        if (!(await submitCollection(item, false))) remaining.push(item);
+        if (await submitCollection(item, false)) succeeded.push(item);
       } catch {
-        remaining.push(item);
+        // Leave it queued; the next sync retries.
       }
     }
-    writeJson(PENDING_KEY, remaining);
+    if (succeeded.length) {
+      // Re-read and only remove what this pass actually submitted, instead of
+      // overwriting with a start-of-loop snapshot - a tap that queued a new
+      // item while this loop was running must not be silently dropped.
+      const stillPending = pendingCollections().filter(item =>
+        !succeeded.some(done => done.readId === item.readId && done.tapToken === item.tapToken));
+      writeJson(PENDING_KEY, stillPending);
+    }
     renderGrid();
   }
 

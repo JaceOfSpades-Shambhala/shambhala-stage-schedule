@@ -1,15 +1,18 @@
-// Minimal browser-global shim so hexlaces.js's IIFE (no exports, reads
-// document/window/localStorage at load time) can actually execute in Node
-// and be driven through real public surface - localStorage, window events,
-// and a mocked fetch - rather than only pattern-matched as source text.
+// Minimal browser-global shim so this repo's plain `(() => {...})()` client
+// scripts (no exports, read document/window/localStorage at load time) can
+// actually execute in Node and be driven through real public surface -
+// localStorage, window events, and a mocked fetch - rather than only
+// pattern-matched as source text. Shared by hexlaces.js and hexadex.js tests.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const HEXLACES_PATH = fileURLToPath(new URL("../../hexlaces.js", import.meta.url));
 const HEXLACES_SOURCE = readFileSync(HEXLACES_PATH, "utf8");
-// hexlaces.js calls window.fetchHexlaceApi (defined here), which itself
-// defaults to the bare global `fetch` unless a caller overrides it - the
-// mock in a test therefore has to sit on globalThis.fetch, not window.fetch.
+const HEXADEX_PATH = fileURLToPath(new URL("../../hexadex.js", import.meta.url));
+const HEXADEX_SOURCE = readFileSync(HEXADEX_PATH, "utf8");
+// Both call window.fetchHexlaceApi (defined here), which itself defaults to
+// the bare global `fetch` unless a caller overrides it - the mock in a test
+// therefore has to sit on globalThis.fetch, not window.fetch.
 const HEXLACE_API_PATH = fileURLToPath(new URL("../../hexlace-api.js", import.meta.url));
 const HEXLACE_API_SOURCE = readFileSync(HEXLACE_API_PATH, "utf8");
 
@@ -31,6 +34,7 @@ function makeStubElement() {
     remove() {},
     replaceChildren() {},
     setAttribute() {},
+    setAttributeNS() {},
     getAttribute() { return null; },
     removeAttribute() {},
     querySelector() { return makeStubElement(); },
@@ -63,6 +67,7 @@ export function installHexlacesGlobals() {
     querySelector: () => makeStubElement(),
     querySelectorAll: () => [],
     createElement: () => makeStubElement(),
+    createElementNS: () => makeStubElement(),
     get cookie() { return cookieValue; },
     set cookie(value) { cookieValue = `${cookieValue ? cookieValue + "; " : ""}${String(value).split(";")[0]}`; }
   });
@@ -111,6 +116,11 @@ async function importFresh(source) {
 export async function loadHexlaces() {
   await importFresh(HEXLACE_API_SOURCE);
   await importFresh(HEXLACES_SOURCE);
+}
+
+export async function loadHexadex() {
+  await importFresh(HEXLACE_API_SOURCE);
+  await importFresh(HEXADEX_SOURCE);
 }
 
 export function makeIdentity(overrides = {}) {
