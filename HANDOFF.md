@@ -1,6 +1,6 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v75**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v76**.
 
 ## What this is
 
@@ -47,7 +47,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (v75 at the time of writing). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (v76 at the time of writing). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
