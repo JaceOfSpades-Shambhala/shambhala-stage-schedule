@@ -1653,6 +1653,124 @@
     });
   }
 
+  // V4 camp customization. The seeded Camp Hexadecibel roll keeps the frozen
+  // V3 grammar and weights untouched; a verified camp editor may then force
+  // any enabled choice from the merged public-plus-camp catalogue on top of
+  // that roll, with no budget, hero, or mandatory-ring restrictions. Camp-only
+  // values stay exclusive to the camp tier without being compulsory for it.
+  function finalizeFreestyleTraitsV4Camp(normalized, state, palette, repairs) {
+    const totals = selectionTotalsV3(state);
+    const prism = prismOrderForSeed(normalized);
+    const multicolor = state.ringMode.multicolor === true;
+    const ringColours = multicolor
+      ? prism.tokens.map(token => palette.tokens[token])
+      : [palette.tokens.ring, palette.tokens.ring, palette.tokens.ring, palette.tokens.ring];
+    const rings = deepFreeze({
+      id: state.ringMode.id,
+      name: state.ringMode.id === "hexadecibel-vortex"
+        ? state.ringMode.name
+        : (multicolor ? palette.name + " Festival Prism" : palette.name + " Portal"),
+      colors: deepFreeze(ringColours.slice()),
+      multicolor
+    });
+    const selectionIds = { palette: palette.id };
+    CATEGORY_KEYS.forEach(key => { selectionIds[key] = state[key].id; });
+    const heroes = [];
+    V3_COST_KEYS.forEach(key => { if (state[key].hero) heroes.push(state[key].name); });
+    return deepFreeze({
+      version: VERSION,
+      tier: CAMP_TIER,
+      seed: normalized,
+      rarity: V3_TIER,
+      palette,
+      face: palette,
+      rings,
+      ringMode: state.ringMode,
+      ringStyle: state.ringStyle,
+      direction: state.direction,
+      ringDirection: state.direction.name,
+      brow: state.brow,
+      eyes: state.eyes,
+      beak: state.beak,
+      marking: state.marking,
+      accessory: state.accessory,
+      aura: state.aura,
+      heroes: deepFreeze(heroes),
+      cost: totals.cost,
+      budget: V3_TIER.budget,
+      focalCount: totals.focalCount,
+      focalCap: V3_TIER.focalCap,
+      heroCount: totals.heroCount,
+      supportCount: totals.supportCount,
+      treatmentCount: totals.treatmentCount,
+      prismPermutation: prism.permutation,
+      prismOrder: prism.tokens,
+      selectionIds: deepFreeze(selectionIds),
+      issues: deepFreeze([]),
+      repairs: deepFreeze(repairs.slice()),
+      freestyle: true
+    });
+  }
+
+  function resolveFreestyleTraitsV4Camp(seed, config) {
+    const normalized = normalizeSeed(seed);
+    const overrides = config.overrides && typeof config.overrides === "object" ? config.overrides : config;
+    const original = resolveTraitsV3(normalized, {}, CAMP_VERSION);
+    const repairs = [];
+    const state = { accessory: V2_ACCESSORIES[0] };
+    V3_CATEGORY_KEYS.forEach(key => { state[key] = original[key]; });
+
+    let palette = original.palette;
+    const requestedPalette = overrides.palette || overrides.face;
+    if (requestedPalette && String(requestedPalette).toLowerCase() !== "auto") {
+      const candidate = findByIdOrName(V4_CAMP_CATEGORIES.palette, requestedPalette);
+      if (candidate && candidate.enabled !== false) palette = candidate;
+      else repairs.push("Unknown or disabled palette override was replaced with the original palette.");
+    }
+
+    CATEGORY_KEYS.forEach(category => {
+      const legacyKey = category === "direction" ? "ringDirection" : category;
+      const supplied = overrides[category] !== undefined ? overrides[category] : overrides[legacyKey];
+      if (supplied === undefined || supplied === null || supplied === "" || String(supplied).toLowerCase() === "auto") return;
+      const candidate = findByIdOrName(V4_CAMP_CATEGORIES[category], supplied);
+      if (candidate && candidate.enabled !== false) state[category] = candidate;
+      else repairs.push("Unknown or disabled " + category + " override was replaced with the original choice.");
+    });
+    return finalizeFreestyleTraitsV4Camp(normalized, state, palette, repairs);
+  }
+
+  function validateTraitsV4Camp(traits) {
+    if (!traits || typeof traits !== "object") {
+      return deepFreeze({ valid: false, issues: ["Traits are missing."], repairs: [] });
+    }
+    if (traits.freestyle !== true) return validateTraitsV3(traits);
+    const issues = [];
+    const rarity = findByIdOrName([V3_TIER], traits.rarity || traits.tier);
+    if (!rarity) issues.push("Rarity is not the Camp Hexadecibel tier.");
+    const palette = findByIdOrName(V4_CAMP_CATEGORIES.palette, traits.palette || traits.face);
+    if (!palette) issues.push("Palette is not in the merged camp catalogue.");
+    else if (palette.enabled === false) issues.push(palette.name + " is disabled.");
+    const state = {};
+    CATEGORY_KEYS.forEach(category => {
+      const supplied = traits[category] || (category === "direction" ? traits.ringDirection : null);
+      const option = findByIdOrName(V4_CAMP_CATEGORIES[category], supplied);
+      if (!option) issues.push(category + " is not in the merged camp catalogue.");
+      else if (option.enabled === false) issues.push(option.name + " is disabled.");
+      else state[category] = option;
+    });
+    const totals = selectionTotalsV3(state);
+    return deepFreeze({
+      valid: issues.length === 0,
+      issues,
+      repairs: Array.isArray(traits.repairs) ? traits.repairs.slice() : [],
+      computedCost: totals.cost,
+      computedFocals: totals.focalCount,
+      computedHeroes: totals.heroCount,
+      computedSupports: totals.supportCount,
+      computedTreatments: totals.treatmentCount
+    });
+  }
+
   function splitClosedSubpaths(pathData) {
     const rawSubpaths = String(pathData || "").match(/[mM][\s\S]*?[zZ](?=\s*[mM]|$)/g) || [];
     let priorStart = [0, 0];
@@ -2298,6 +2416,77 @@
       definitions + body + "</svg>";
   }
 
+  function campNativeId(category, id) {
+    return (V3_CATEGORIES[category] || []).some(option => option.id === id);
+  }
+
+  function campSelectionIsV3Native(traits) {
+    const ids = traits && traits.selectionIds;
+    if (!ids) return true;
+    if (!V3_PALETTES.some(palette => palette.id === ids.palette)) return false;
+    if (ids.accessory && ids.accessory !== V2_ACCESSORIES[0].id) return false;
+    return V3_CATEGORY_KEYS.every(key => campNativeId(key, ids[key]));
+  }
+
+  // Camp Owls carrying merged-catalogue choices keep the V3 frame (dark stage,
+  // base disc, Vortex glow) while each treatment renders through the grammar
+  // that owns its art: V3 helpers for camp-native ids, V2 helpers otherwise.
+  function renderResolvedV4Camp(traits) {
+    const validation = validateTraitsV4Camp(traits);
+    if (!validation.valid) throw new Error("Invalid Hex Owl traits: " + validation.issues.join(" "));
+    const signature = ["v4-camp", "palette"].concat(CATEGORY_KEYS)
+      .map(key => key === "v4-camp" ? key : traits.selectionIds[key])
+      .concat([String(traits.prismPermutation)])
+      .join("|");
+    const idRoot = "hex-owl-v4-camp-" + traits.seed.slice(0, 12) + "-" + hashWords(signature).slice(0, 8);
+    const ids = {
+      background: idRoot + "-background",
+      beacon: idRoot + "-beacon",
+      vortexGlow: idRoot + "-vortex-glow",
+      backdrop: idRoot + "-backdrop",
+      festivalWell: idRoot + "-festival-well",
+      uvWell: idRoot + "-uv-well",
+      combFade: idRoot + "-comb-fade",
+      combMask: idRoot + "-comb-mask",
+      safe: idRoot + "-safe",
+      gazeLeft: idRoot + "-gaze-left",
+      gazeRight: idRoot + "-gaze-right"
+    };
+    const tokens = traits.palette.tokens;
+    const gazeGradient = id => '<radialGradient id="' + id + '"><stop offset="0" stop-color="' + tokens.highlight + '"/><stop offset=".45" stop-color="' + tokens.focal + '"/><stop offset="1" stop-color="' + tokens.focal + '" stop-opacity=".12"/></radialGradient>';
+    const definitions = '<defs>' +
+      '<clipPath id="' + ids.safe + '"><polygon points="' + GEOMETRY.safeZones.innerPortal.points + '"/></clipPath>' +
+      '<radialGradient id="' + ids.background + '" cx="30%" cy="20%" r="85%"><stop offset="0%" stop-color="' + tokens.shadow + '" stop-opacity=".5"/><stop offset="100%" stop-color="' + tokens.shadow + '" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="' + ids.beacon + '"><stop offset="55%" stop-color="' + tokens.beam + '" stop-opacity="0"/><stop offset="88%" stop-color="' + tokens.beam + '" stop-opacity=".14"/><stop offset="100%" stop-color="' + tokens.beam + '" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="' + ids.vortexGlow + '"><stop offset="0%" stop-color="' + tokens.ring + '" stop-opacity=".13"/><stop offset="100%" stop-color="' + tokens.ring + '" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="' + ids.backdrop + '"><stop offset="0%" stop-color="' + tokens.face + '" stop-opacity=".15"/><stop offset="100%" stop-color="' + tokens.face + '" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="' + ids.festivalWell + '"><stop offset="0%" stop-color="' + tokens.focal + '"/><stop offset="62%" stop-color="' + tokens.focal + '" stop-opacity=".55"/><stop offset="100%" stop-color="' + tokens.shadow + '"/></radialGradient>' +
+      '<radialGradient id="' + ids.uvWell + '"><stop offset="0%" stop-color="' + tokens.beam + '"/><stop offset="62%" stop-color="' + tokens.beam + '" stop-opacity=".55"/><stop offset="100%" stop-color="' + tokens.shadow + '"/></radialGradient>' +
+      gazeGradient(ids.gazeLeft) + gazeGradient(ids.gazeRight) +
+      '<radialGradient id="' + ids.combFade + '"><stop offset="0%" stop-color="#fff"/><stop offset="58%" stop-color="#fff"/><stop offset="100%" stop-color="#fff" stop-opacity=".12"/></radialGradient>' +
+      '<mask id="' + ids.combMask + '"><circle cx="50" cy="50" r="26" fill="url(#' + ids.combFade + ')"/></mask></defs>';
+    const vortex = traits.ringMode.id === "hexadecibel-vortex";
+    const clipped = ' clip-path="url(#' + ids.safe + ')"';
+    const body =
+      layer("background", '<rect width="100" height="100" fill="#0b0c15"/><rect width="100" height="100" fill="url(#' + ids.background + ')"/>') +
+      layer("aura", campNativeId("aura", traits.aura.id) ? auraSvgV3(traits, ids) : auraSvgV2(traits, ids), ' data-aura="' + traits.aura.id + '"') +
+      layer("laser-outer", laserSegmentSvg(traits, "outer"), ' data-crossing-exception="' + (traits.eyes.id === "pupil-lasers" ? "laser" : "none") + '"') +
+      layer("portal-rings", vortex ? ringsSvgV3(traits) : ringsSvg(traits), ' data-direction="' + traits.direction.id + '"') +
+      layer("ring-glow", vortex ? '<circle cx="50" cy="50" r="30" fill="url(#' + ids.vortexGlow + ')"/>' : "") +
+      layer("owl-backdrop", '<circle cx="50" cy="50" r="27.5" fill="url(#' + ids.backdrop + ')"/>') +
+      layer("base-disc", '<circle cx="50" cy="50" r="26.4" fill="#0b0c15"/>') +
+      layer("eyes", campNativeId("eyes", traits.eyes.id) ? eyesSvgV3(traits, ids) : eyesSvgV2(traits, ids), clipped) +
+      layer("owl-base", '<use href="#' + SHARED_MARK_ID + '" fill="' + tokens.face + '" transform="' + OWL_TRANSFORM + '"/>') +
+      layer("honeycomb", honeycombSvgV3(traits, ids)) +
+      layer("brows", campNativeId("brow", traits.brow.id) ? browSvgV3(traits) : browSvgV2(traits), clipped) +
+      layer("facial-details", campNativeId("marking", traits.marking.id) ? facialDetailsSvgV3(traits) : facialDetailsSvgV2(traits), clipped) +
+      layer("beak", campNativeId("beak", traits.beak.id) ? beakSvgV3(traits) : beakSvgV2(traits), clipped) +
+      layer("laser-inner", laserSegmentSvg(traits, "inner"), ' data-origin="exact-pupils"');
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Camp Hexadecibel Owl" preserveAspectRatio="xMidYMid meet" data-hex-owl-version="4" data-rarity="camp-hexadecibel" data-cost="' + traits.cost + '" data-heroes="' + traits.heroCount + '" data-supports="' + traits.supportCount + '">' +
+      '<title>Camp Hexadecibel Owl, 2026 edition</title><desc>Provenance-gated Hex Owl customized from the merged public and camp trait catalogue.</desc>' +
+      definitions + body + "</svg>";
+  }
+
   function checkedIdentity(value) {
     const source = value && typeof value === "object" ? value : { version: value };
     const resolved = source.version === undefined ? VERSION : Number(source.version);
@@ -2329,9 +2518,10 @@
 
   function resolveTraitsV4(seed, options, identity) {
     const tier = requestedTier(options, identity);
-    return tier === CAMP_TIER
-      ? wrapCurrentTraits(resolveTraitsV3(seed, options, CAMP_VERSION), CAMP_TIER)
-      : wrapCurrentTraits(resolveTraitsV2(seed, options, V2_VERSION), PUBLIC_TIER);
+    if (tier !== CAMP_TIER) return wrapCurrentTraits(resolveTraitsV2(seed, options, V2_VERSION), PUBLIC_TIER);
+    const config = options && typeof options === "object" ? options : {};
+    if (config.freestyle === true) return resolveFreestyleTraitsV4Camp(seed, config);
+    return wrapCurrentTraits(resolveTraitsV3(seed, options, CAMP_VERSION), CAMP_TIER);
   }
 
   function resolveTraits(seed, options, version) {
@@ -2357,11 +2547,12 @@
     if (identity.version === V1_VERSION) return validateTraitsV1(traits);
     if (identity.version === V2_VERSION) return validateTraitsV2(traits);
     if (identity.version === CAMP_VERSION) return validateTraitsV3(traits);
-    return requestedTier(traits, identity) === CAMP_TIER ? validateTraitsV3(traits) : validateTraitsV2(traits);
+    return requestedTier(traits, identity) === CAMP_TIER ? validateTraitsV4Camp(traits) : validateTraitsV2(traits);
   }
 
   function renderResolvedV4(traits) {
     const tier = requestedTier(traits, checkedIdentity(traits));
+    if (tier === CAMP_TIER && !campSelectionIsV3Native(traits)) return renderResolvedV4Camp(traits);
     const legacyTraits = { ...traits, version: tier === CAMP_TIER ? CAMP_VERSION : V2_VERSION };
     const svg = tier === CAMP_TIER ? renderResolvedV3(legacyTraits) : renderResolvedV2(legacyTraits);
     return svg.replace(/data-hex-owl-version="[23]"/, 'data-hex-owl-version="4"');
