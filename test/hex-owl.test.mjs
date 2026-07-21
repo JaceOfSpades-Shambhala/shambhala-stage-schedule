@@ -1890,3 +1890,96 @@ test("every V3 camp trait can be forced and renders with exact Vortex and overla
   assert.equal((svg.match(/stroke="#f1e7ff" stroke-width="\.22"/g) || []).length, 6);
   assert.equal((svg.match(/data-layer="/g) || []).length, 12);
 });
+
+test("camp freestyle keeps the seeded V3 roll and byte-stable art when nothing is overridden", async () => {
+  const owl = await renderer();
+  const identity = { version: 4, tier: "camp-hexadecibel" };
+  for (let index = 0; index < 200; index += 1) {
+    const seed = `camp-v4-freestyle-baseline-${index}`;
+    const resolved = owl.resolveTraits(seed, { overrides: {}, freestyle: true }, identity);
+    assert.equal(resolved.version, 4);
+    assert.equal(resolved.tier, "camp-hexadecibel");
+    assert.equal(resolved.freestyle, true);
+    assert.deepEqual(plain(resolved.selectionIds), plain(owl.selectTraits(seed, 3).selectionIds),
+      "An unforced camp freestyle resolution must keep the frozen V3 roll and weights.");
+    assert.equal(owl.renderWithTraits(seed, resolved, identity), owl.renderSvg(seed, identity),
+      "An unforced camp freestyle render must stay byte-identical to the seeded camp art.");
+  }
+});
+
+test("camp members can freestyle every enabled merged-catalogue choice onto their camp Owl", async () => {
+  const owl = await renderer();
+  const identity = { version: 4, tier: "camp-hexadecibel" };
+  const catalogue = owl.catalogue({ version: 4, campAccess: true });
+  const categories = ["palette", "ringMode", "ringStyle", "direction", "brow", "eyes", "beak", "marking", "accessory", "aura"];
+  let forced = 0;
+  for (const category of categories) {
+    for (const option of categoryOptions(catalogue, category)) {
+      if (option.enabled === false) continue;
+      const id = rawOptionId(option);
+      const seed = `camp-v4-freestyle-${category}-${id}`;
+      const resolved = owl.resolveTraits(seed, {
+        rarity: "camp-hexadecibel",
+        overrides: { [category]: id },
+        freestyle: true
+      }, identity);
+      assert.equal(resolved.selectionIds[category], id, `${category}.${id} must remain selected on a camp Owl.`);
+      assert.equal(resolved.tier, "camp-hexadecibel");
+      assert.equal(resolved.freestyle, true);
+      assert.deepEqual(plain(resolved.repairs), []);
+      assert.deepEqual(plain(resolved.issues), []);
+      assert.equal(validationIsValid(owl.validateTraits(resolved, identity)), true,
+        `${category}.${id}: ${JSON.stringify(validationIssues(owl.validateTraits(resolved, identity)))}`);
+      const first = owl.renderWithTraits(seed, resolved, identity);
+      assert.match(first, /^<svg\b[^>]*data-hex-owl-version="4"[^>]*data-rarity="camp-hexadecibel"/);
+      assert.equal(first, owl.renderWithTraits(seed, resolved, identity),
+        `${category}.${id} must serialize byte-identically.`);
+      forced += 1;
+    }
+  }
+  assert.ok(forced >= 96, `Expected freestyle coverage of the merged camp catalogue, forced only ${forced} options.`);
+});
+
+test("public treatments stay visible on camp Owls even with a UV palette selected", async () => {
+  const owl = await renderer();
+  const identity = { version: 4, tier: "camp-hexadecibel" };
+  const seed = "camp-v4-merged-art";
+  const resolved = owl.resolveTraits(seed, {
+    overrides: {
+      palette: "uv-violet",
+      brow: "brow-echo",
+      eyes: "midnight-eye-wells",
+      beak: "bold-chevron",
+      marking: "festival-stripes",
+      aura: "shooting-star"
+    },
+    freestyle: true
+  }, identity);
+  assert.equal(resolved.palette.id, "uv-violet");
+  assert.equal(resolved.brow.id, "brow-echo");
+  assert.equal(resolved.eyes.id, "midnight-eye-wells");
+  assert.equal(resolved.beak.id, "bold-chevron");
+  assert.equal(resolved.marking.id, "festival-stripes");
+  assert.equal(resolved.aura.id, "shooting-star");
+  assert.deepEqual(plain(resolved.repairs), []);
+  const svg = owl.renderWithTraits(seed, resolved, identity);
+  assert.match(svg, /data-hex-owl-version="4"[^>]*data-rarity="camp-hexadecibel"/);
+  assert.match(svg, /href="#hex-owl-shared-mark-brow-upper"/, "Brow Echo must draw its brow marks on the camp frame.");
+  assert.match(svg, /data-eye-treatment="midnight-eye-wells"/);
+  assert.match(svg, /data-beak-bottom="60\.2516"/, "Bold Chevron must draw its beak art on the camp frame.");
+  assert.match(svg, /data-aura="shooting-star"/);
+  assert.match(svg, /<circle cx="50" cy="50" r="26\.4" fill="#0b0c15"\/>/, "The camp base disc must remain.");
+  assert.match(svg, /data-ring="outer" data-rotation="30" data-radius="4[89]\./, "The seeded Hexadecibel Vortex must remain when rings are untouched.");
+  assert.match(svg, /fill="#a45cff"/, "The forced UV Violet face must colour the Owl base.");
+
+  const publicRings = owl.resolveTraits(seed, {
+    overrides: { ringMode: "single", ringStyle: "double-line", direction: "clockwise", eyes: "pupil-lasers" },
+    freestyle: true
+  }, identity);
+  assert.equal(publicRings.ringMode.id, "single");
+  const ringSvg = owl.renderWithTraits(seed, publicRings, identity);
+  assert.match(ringSvg, /points="74\.4000,7\.7380 98\.8000,50\.0000/, "The public portal ring geometry must render on a camp Owl.");
+  assert.match(ringSvg, /data-ring-cut="outer"/, "Double Line must keep its cut stroke.");
+  assert.match(ringSvg, /data-crossing-exception="laser"/, "Pupil Lasers must draw their beams on a camp Owl.");
+  assert.match(ringSvg, /data-origin="exact-pupils"/);
+});

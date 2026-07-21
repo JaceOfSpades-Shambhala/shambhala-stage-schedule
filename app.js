@@ -360,7 +360,7 @@
     const art = document.createElement("img");
     art.id = "stage-mark";
     art.className = "stage-mark";
-    art.src = `stage-names/${appState.stage}.png?v=76`;
+    art.src = `stage-names/${appState.stage}.png?v=77`;
     art.alt = stageLabel;
     art.width = 232;
     art.height = 93;
@@ -552,7 +552,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-metadata.js?v=76";
+  const SCHEDULE_ASSET = "schedule-metadata.js?v=77";
   const FRESHNESS_ASSET = "schedule-freshness.json";
   const FRESHNESS_KEY = "shambhala-schedule-refreshed-at";
   const FRESH_THRESHOLD_MS = 15 * 60 * 1000;
@@ -717,7 +717,7 @@
     STAGES.forEach(stage => {
       if (stage.id === appState.stage) return;
       const img = new Image();
-      img.src = `stage-names/${stage.id}.png?v=76`;
+      img.src = `stage-names/${stage.id}.png?v=77`;
     });
   }, 1500);
   window.setInterval(renderLiveStatus, 30000);
@@ -737,6 +737,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=76").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=77").then(registerPeriodicSync).catch(() => {});
   });
 })();
