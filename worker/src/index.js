@@ -19,7 +19,6 @@
 //   POST /lists/:readId/handoff -> create a 24-hour PWA transfer
 //   POST /lists/:readId/connect-code -> create a human-entered PWA transfer
 //   POST /lists/:readId/release -> clear ownership and make the tag claimable
-//   POST/GET /lists/:readId/trade -> reciprocal physical-tag trade handshake
 //   GET  /lists/:readId/owner -> authenticated state for cross-context sync
 //   POST /handoffs/redeem       -> idempotently exchange it for ownership
 
@@ -938,65 +937,6 @@ export default {
           writeKey: request.headers.get("X-Write-Key") || ""
         });
         return relayInternal(response);
-      }
-
-      // A trade is a reciprocal NFC handshake. Both owners must enter trade
-      // mode, tap the other physical tag, and confirm the matched pair.
-      if (parts.length >= 3 && parts[2] === "trade") {
-        const readId = parts[1];
-        if (!isReadId(readId)) return json({ error: "Not found." }, 404);
-        if (!hasHexlaceCoordinator(env)) return json({ error: "Trading is temporarily unavailable." }, 503);
-        const writeKey = request.headers.get("X-Write-Key") || "";
-        if (request.method === "POST" && parts.length === 3) {
-          const limited = await enforceRateLimit(request, env, "updateIp");
-          if (limited) return limited;
-          const body = await readJson(request);
-          const targetReadId = body && typeof body.targetReadId === "string" ? body.targetReadId : "";
-          if (!isReadId(targetReadId) || targetReadId === readId) return json({ error: "Invalid trade target." }, 400);
-          if (hasOwlInfrastructure(env)) {
-            const targetTapToken = body && typeof body.targetTapToken === "string" ? body.targetTapToken : "";
-            const tapped = await callHexlaceCoordinator(env, targetReadId, "/collect", { tapToken: targetTapToken });
-            if (!tapped.ok) return relayInternal(tapped);
-          }
-          const targetStored = await env.LISTS.get(`list:${targetReadId}`);
-          if (!targetStored) return json({ error: "That Hexlace is not available." }, 404);
-          const response = await callHexlaceCoordinator(env, readId, "/trade", { writeKey, targetReadId });
-          return relayInternal(response, data => ({ ...data, targetName: publicList(targetStored, env).name || "your friend" }));
-        }
-        if (request.method === "GET" && parts.length === 3) {
-          const response = await callHexlaceCoordinator(env, readId, "/trade/read", { writeKey });
-          return relayInternal(response);
-        }
-        if (request.method === "POST" && parts.length === 4 && parts[3] === "confirm") {
-          const limited = await enforceRateLimit(request, env, "updateIp");
-          if (limited) return limited;
-          const response = await callHexlaceCoordinator(env, readId, "/trade/confirm", { writeKey });
-          if (!response.ok) return relayInternal(response);
-          const confirmed = await response.json();
-          const targetReadId = confirmed?.targetReadId;
-          if (!isReadId(targetReadId)) return json({ error: "Trade could not be completed." }, 409);
-          const coordinatorReadId = [readId, targetReadId].sort()[0];
-          const settledResponse = await callHexlaceCoordinator(env, coordinatorReadId, "/trade/settle");
-          if (settledResponse.status === 202) return json({ completed: false });
-          const settled = await settledResponse.json().catch(() => ({}));
-          if (!settledResponse.ok || !settled.completed) return json(settled, settledResponse.status);
-          const callerIsCoordinator = readId === settled.coordinatorReadId;
-          const completed = {
-            completed: true,
-            readId: callerIsCoordinator ? settled.targetReadId : settled.coordinatorReadId,
-            revision: callerIsCoordinator ? settled.targetRevision : settled.selfRevision
-          };
-          if (hasOwlInfrastructure(env)) {
-            completed.owl = cleanOwl(callerIsCoordinator ? settled.targetOwl : settled.selfOwl);
-            completed.tapToken = callerIsCoordinator ? settled.targetTapToken : settled.selfTapToken;
-            completed.isPhysical = true;
-          }
-          return json(completed);
-        }
-        if (request.method === "POST" && parts.length === 4 && parts[3] === "cancel") {
-          const response = await callHexlaceCoordinator(env, readId, "/trade/cancel", { writeKey });
-          return relayInternal(response);
-        }
       }
 
       // POST /lists/:readId/handoff — Safari proves ownership and receives a

@@ -1,7 +1,6 @@
 const TTL_SECONDS = 60 * 24 * 60 * 60;
 const HANDOFF_TTL_SECONDS = 24 * 60 * 60;
 const CLAIM_CONTENTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-const TRADE_TTL_MS = 15 * 60 * 1000;
 const PROFILE_ID_LENGTH = 16;
 const OWL_VERSION = 4;
 const LEGACY_CAMP_OWL_VERSION = 3;
@@ -185,7 +184,6 @@ export class HexlaceCoordinator {
       let upgradedLegacyRecord = false;
       this.record.handoffs ||= {};
       this.record.redirects ||= {};
-      this.record.appliedTrades ||= {};
       this.record.profileId ||= null;
       this.record.profileKey ||= null;
       this.record.owl ||= null;
@@ -202,7 +200,6 @@ export class HexlaceCoordinator {
         this.record.isPhysical = true;
         upgradedLegacyRecord = true;
       }
-      if (!Object.prototype.hasOwnProperty.call(this.record, "trade")) this.record.trade = null;
       if (upgradedLegacyRecord) await this.commit();
     }
     this.sweepExpiredHandoffs();
@@ -218,13 +215,6 @@ export class HexlaceCoordinator {
     if (url.pathname === "/handoff" && request.method === "POST") return this.createHandoff(body);
     if (url.pathname === "/redeem" && request.method === "POST") return this.redeemHandoff(body);
     if (url.pathname === "/release" && request.method === "POST") return this.release(body);
-    if (url.pathname === "/trade" && request.method === "POST") return this.startTrade(body);
-    if (url.pathname === "/trade/read" && request.method === "POST") return this.readTrade(body);
-    if (url.pathname === "/trade/match" && request.method === "POST") return this.matchTrade(body);
-    if (url.pathname === "/trade/confirm" && request.method === "POST") return this.confirmTrade(body);
-    if (url.pathname === "/trade/settle" && request.method === "POST") return this.settleTrade(body);
-    if (url.pathname === "/trade/apply" && request.method === "POST") return this.applyTrade(body);
-    if (url.pathname === "/trade/cancel" && request.method === "POST") return this.cancelTrade(body);
     if (url.pathname === "/owner" && request.method === "POST") return this.readOwner(body);
     if (url.pathname === "/read" && request.method === "POST") return this.readPublic();
     return json({ error: "Not found." }, 404);
@@ -257,16 +247,14 @@ export class HexlaceCoordinator {
       auth: auth || null,
       claim: parseClaimRecord(claimValue),
       handoffs: {},
-      trade: null,
       redirects: {},
-      appliedTrades: {},
       profileId: null,
       profileKey: null,
       owl: validOwl(list.owl) ? list.owl : null,
       tapToken: null,
       // Legacy lists did not distinguish a browser-only share identity from a
       // written NFC tag. Treat them as physical to preserve existing release
-      // and trade behavior; the new client explicitly marks virtual records.
+      // behavior; the new client explicitly marks virtual records.
       isPhysical: true,
       expiresAt: null,
       snapshotDirty: false
@@ -290,9 +278,7 @@ export class HexlaceCoordinator {
       tapToken: typeof body.tapToken === "string" && body.tapToken.length >= 16 ? body.tapToken : null,
       isPhysical: typeof body.isPhysical === "boolean" ? body.isPhysical : true,
       handoffs: {},
-      trade: null,
       redirects: {},
-      appliedTrades: {},
       expiresAt: body.isPhysical === false ? now + TTL_SECONDS * 1000 : null,
       snapshotDirty: false
     };
@@ -439,13 +425,8 @@ export class HexlaceCoordinator {
     this.record.isPhysical = true;
     this.record.claim = { token: body.claimToken, released: true };
     this.record.handoffs = {};
-    this.record.trade = null;
     await this.commit();
     return json({ ok: true, revision });
-  }
-
-  tradeActive() {
-    return Boolean(this.record.trade && this.record.trade.expiresAt > nowMs(this.env));
   }
 
   async authRedirect(writeKey) {
@@ -453,170 +434,6 @@ export class HexlaceCoordinator {
     if (typeof writeKey !== "string" || !writeKey) return false;
     const redirect = this.record.redirects?.[await tokenHash(writeKey)];
     return redirect || false;
-  }
-
-  async startTrade(body) {
-    if (!this.record.auth) return json({ error: "Not found." }, 404);
-    if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
-    if (isCampOwl(this.record.owl)) return json({ error: "Camp Hexadecibel Owls cannot be traded." }, 409);
-    if (!this.record.isPhysical) return json({ error: "Only physical Hexlaces can be traded." }, 409);
-    if (typeof body.targetReadId !== "string" || body.targetReadId.length !== 8 || body.targetReadId === this.record.readId) {
-      return json({ error: "Invalid trade target." }, 400);
-    }
-    this.record.trade = {
-      targetReadId: body.targetReadId,
-      startedAt: nowMs(this.env),
-      expiresAt: nowMs(this.env) + TRADE_TTL_MS,
-      matched: false,
-      confirmed: false,
-      // Unique per attempt so a later, unrelated trade between this same pair
-      // of tags can never replay a prior trade's cached applied-trade result.
-      attemptId: randomHex(8)
-    };
-    await this.saveRecord();
-    const response = await namedStub(this.env.HEXLACES, body.targetReadId).fetch(new Request("https://hexlace.internal/trade/match", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ readId: body.targetReadId, requesterReadId: this.record.readId })
-    }));
-    const match = await response.json().catch(() => ({}));
-    if (response.status === 409) {
-      this.record.trade = null;
-      await this.saveRecord();
-      return json({ error: match.error || "That Hexlace cannot be traded." }, 409);
-    }
-    if (response.ok && match.matched) {
-      this.record.trade.matched = true;
-      await this.saveRecord();
-    }
-    return json({ matched: this.record.trade.matched, targetName: match.name || "" });
-  }
-
-  async matchTrade(body) {
-    if (isCampOwl(this.record.owl)) return json({ error: "Camp Hexadecibel Owls cannot be traded." }, 409);
-    if (!this.record.isPhysical || !this.tradeActive() || this.record.trade.targetReadId !== body.requesterReadId) return json({ matched: false });
-    this.record.trade.matched = true;
-    await this.saveRecord();
-    return json({ matched: true, name: this.record.list.name || "" });
-  }
-
-  async readTrade(body) {
-    const redirect = await this.authRedirect(body.writeKey);
-    if (redirect) return json({ transferredTo: redirect.readId, revision: redirect.revision }, 409);
-    if (redirect === false) return json({ error: "Invalid write key." }, 403);
-    if (!this.tradeActive()) return json({ active: false });
-    return json({
-      active: true,
-      targetReadId: this.record.trade.targetReadId,
-      matched: this.record.trade.matched,
-      confirmed: this.record.trade.confirmed
-    });
-  }
-
-  async confirmTrade(body) {
-    if (!this.record.auth) return json({ error: "Not found." }, 404);
-    if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
-    if (isCampOwl(this.record.owl)) return json({ error: "Camp Hexadecibel Owls cannot be traded." }, 409);
-    if (!this.tradeActive() || !this.record.trade.matched) return json({ error: "Trade is not matched." }, 409);
-    this.record.trade.confirmed = true;
-    await this.saveRecord();
-    return json({ confirmed: true, targetReadId: this.record.trade.targetReadId });
-  }
-
-  async settleTrade() {
-    if (isCampOwl(this.record.owl)) return json({ error: "Camp Hexadecibel Owls cannot be traded." }, 409);
-    if (!this.record.auth || !this.tradeActive() || !this.record.trade.matched || !this.record.trade.confirmed) {
-      return json({ completed: false }, 202);
-    }
-    const targetReadId = this.record.trade.targetReadId;
-    const tradeId = [this.record.readId, targetReadId].sort().join(":");
-    if (this.record.readId !== tradeId.slice(0, tradeId.indexOf(":"))) return json({ error: "Wrong trade coordinator." }, 409);
-    // The applied-trade idempotency key must identify this one trade attempt,
-    // not just this pair of tags - otherwise a later, unrelated trade between
-    // the same two physical tags would replay the first trade's cached result
-    // instead of actually applying. Capture it before this.record.trade is
-    // cleared below.
-    const attemptId = this.record.trade.attemptId;
-    const selfRevision = Number.isSafeInteger(this.record.list.revision) ? this.record.list.revision : 1;
-    const response = await namedStub(this.env.HEXLACES, targetReadId).fetch(new Request("https://hexlace.internal/trade/apply", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        readId: targetReadId,
-        requesterReadId: this.record.readId,
-        requesterAuth: this.record.auth,
-        requesterProfileId: this.record.profileId,
-        requesterProfileKey: this.record.profileKey,
-        tradeId: attemptId
-      })
-    }));
-    if (response.status === 202) return json({ completed: false }, 202);
-    const applied = await response.json().catch(() => ({}));
-    if (!response.ok || typeof applied.previousAuth !== "string") return json({ error: "Trade could not be completed." }, response.status || 409);
-    const previousAuth = this.record.auth;
-    this.record.auth = applied.previousAuth;
-    this.record.profileId = applied.previousProfileId || null;
-    this.record.profileKey = applied.previousProfileKey || null;
-    this.record.redirects ||= {};
-    this.record.redirects[await tokenHash(previousAuth)] = { readId: targetReadId, revision: applied.revision || 1 };
-    this.record.trade = null;
-    this.record.handoffs = {};
-    await this.commit();
-    try {
-      await adoptProfileOwl(this.env, this.record.profileId, this.record.profileKey, this.record.owl, this.record.readId, attemptId);
-    } catch (error) {
-      console.error("Hex Owl profile reconciliation failed after trade", error);
-    }
-    return json({
-      completed: true,
-      coordinatorReadId: this.record.readId,
-      targetReadId,
-      selfRevision,
-      targetRevision: applied.revision || 1,
-      selfOwl: this.record.owl,
-      targetOwl: applied.owl || null,
-      selfTapToken: this.record.tapToken || null,
-      targetTapToken: applied.tapToken || null
-    });
-  }
-
-  async applyTrade(body) {
-    if (isCampOwl(this.record.owl)) return json({ error: "Camp Hexadecibel Owls cannot be traded." }, 409);
-    this.record.appliedTrades ||= {};
-    const prior = this.record.appliedTrades[body.tradeId];
-    if (prior) return json(prior);
-    if (!this.tradeActive() || !this.record.trade.matched || !this.record.trade.confirmed || this.record.trade.targetReadId !== body.requesterReadId) {
-      return json({ pending: true }, 202);
-    }
-    if (typeof body.requesterAuth !== "string" || body.requesterAuth.length < 16) return json({ error: "Invalid trade owner." }, 400);
-    const previousAuth = this.record.auth;
-    const previousProfileId = this.record.profileId;
-    const previousProfileKey = this.record.profileKey;
-    const revision = Number.isSafeInteger(this.record.list.revision) ? this.record.list.revision : 1;
-    this.record.auth = body.requesterAuth;
-    this.record.profileId = validProfileCredentials(body.requesterProfileId, body.requesterProfileKey) ? body.requesterProfileId : null;
-    this.record.profileKey = validProfileCredentials(body.requesterProfileId, body.requesterProfileKey) ? body.requesterProfileKey : null;
-    this.record.redirects ||= {};
-    this.record.redirects[await tokenHash(previousAuth)] = { readId: body.requesterReadId, revision };
-    const result = { previousAuth, previousProfileId, previousProfileKey, revision, owl: this.record.owl, tapToken: this.record.tapToken || null };
-    this.record.appliedTrades[body.tradeId] = result;
-    this.record.trade = null;
-    this.record.handoffs = {};
-    await this.commit();
-    try {
-      await adoptProfileOwl(this.env, this.record.profileId, this.record.profileKey, this.record.owl, this.record.readId, body.tradeId);
-    } catch (error) {
-      console.error("Hex Owl profile reconciliation failed while applying trade", error);
-    }
-    return json(result);
-  }
-
-  async cancelTrade(body) {
-    if (!this.record.auth) return json({ error: "Not found." }, 404);
-    if (body.writeKey !== this.record.auth) return json({ error: "Invalid write key." }, 403);
-    this.record.trade = null;
-    await this.saveRecord();
-    return json({ ok: true });
   }
 
   async update(body) {
