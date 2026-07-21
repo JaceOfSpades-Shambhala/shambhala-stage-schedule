@@ -10,7 +10,7 @@ https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 
 Hex Owl visual playground: [open the live playground](https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/hex-owl-playground.html). It is a standalone developer tool for previewing deterministic Owl seeds, traits, palettes, and contact sheets.
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v77 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v78 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
@@ -113,7 +113,7 @@ Use the `preview` parameter to pretend the festival-local time is the value in t
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-24T23:30#amp
 ```
 
-Expected: Friday auto-selected, `PEEKABOO` now playing, `RUSKO` up next, PEEKABOO row highlighted.
+Expected: Friday auto-selected, `PEEKABOO` now playing, `TRUTH` up next, PEEKABOO row highlighted.
 
 ```text
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/?preview=2026-07-24T21:45#pagoda

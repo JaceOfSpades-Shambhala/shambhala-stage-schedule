@@ -152,6 +152,14 @@
     return buildStageTimeline(item.stageId).find(entry => entry.day === item.day && entry.time === item.time && entry.artist === item.artist);
   }
 
+  function reconcileSavedSet(item) {
+    const normalised = normaliseSet(item);
+    if (timelineMatch(normalised)) return normalised;
+    const artistMatches = buildStageTimeline(normalised.stageId)
+      .filter(entry => entry.day === normalised.day && entry.artist === normalised.artist);
+    return artistMatches.length === 1 ? normaliseSet(artistMatches[0]) : normalised;
+  }
+
   function sortKey(item) {
     return timelineMatch(item)?.key || (DAYS.indexOf(item.day) + 1) * 100000 + parseSetTime(item.time);
   }
@@ -160,7 +168,25 @@
     try {
       const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
       if (!Array.isArray(parsed)) return [];
-      return parsed.filter(item => item && DAYS.includes(item.day) && STAGES.some(stage => stage.id === item.stageId) && item.time && item.artist).map(normaliseSet);
+      const valid = parsed.filter(item => item && DAYS.includes(item.day) && STAGES.some(stage => stage.id === item.stageId) && item.time && item.artist).map(normaliseSet);
+      const reconciled = valid.map(reconcileSavedSet);
+      const unique = reconciled
+        .filter((item, index) => reconciled.findIndex(candidate => setId(candidate) === setId(item)) === index)
+        .sort((a, b) => sortKey(a) - sortKey(b) || titleCaseStage(a.stageId).localeCompare(titleCaseStage(b.stageId)));
+      if (JSON.stringify(unique) !== JSON.stringify(valid)) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(unique));
+          if (!loadSets.reconciliationScheduled) {
+            loadSets.reconciliationScheduled = true;
+            // Run after the remaining page scripts have attached their
+            // listeners so a corrected saved time is also republished.
+            window.setTimeout(() => window.dispatchEvent(new CustomEvent("setlist-changed")), 0);
+          }
+        } catch {
+          setFeedback("Couldn't update saved set times - your device storage may be full.");
+        }
+      }
+      return unique;
     } catch {
       return [];
     }
@@ -178,9 +204,10 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
     } catch {
       setFeedback("Couldn't save - your device storage may be full.");
-      return;
+      return false;
     }
     window.dispatchEvent(new CustomEvent("setlist-changed"));
+    return true;
   }
 
   function sortedSets() {
@@ -314,7 +341,7 @@
         return;
       }
       sets.push(normaliseSet(item));
-      saveSets(sets);
+      if (!saveSets(sets)) return;
     }
     renderPlanner();
     enhanceScheduleRows();
@@ -324,16 +351,21 @@
     const previousSets = loadSets();
     const previousPing = loadPing();
     const clearsPing = pingMatchesSet(previousPing, item);
+    const remainingSets = previousSets.filter(saved => setId(saved) !== setId(item));
+    if (!saveSets(remainingSets)) return;
     window.showUndo?.(`${item.artist} removed.`, () => {
-      saveSets(previousSets);
-      if (previousPing) savePing(previousPing, "Set restored.");
+      const currentSets = loadSets();
+      const restoredSets = currentSets.some(saved => setId(saved) === setId(item))
+        ? currentSets
+        : [...currentSets, item];
+      if (!saveSets(restoredSets)) return;
+      if (previousPing && clearsPing) savePing(previousPing, "Set restored.");
       else {
         renderPlanner();
         enhanceScheduleRows();
         setFeedback("Set restored.");
       }
     });
-    saveSets(previousSets.filter(saved => setId(saved) !== setId(item)));
     if (clearsPing) {
       savePing(null, "Ping ended because that set was removed.");
       enhanceScheduleRows();
@@ -391,6 +423,7 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = "planner-add";
+      button.dataset.scheduleFocus = `save:${setId(item)}`;
       setButtonState(button, item);
       button.addEventListener("click", () => hasSet(item) ? removeSet(item) : addSet(item));
       if (list === elements.scheduleList) row.append(button);
@@ -609,6 +642,7 @@
       badge.type = "button";
       badge.className = "overlap-badge planner-overlap-button";
       badge.dataset.plannerKey = itemKey;
+      badge.dataset.plannerFocus = `overlap:${itemKey}`;
       badge.setAttribute("aria-expanded", String(isExpanded));
       badge.setAttribute("aria-controls", timelineId);
       badge.setAttribute("aria-label", `${isExpanded ? "Hide" : "Show"} overlap details for ${item.artist}`);
@@ -629,6 +663,7 @@
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "planner-remove";
+    remove.dataset.plannerFocus = `remove:${itemKey}`;
     remove.textContent = "−";
     remove.setAttribute("aria-label", `Remove ${item.artist} from My Set List`);
     remove.title = "Remove from My Set List";
@@ -642,6 +677,7 @@
     actions.append(remove);
     if (selectingPingSet && current?.match && nowKey < current.end && !cancelled) {
       row.classList.add("is-ping-choice");
+      row.dataset.plannerFocus = `ping:${itemKey}`;
       row.tabIndex = 0;
       row.setAttribute("role", "button");
       row.setAttribute("aria-label", `Set a ping for ${item.artist} at ${titleCaseStage(item.stageId)}, ${item.time}`);
@@ -669,6 +705,7 @@
   }
 
   function renderPlanner() {
+    const focusedPlannerControl = document.activeElement?.dataset.plannerFocus || "";
     const sets = sortedSets();
     const nowKey = festivalNowKey();
     const timeline = savedTimeline();
@@ -695,6 +732,7 @@
       group.addEventListener("toggle", () => dayOpenState.set(day, group.open));
       const summary = document.createElement("summary");
       summary.className = "planner-day-summary";
+      summary.dataset.plannerFocus = `day:${day}`;
       const name = document.createElement("span");
       name.className = "planner-day-name";
       name.textContent = day;
@@ -712,6 +750,13 @@
       group.append(summary, list);
       elements.list.append(group);
     });
+    if (focusedPlannerControl) {
+      window.requestAnimationFrame(() => {
+        const replacement = Array.from(elements.list.querySelectorAll("[data-planner-focus]"))
+          .find(element => element.dataset.plannerFocus === focusedPlannerControl);
+        replacement?.focus({ preventScroll: true });
+      });
+    }
   }
 
   function plannerText() {

@@ -875,13 +875,18 @@ export default {
         if (((body && body.claimToken) || "") !== claim.token) return json({ error: "Invalid claim token." }, 403);
         const writeKey = body && typeof body.writeKey === "string" ? body.writeKey : "";
         if (writeKey.length < MIN_KEY_LENGTH) return json({ error: "A valid write key is required." }, 400);
+        // Keep the phone's original scan time even when this request arrives
+        // days later. That is the offline ownership proof: a friend who got
+        // signal first must not displace the person who physically scanned
+        // first. The valid claim token and seven-day contention window bound
+        // this deliberately client-clock-based arbitration.
         const scannedAt = cleanScannedAt(body && body.scannedAt, env);
         const previousScannedAt = Number.isFinite(Number(claim.scannedAt)) ? Number(claim.scannedAt) : Infinity;
         // firstClaimedAt never advances on takeovers, so the whole contention
         // period is bounded to the window after the very first claim.
         const firstClaimedAt = Number.isFinite(Number(claim.claimedAt)) ? Number(claim.claimedAt) : null;
         const contentionOpen = firstClaimedAt === null || nowMs(env) - firstClaimedAt < CLAIM_CONTENTION_WINDOW_MS;
-        const accepted = !claim.ownerSet || (contentionOpen && scannedAt <= previousScannedAt);
+        const accepted = !claim.ownerSet || (contentionOpen && scannedAt < previousScannedAt);
         if (accepted) {
           await env.LISTS.put(`auth:${readId}`, writeKey, { expirationTtl: TTL_SECONDS });
           await env.LISTS.put(`claim:${readId}`, JSON.stringify({

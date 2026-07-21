@@ -185,16 +185,16 @@
   }
 
   function mergeEntry(entry) {
-    if (!entry || !validOwl(entry.owl)) return false;
+    if (!entry || !validOwl(entry.owl)) return { saved: false, added: false };
     entry = { ...entry, owl: normalizeOwlIdentity(entry.owl) };
     const entries = cachedEntries();
     const index = entries.findIndex(item => item.owl.number === entry.owl.number);
     if (index >= 0) entries[index] = { ...entries[index], ...entry, firstCollectedAt: entries[index].firstCollectedAt || entry.firstCollectedAt };
     else entries.push(entry);
     entries.sort((a, b) => (b.firstCollectedAt || 0) - (a.firstCollectedAt || 0));
-    writeJson(CACHE_KEY, entries);
+    const saved = writeJson(CACHE_KEY, entries);
     renderCount();
-    return index < 0;
+    return { saved, added: index < 0 };
   }
 
   function feedback(message) {
@@ -422,21 +422,32 @@
 
   async function submitCollection(item, reveal = false) {
     const profile = loadProfile();
-    if (!profile || navigator.onLine === false) return false;
-    const result = await api(`/profiles/${profile.profileId}/hexadex`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Profile-Key": profile.profileKey },
-      body: JSON.stringify(item)
-    });
-    if (!result.ok || !result.body?.entry) return false;
-    const added = mergeEntry(result.body.entry);
-    if (reveal && added) {
+    if (!profile || navigator.onLine === false) return { ok: false, retryable: true, status: 0 };
+    let result;
+    try {
+      result = await api(`/profiles/${profile.profileId}/hexadex`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Profile-Key": profile.profileKey },
+        body: JSON.stringify(item)
+      });
+    } catch {
+      return { ok: false, retryable: true, status: 0, error: "The request timed out or lost signal." };
+    }
+    if (!result.ok || !result.body?.entry) {
+      const status = Number(result.status) || 0;
+      const serverError = typeof result.body?.error === "string" ? result.body.error : "The Hex Owl could not be collected.";
+      const retryable = status === 0 || status === 408 || status === 425 || status === 429 || status >= 500
+        || (status === 409 && !/your own Hexlace/i.test(serverError));
+      return { ok: false, retryable, status, error: serverError };
+    }
+    const merged = mergeEntry(result.body.entry);
+    if (reveal && merged.added) {
       putOwl(elements.revealImage, result.body.entry.owl);
       elements.revealName.textContent = result.body.entry.name || "Festival friend";
       elements.revealNumber.textContent = owlLabel(result.body.entry.owl);
       showDialog(elements.reveal);
     }
-    return true;
+    return { ok: true, entry: result.body.entry, cacheSaved: merged.saved };
   }
 
   async function collect(readId, tapToken) {
@@ -444,7 +455,10 @@
     const items = pendingCollections();
     if (!items.some(item => item.readId === readId && item.tapToken === tapToken)) {
       items.push({ readId, tapToken, firstCollectedAt: Date.now() });
-      writeJson(PENDING_KEY, items);
+      if (!writeJson(PENDING_KEY, items)) {
+        feedback("Couldn't save this Hex Owl tap on your device. Free some storage and scan again.");
+        return false;
+      }
     }
     const item = items.find(candidate => candidate.readId === readId && candidate.tapToken === tapToken);
     if (!loadProfile()) {
@@ -455,35 +469,53 @@
       feedback("Hex Owl tap saved. It will join your Hexadex when you reconnect.");
       return false;
     }
-    try {
-      const saved = await submitCollection(item, true);
-      if (saved) writeJson(PENDING_KEY, pendingCollections().filter(candidate =>
-        candidate.readId !== item.readId || candidate.tapToken !== item.tapToken));
-      return saved;
-    } catch {
-      feedback("Hex Owl tap saved. It will retry when you have signal.");
+    const result = await submitCollection(item, true);
+    if (!result.ok && result.retryable) {
+      feedback(result.status === 429
+        ? "Hex Owl tap saved. The server is busy and will retry later."
+        : "Hex Owl tap saved. It will retry when you have signal.");
       return false;
     }
+    const remaining = pendingCollections().filter(candidate =>
+      candidate.readId !== item.readId || candidate.tapToken !== item.tapToken);
+    if (!writeJson(PENDING_KEY, remaining)) {
+      feedback(result.ok
+        ? "Hex Owl collected online, but device storage cleanup failed. It is safe to try again later."
+        : "Couldn't remove an invalid Hex Owl tap from device storage. Free some storage and try again.");
+      return result.ok;
+    }
+    if (!result.ok) {
+      feedback(`Hex Owl wasn't collected: ${result.error || "this tap is no longer valid."}`);
+      return false;
+    }
+    if (!result.cacheSaved) feedback("Hex Owl collected online, but its offline copy couldn't be saved on this device.");
+    return true;
   }
 
   async function syncPending() {
     const profile = loadProfile();
     if (!profile || navigator.onLine === false) return;
-    const succeeded = [];
+    const completed = [];
+    const permanentFailures = [];
     for (const item of pendingCollections()) {
-      try {
-        if (await submitCollection(item, false)) succeeded.push(item);
-      } catch {
-        // Leave it queued; the next sync retries.
+      const result = await submitCollection(item, false);
+      if (result.ok) completed.push(item);
+      else if (!result.retryable) {
+        completed.push(item);
+        permanentFailures.push(result.error || `HTTP ${result.status}`);
       }
     }
-    if (succeeded.length) {
+    if (completed.length) {
       // Re-read and only remove what this pass actually submitted, instead of
       // overwriting with a start-of-loop snapshot - a tap that queued a new
       // item while this loop was running must not be silently dropped.
       const stillPending = pendingCollections().filter(item =>
-        !succeeded.some(done => done.readId === item.readId && done.tapToken === item.tapToken));
-      writeJson(PENDING_KEY, stillPending);
+        !completed.some(done => done.readId === item.readId && done.tapToken === item.tapToken));
+      if (!writeJson(PENDING_KEY, stillPending)) {
+        feedback("Hexadex synced, but device storage cleanup failed. It is safe to retry later.");
+      } else if (permanentFailures.length) {
+        feedback(`A saved Hex Owl tap was no longer valid: ${permanentFailures[0]}`);
+      }
     }
     renderGrid();
   }

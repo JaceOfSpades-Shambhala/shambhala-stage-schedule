@@ -81,6 +81,43 @@ async function runInstall({ rejectedOptionalAsset }) {
   return added;
 }
 
+async function runScheduleRefresh({ failedAsset = "" } = {}) {
+  const listeners = new Map();
+  const puts = [];
+  const cache = {
+    async put(asset) { puts.push(String(asset)); },
+    async match() { return null; }
+  };
+  const context = {
+    Response,
+    URL,
+    Promise,
+    setTimeout,
+    clearTimeout,
+    fetch: async asset => String(asset) === failedAsset
+      ? new Response("unavailable", { status: 503 })
+      : new Response(`fresh:${asset}`),
+    caches: {
+      async open() { return cache; },
+      async match() { return null; },
+      async keys() { return []; },
+      async delete() { return true; }
+    },
+    self: {
+      location: { origin: "https://site.example.test" },
+      addEventListener(type, listener) { listeners.set(type, listener); },
+      skipWaiting() {},
+      clients: { claim() {} }
+    }
+  };
+  const source = await readFile(new URL("../sw.js", import.meta.url), "utf8");
+  vm.runInNewContext(source, context);
+  let refreshPromise;
+  listeners.get("periodicsync")({ tag: "refresh-schedule", waitUntil(value) { refreshPromise = Promise.resolve(value); } });
+  await refreshPromise;
+  return puts;
+}
+
 test("a fast server error falls back to a cached navigation", async () => {
   const cached = new Response("cached page", { status: 200 });
   const response = await runFetch({ networkResponse: new Response("unavailable", { status: 503 }), cachedResponse: cached });
@@ -95,23 +132,35 @@ test("a successful network response remains preferred", async () => {
 });
 
 test("a failed optional precache asset does not block the offline shell install", async () => {
-  const added = await runInstall({ rejectedOptionalAsset: "./stage-names/amp.png?v=77" });
+  const added = await runInstall({ rejectedOptionalAsset: "./stage-names/amp.png?v=78" });
   assert.ok(added.includes("./index.html"));
   assert.ok(added.includes("./hex-owl-playground.html"));
-  assert.ok(added.includes("./camp-access.js?v=77"));
-  assert.ok(added.includes("./hexlaces.js?v=77"));
-  assert.ok(added.includes("./hexlace-compare.js?v=77"));
-  assert.ok(added.includes("./hex-owl.js?v=77"));
-  assert.ok(added.includes("./hex-owl-base.svg?v=77"));
-  assert.ok(added.includes("./hexadex.js?v=77"));
-  assert.equal(added.includes("./stage-names/amp.png?v=77"), false);
-  assert.ok(added.includes("./stage-names/fractal-forest.png?v=77"));
+  assert.ok(added.includes("./camp-access.js?v=78"));
+  assert.ok(added.includes("./hexlaces.js?v=78"));
+  assert.ok(added.includes("./hexlace-compare.js?v=78"));
+  assert.ok(added.includes("./hex-owl.js?v=78"));
+  assert.ok(added.includes("./hex-owl-base.svg?v=78"));
+  assert.ok(added.includes("./hexadex.js?v=78"));
+  assert.equal(added.includes("./stage-names/amp.png?v=78"), false);
+  assert.ok(added.includes("./stage-names/fractal-forest.png?v=78"));
 });
 
 test("background refresh is schedule-only and cache cleanup is app-scoped", async () => {
   const source = await readFile(new URL("../sw.js", import.meta.url), "utf8");
-  assert.match(source, /REFRESH_ASSETS = \["\.\/schedule-data\.js\?v=77", "\.\/schedule-metadata\.js\?v=77"\]/);
+  assert.match(source, /REFRESH_ASSETS = \["\.\/schedule-data\.js\?v=78", "\.\/schedule-metadata\.js\?v=78"\]/);
   assert.match(source, /key\.startsWith\(CACHE_PREFIX\)/);
   assert.match(source, /OPTIONAL_CACHE_TIMEOUT_MS/);
   assert.match(source, /request\.mode === "navigate"/);
+});
+
+test("schedule refresh caches and marks fresh only when data and metadata both succeed", async () => {
+  const failed = await runScheduleRefresh({ failedAsset: "./schedule-metadata.js?v=78" });
+  assert.deepEqual(failed, []);
+
+  const succeeded = await runScheduleRefresh();
+  assert.deepEqual(succeeded, [
+    "./schedule-data.js?v=78",
+    "./schedule-metadata.js?v=78",
+    "./schedule-freshness.json"
+  ]);
 });

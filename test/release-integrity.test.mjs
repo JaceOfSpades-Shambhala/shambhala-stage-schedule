@@ -13,26 +13,26 @@ test("release assets and service-worker precache use one version and include bot
   ]);
   const releaseSources = [html, serviceWorker, css, manifest, app, hexOwl, playground];
   const referencedVersions = new Set(releaseSources.flatMap(source => [...source.matchAll(/\?v=(\d+)/g)].map(match => match[1])));
-  assert.deepEqual([...referencedVersions], ["77"], "Every release asset query must use exactly v77.");
-  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "77", "The Pages release marker must be v77.");
-  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "77", "The service-worker cache must be v77.");
-  assert.match(readme, /authoritative deployed version[^\n]*\bv77\b/i);
-  assert.match(handoff, /current release \*\*v77\*\*/i);
-  assert.match(handoff, /release bumps ONE version number everywhere \(v77 at the time of writing\)/);
-  assert.match(serviceWorker, /InterVariable\.woff2\?v=77/);
-  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=77/);
-  assert.match(css, /InterVariable\.woff2\?v=77/);
-  assert.match(css, /InterVariable-Italic\.woff2\?v=77/);
-  assert.match(serviceWorker, /schedule-metadata\.js\?v=77/);
-  assert.match(serviceWorker, /undo\.js\?v=77/);
-  assert.match(serviceWorker, /camp-access\.js\?v=77/);
-  assert.match(serviceWorker, /hexlace-compare\.js\?v=77/);
-  assert.match(serviceWorker, /hex-owl\.js\?v=77/);
-  assert.match(serviceWorker, /hex-owl-base\.svg\?v=77/);
+  assert.deepEqual([...referencedVersions], ["78"], "Every release asset query must use exactly v78.");
+  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "78", "The Pages release marker must be v78.");
+  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "78", "The service-worker cache must be v78.");
+  assert.match(readme, /authoritative deployed version[^\n]*\bv78\b/i);
+  assert.match(handoff, /current release \*\*v78\*\*/i);
+  assert.match(handoff, /release bumps ONE version number everywhere \(v78 at the time of writing\)/);
+  assert.match(serviceWorker, /InterVariable\.woff2\?v=78/);
+  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=78/);
+  assert.match(css, /InterVariable\.woff2\?v=78/);
+  assert.match(css, /InterVariable-Italic\.woff2\?v=78/);
+  assert.match(serviceWorker, /schedule-metadata\.js\?v=78/);
+  assert.match(serviceWorker, /undo\.js\?v=78/);
+  assert.match(serviceWorker, /camp-access\.js\?v=78/);
+  assert.match(serviceWorker, /hexlace-compare\.js\?v=78/);
+  assert.match(serviceWorker, /hex-owl\.js\?v=78/);
+  assert.match(serviceWorker, /hex-owl-base\.svg\?v=78/);
   assert.match(serviceWorker, /hex-owl-playground\.html/);
-  assert.match(serviceWorker, /hexadex\.js\?v=77/);
-  assert.match(hexOwl, /hex-owl-base\.svg\?v=77/);
-  assert.match(playground, /hex-owl\.js\?v=77/);
+  assert.match(serviceWorker, /hexadex\.js\?v=78/);
+  assert.match(hexOwl, /hex-owl-base\.svg\?v=78/);
+  assert.match(playground, /hex-owl\.js\?v=78/);
 });
 
 test("schedule and overlap policy stay explicit", async () => {
@@ -194,4 +194,44 @@ test("Hex Owl and Hexadex discovery UI stays wired to the chosen handoff", async
   assert.match(css, /\.hexadex-strip-art \{[^}]*width: 4\.2rem/);
   assert.match(css, /\.hexadex-ghost-slots \{[^}]*opacity: \.14/);
   assert.match(css, /body \{[\s\S]*background: radial-gradient\(circle at 50% -12%, color-mix\(in srgb, var\(--accent\) 13%, #17192b\) 0, #111321 38%, #090a12 100%\)/);
+});
+
+test("production freeze hotfix safeguards stay wired", async () => {
+  const [html, app, planner, serviceWorker, styles, config, readme, hexadex, worker, coordinator] = await Promise.all([
+    read("index.html"), read("app.js"), read("planner.js"), read("sw.js"), read("styles.css"),
+    read("wrangler.jsonc"), read("README.md"), read("hexadex.js"), read("worker/src/index.js"),
+    read("worker/src/durable-objects.js")
+  ]);
+
+  assert.match(app, /scheduleFestivalSortKey\(a\.day, a\.time\).*scheduleFestivalSortKey\(b\.day, b\.time\)/s);
+  assert.match(app, /focusedScheduleControl[\s\S]*data-schedule-focus/);
+  assert.match(planner, /function reconcileSavedSet\(item\)/);
+  assert.match(planner, /const currentSets = loadSets\(\)[\s\S]*\[\.\.\.currentSets, item\]/);
+  assert.match(planner, /if \(!saveSets\(remainingSets\)\) return;[\s\S]*window\.showUndo/);
+  assert.match(hexadex, /if \(!writeJson\(PENDING_KEY, items\)\)/);
+  assert.match(hexadex, /status === 429 \|\| status >= 500/);
+  assert.match(hexadex, /else if \(!result\.retryable\)/);
+
+  assert.match(html, /id="hexlace-release-dialog"[^>]*aria-labelledby="hexlace-release-title"/);
+  assert.match(html, /id="hexlace-release-cancel"[^>]*autofocus/);
+  assert.match(html, /id="hexlace-compare-dialog"[^>]*aria-labelledby="hexlace-compare-title"/);
+  assert.match(html, /id="hexadex-reveal-dialog"[^>]*aria-labelledby="hexadex-reveal-heading hexadex-reveal-name"/);
+  assert.doesNotMatch(styles, /body \{[^}]*min-width:\s*320px/);
+  assert.match(styles, /\.schedule-day-pill \{[^}]*min-height: 44px/);
+  assert.match(styles, /\.hexadex-close \{[^}]*width: 2\.75rem; height: 2\.75rem/);
+  assert.doesNotMatch(styles, /planner-row-actions \.planner-remove \{ min-height: 32px/);
+
+  const coreAssets = serviceWorker.match(/const CORE_ASSETS = \[([\s\S]*?)\];/)?.[1] || "";
+  const optionalAssets = serviceWorker.match(/const OPTIONAL_ASSETS = \[([\s\S]*?)\];/)?.[1] || "";
+  assert.doesNotMatch(coreAssets, /hex-owl-playground|InterVariable-Italic/);
+  assert.match(optionalAssets, /hex-owl-playground/);
+  assert.match(optionalAssets, /InterVariable-Italic/);
+  assert.match(serviceWorker, /if \(!response\?\.ok\) throw new Error/);
+  assert.match(serviceWorker, /if \(changed && !await refreshSchedule\(\) && cachedScheduleAsset\) return cachedScheduleAsset/);
+
+  assert.match(config, /"observability"[\s\S]*"invocation_logs": true/);
+  assert.match(readme, /PEEKABOO` now playing, `TRUTH` up next/);
+  assert.match(worker, /original scan time[\s\S]*const scannedAt = cleanScannedAt/);
+  assert.match(coordinator, /Preserve the local scan time[\s\S]*scannedAt < previousScannedAt/);
+  assert.doesNotMatch(`${worker}\n${coordinator}`, /claimableAt|CLAIM_CLOCK_SKEW_MS/);
 });

@@ -293,11 +293,13 @@ export class HexlaceCoordinator {
     if (typeof body.writeKey !== "string" || body.writeKey.length < 16) return json({ error: "A valid write key is required." }, 400);
 
     const now = nowMs(this.env);
+    // Preserve the local scan time across an offline period. Arrival order is
+    // intentionally not ownership order while the contention window is open.
     const scannedAt = Number.isFinite(Number(body.scannedAt)) && Number(body.scannedAt) > 0 ? Number(body.scannedAt) : now;
     const previousScannedAt = Number.isFinite(Number(claim.scannedAt)) ? Number(claim.scannedAt) : Infinity;
     const firstClaimedAt = Number.isFinite(Number(claim.claimedAt)) ? Number(claim.claimedAt) : null;
     const contentionOpen = firstClaimedAt === null || now - firstClaimedAt < CLAIM_CONTENTION_WINDOW_MS;
-    const accepted = !claim.ownerSet || (contentionOpen && scannedAt <= previousScannedAt);
+    const accepted = !claim.ownerSet || (contentionOpen && scannedAt < previousScannedAt);
     let replacedProfile = null;
     let previousOwl = null;
     if (accepted) {

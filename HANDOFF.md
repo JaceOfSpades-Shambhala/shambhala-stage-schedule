@@ -1,6 +1,6 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v77**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v78**.
 
 ## What this is
 
@@ -47,7 +47,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (v77 at the time of writing). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (v78 at the time of writing). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
@@ -130,6 +130,16 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 - [ ] Write camp pendants with each person's `?f=` link before the festival (NFC Tools app, or Android in-app button)
 
 ## Version history (condensed)
+
+v78 is the festival production-reliability hotfix: saved-set times reconcile
+without changing their printed festival day; planner removal and Undo preserve
+newer state and report storage failures honestly; all-stage search sorts each
+printed day from noon through its after-midnight sets; schedule data and
+metadata refresh as one service-worker unit; Hexadex retry queues distinguish
+retryable from permanent failures; keyboard focus, dialog names, narrow-screen
+reflow, and touch targets are hardened; and Worker invocation logging is
+enabled. Offline Hexlace ownership still uses the original phone scan time, so
+an earlier scan can arrive days later and displace a later accidental claim.
 
 v77 fixes camp Hex Owl customization: selecting the Camp Hexadecibel
 rarity no longer forces the seeded UV roll onto every dropdown. The

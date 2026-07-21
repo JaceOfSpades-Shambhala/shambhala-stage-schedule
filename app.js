@@ -278,7 +278,15 @@
         if (normaliseForSearch(artist).includes(query)) matches.push({ ...entry, stage, cancelled: isCancelledSet(entry) });
       });
     }));
-    return matches;
+    // Search spans every stage, so object insertion order is not meaningful.
+    // Keep the printed festival day as the primary key: after-midnight sets
+    // stay with the day printed in the schedule (for example, Friday 2 AM is
+    // Saturday morning but remains at the end of Friday's results).
+    return matches.sort((a, b) => {
+      return window.scheduleFestivalSortKey(a.day, a.time) - window.scheduleFestivalSortKey(b.day, b.time)
+        || a.stage.localeCompare(b.stage)
+        || a.artist.localeCompare(b.artist);
+    });
   }
 
   function appendSet({ time, artist, day, stage, cancelled = false, isCurrent = false, state = "", sub = "", progress = null }, target = elements.setList) {
@@ -360,7 +368,7 @@
     const art = document.createElement("img");
     art.id = "stage-mark";
     art.className = "stage-mark";
-    art.src = `stage-names/${appState.stage}.png?v=77`;
+    art.src = `stage-names/${appState.stage}.png?v=78`;
     art.alt = stageLabel;
     art.width = 232;
     art.height = 93;
@@ -526,6 +534,7 @@
   }
 
   function renderLiveStatus() {
+    const focusedScheduleControl = document.activeElement?.dataset.scheduleFocus || "";
     const currentDay = getCurrentFestivalDay();
     if (currentDay && lastObservedFestivalDay && currentDay !== lastObservedFestivalDay && appState.day === lastObservedFestivalDay && isAvailable(currentDay, appState.stage)) {
       appState.day = currentDay;
@@ -536,6 +545,16 @@
     renderSchedule();
     renderSearch();
     renderNowPlaying();
+    if (focusedScheduleControl) {
+      // planner.js re-adds the Save buttons from a MutationObserver after the
+      // list is rebuilt. Restore focus on the next frame, once that work has
+      // completed, so the 30-second live-status refresh is keyboard-safe.
+      window.requestAnimationFrame(() => {
+        const replacement = Array.from(document.querySelectorAll("[data-schedule-focus]"))
+          .find(element => element.dataset.scheduleFocus === focusedScheduleControl);
+        replacement?.focus({ preventScroll: true });
+      });
+    }
   }
 
   function render() {
@@ -552,7 +571,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-metadata.js?v=77";
+  const SCHEDULE_ASSET = "schedule-metadata.js?v=78";
   const FRESHNESS_ASSET = "schedule-freshness.json";
   const FRESHNESS_KEY = "shambhala-schedule-refreshed-at";
   const FRESH_THRESHOLD_MS = 15 * 60 * 1000;
@@ -717,7 +736,7 @@
     STAGES.forEach(stage => {
       if (stage.id === appState.stage) return;
       const img = new Image();
-      img.src = `stage-names/${stage.id}.png?v=77`;
+      img.src = `stage-names/${stage.id}.png?v=78`;
     });
   }, 1500);
   window.setInterval(renderLiveStatus, 30000);
@@ -737,6 +756,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=77").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=78").then(registerPeriodicSync).catch(() => {});
   });
 })();

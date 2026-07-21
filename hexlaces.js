@@ -90,6 +90,7 @@
     releaseOpen: document.querySelector("#hexlace-release-open"),
     releaseDialog: document.querySelector("#hexlace-release-dialog"),
     releaseConfirm: document.querySelector("#hexlace-release-confirm"),
+    releaseCancel: document.querySelector("#hexlace-release-cancel"),
     editor: document.querySelector("#hexlace-editor"),
     editorPrompt: document.querySelector("#hexlace-editor-prompt"),
     nameInput: document.querySelector("#hexlace-name-input"),
@@ -1476,7 +1477,10 @@
   });
   elements.giveaway.addEventListener("click", createGiveaway);
   elements.giveawayShare.addEventListener("click", () => { if (giveawayLink) shareOrCopy(giveawayLink, "A Hexlace for you"); });
-  elements.releaseOpen?.addEventListener("click", () => showDialog(elements.releaseDialog));
+  elements.releaseOpen?.addEventListener("click", () => {
+    showDialog(elements.releaseDialog);
+    window.requestAnimationFrame(() => elements.releaseCancel?.focus());
+  });
   elements.releaseConfirm?.addEventListener("click", releaseHexlace);
   elements.comparePrevious?.addEventListener("click", () => {
     compareDayIndex = Math.max(0, compareDayIndex - 1);

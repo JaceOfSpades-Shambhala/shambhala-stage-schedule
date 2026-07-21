@@ -8,6 +8,15 @@
   "name": "shambhala-setlists",
   "main": "worker/src/index.js",
   "compatibility_date": "2026-07-09",
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
+    }
+  },
   "kv_namespaces": [
     { "binding": "LISTS", "id": "61bdc52caedc49c0acefbd5ae92cb5fe" }
   ],

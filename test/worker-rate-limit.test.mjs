@@ -254,6 +254,30 @@ test("Durable Objects serialize claims and preserve the earliest scan for seven 
   assert.equal(env.LISTS.writes.some(write => write.key.startsWith("rate:")), false);
 });
 
+test("a days-late offline scan keeps its phone timestamp and can beat a later online claim", async () => {
+  const env = makeDurableEnv();
+  const created = await worker.fetch(makeRequest("/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: "Unclaimed Hexlace", sets: [], claimable: true })
+  }), env);
+  const { readId, claimToken } = await created.json();
+
+  const temporary = await worker.fetch(makeRequest(`/lists/${readId}/claim`, {
+    method: "POST",
+    body: JSON.stringify({ claimToken, writeKey: "temporary-write-key-123", scannedAt: 120000 })
+  }), env);
+  assert.equal((await temporary.json()).accepted, true);
+
+  env.NOW_MS += 3 * 24 * 60 * 60 * 1000;
+  const rightful = await worker.fetch(makeRequest(`/lists/${readId}/claim`, {
+    method: "POST",
+    headers: { "CF-Connecting-IP": "203.0.113.91" },
+    body: JSON.stringify({ claimToken, writeKey: "rightful-offline-key-123", scannedAt: 60000 })
+  }), env);
+  assert.equal((await rightful.json()).accepted, true);
+  assert.equal(await env.LISTS.get(`auth:${readId}`), "rightful-offline-key-123");
+});
+
 test("existing KV Hexlaces migrate lazily into their Durable Object on the first write", async () => {
   const env = makeDurableEnv();
   const readId = "23456789";
