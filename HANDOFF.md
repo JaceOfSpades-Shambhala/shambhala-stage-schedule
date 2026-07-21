@@ -1,6 +1,6 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v74**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v75**.
 
 ## What this is
 
@@ -47,7 +47,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (v74 at the time of writing). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (v75 at the time of writing). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
@@ -131,7 +131,16 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 
 ## Version history (condensed)
 
-v74 is a correctness audit for the bug class behind v73: pullOwnerState()
+v75 removes the trade-between-tags feature entirely (both the Worker's
+`/trade/*` endpoints and the client's swap-dialog handshake) - exchanging
+two physical tags is now release-and-retap on each side, the same flow
+already used for ordinary ownership transfer. Also from the same audit
+pass: camp-access revocation now shows the same "Update available - tap
+to refresh" banner used for schedule/app updates instead of a misleading
+inline error, undo supports multiple independently-timed pending actions
+instead of a second one silently cancelling an earlier one's window, and
+the install/handoff button guards against a double-tap starting a second
+overlapping attempt. v74 is a correctness audit for the bug class behind v73: pullOwnerState()
 (the periodic owner refresh) and publish() could each silently overwrite a
 concurrent edit, a release, or a scanned friend with a stale pre-fetch
 snapshot; the Hexadex tap-collection queue could drop a tap queued while
