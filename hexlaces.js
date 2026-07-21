@@ -195,6 +195,23 @@
     }
   }
 
+  // Both checks compare a stale pre-await snapshot against what's actually in
+  // storage now. Divergence covers anything that should stop an in-flight
+  // remote-derived write from applying at all (release, a completed trade
+  // swapping in a different identity, or a plain local edit setting dirty).
+  // The narrower goneOrReplaced check omits the dirty case, for call sites
+  // that still need to persist their own outcome (e.g. a fresh revision
+  // number) even when a newer edit is independently pending publish.
+  function identityDivergedFrom(expected) {
+    const current = loadIdentity();
+    return !current || current.readId !== expected.readId || current.dirty;
+  }
+
+  function identityGoneOrReplaced(expected) {
+    const current = loadIdentity();
+    return !current || current.readId !== expected.readId;
+  }
+
   function storeJson(key, value) {
     try {
       if (value == null) localStorage.removeItem(key);
@@ -632,6 +649,10 @@
         headers: { "Content-Type": "application/json", "X-Write-Key": identity.writeKey },
         body: JSON.stringify({ name: identity.name, sets: mySets(), ping: myPing(), friends: friendIds(), revision: identity.revision, force: options.force === true, ...owlRequestCredentials() })
       });
+      // The Hexlace may have been released, or replaced by a completed trade,
+      // while this request was in flight. Never resurrect a stale identity or
+      // stomp whatever now legitimately occupies IDENTITY_KEY.
+      if (identityGoneOrReplaced(identity)) return false;
       if (result.ok) {
         applyOwlMetadata(identity, result.body);
         identity.dirty = false;
@@ -648,6 +669,11 @@
           identity.conflict = false;
           delete identity.conflictRevision;
           queueFriendCollectionSync(FRIEND_SYNC_RETRY_MS);
+        } else if ((loadIdentity()?.revision || 0) >= result.body.currentRevision) {
+          // A concurrent publish call already resolved this exact conflict and
+          // saved the newer state; don't overwrite it with our stale view.
+          renderMine();
+          return false;
         } else {
           identity.conflict = true;
           identity.conflictRevision = result.body.currentRevision;
@@ -666,8 +692,10 @@
       renderMine();
       return result.ok;
     } catch {
-      identity.dirty = true;
-      saveIdentity(identity);
+      if (!identityGoneOrReplaced(identity)) {
+        identity.dirty = true;
+        saveIdentity(identity);
+      }
     }
     renderMine();
     return false;
@@ -867,6 +895,9 @@
         }
         return false;
       }
+      // A planner/ping edit, a friend scan, or a release during this fetch
+      // must stop this pre-fetch snapshot from being applied at all.
+      if (identityDivergedFrom(identity)) return false;
       const remoteRevision = Number(result.body?.revision);
       applyOwlMetadata(identity, result.body);
       if (!Number.isSafeInteger(remoteRevision) || remoteRevision <= (identity.revision || 1)) {
@@ -877,7 +908,11 @@
       if (!storeJson(SETS_KEY, Array.isArray(result.body.sets) ? result.body.sets : [])) return false;
       const remotePing = result.body.ping?.type === "set" && isCancelledSet(result.body.ping) ? null : result.body.ping || null;
       if (!storeJson(PING_KEY, remotePing)) return false;
-      if (!restoreFriendIds(result.body.friends)) return false;
+      // Union with whatever is locally collected right now (not the pre-fetch
+      // snapshot) so a friend scanned during this fetch isn't dropped just
+      // because the server doesn't know about it yet.
+      const remoteFriendIds = Array.isArray(result.body.friends) ? result.body.friends : [];
+      if (!restoreFriendIds([...remoteFriendIds, ...friendIds()])) return false;
       identity.name = result.body.name || identity.name;
       identity.revision = remoteRevision;
       identity.invalid = false;
@@ -907,9 +942,9 @@
         headers: { "X-Write-Key": identity.writeKey }
       });
       if (!result.ok) return false;
-      // A friend removal during this fetch marks the identity dirty; merging
-      // the pre-removal server list now would resurrect the removed friend.
-      if (loadIdentity()?.dirty) return false;
+      // A friend removal (or a release) during this fetch must stop this
+      // pre-fetch snapshot from being merged in at all.
+      if (identityDivergedFrom(identity)) return false;
       const remoteRevision = Number(result.body?.revision);
       if (!Number.isSafeInteger(remoteRevision) || remoteRevision < 1) return false;
 
