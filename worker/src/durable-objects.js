@@ -286,7 +286,7 @@ export class HexlaceCoordinator {
       claim: typeof body.claimToken === "string" ? { token: body.claimToken } : null,
       profileId: validProfileCredentials(body.profileId, body.profileKey) ? body.profileId : null,
       profileKey: validProfileCredentials(body.profileId, body.profileKey) ? body.profileKey : null,
-      owl: validOwl(body.owl) ? body.owl : null,
+      owl: validOwl(body.owl) ? normalizeOwl(body.owl) : null,
       tapToken: typeof body.tapToken === "string" && body.tapToken.length >= 16 ? body.tapToken : null,
       isPhysical: typeof body.isPhysical === "boolean" ? body.isPhysical : true,
       handoffs: {},
@@ -331,7 +331,7 @@ export class HexlaceCoordinator {
       this.record.auth = body.writeKey;
       this.record.profileId = validProfileCredentials(body.profileId, body.profileKey) ? body.profileId : null;
       this.record.profileKey = validProfileCredentials(body.profileId, body.profileKey) ? body.profileKey : null;
-      this.record.owl = validOwl(body.owl) ? body.owl : null;
+      this.record.owl = validOwl(body.owl) ? normalizeOwl(body.owl) : null;
       this.record.isPhysical = true;
       // A takeover invalidates tickets created by the temporary owner so an
       // old installed context can never redeem the rightful owner's new key.
@@ -644,11 +644,12 @@ export class HexlaceCoordinator {
       revision: currentRevision + 1
     };
     if (validOwl(body.owl)) {
+      const owl = normalizeOwl(body.owl);
       const sameOwl = validOwl(this.record.owl)
-        && this.record.owl.seed === body.owl.seed
-        && this.record.owl.number === body.owl.number
-        && this.record.owl.season === body.owl.season;
-      if (!this.record.isPhysical || !validOwl(this.record.owl) || sameOwl) this.record.owl = body.owl;
+        && this.record.owl.seed === owl.seed
+        && this.record.owl.number === owl.number
+        && this.record.owl.season === owl.season;
+      if (!this.record.isPhysical || !validOwl(this.record.owl) || sameOwl) this.record.owl = owl;
     }
     await this.commit();
     const result = { ok: true, updated: this.record.list.updated, revision: this.record.list.revision };
