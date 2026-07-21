@@ -10,7 +10,7 @@ https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 
 Hex Owl visual playground: [open the live playground](https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/hex-owl-playground.html). It is a standalone developer tool for previewing deterministic Owl seeds, traits, palettes, and contact sheets.
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v73 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v74 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 
