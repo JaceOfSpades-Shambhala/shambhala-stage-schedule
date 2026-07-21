@@ -628,6 +628,10 @@
     updateAvailable = true;
     elements.updateBanner.hidden = false;
   }
+  // Exposed so any feature can prompt the same "tap to refresh" banner
+  // instead of inventing its own reload-and-retry messaging - e.g. camp
+  // access revocation, which is simplest to resolve with a full reload.
+  window.showUpdateBanner = showUpdateBanner;
 
   // The release number lives in a comment at the top of <body>; every deploy
   // bumps it, so comparing it against the live copy detects new app code the

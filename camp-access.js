@@ -133,6 +133,16 @@
     render();
   }
 
+  // A revoke is simplest to resolve the same way any other stale-app-state
+  // problem is: prompt a reload rather than trying to reactively patch every
+  // piece of in-page admin state. clear() still hides the admin UI on this
+  // page immediately in case the visitor doesn't refresh right away - the
+  // server rejects any protected write regardless.
+  function handleAccessRevoked() {
+    clear();
+    window.showUpdateBanner?.();
+  }
+
   async function api(path, options = {}) {
     const response = await window.fetchHexlaceApi(`${API_BASE}${path}`, options, API_TIMEOUT_MS);
     let body = null;
@@ -149,7 +159,7 @@
     try {
       const result = await api("/camp/access", { cache: "no-store" });
       if (!result.ok) {
-        if (result.status === 401 || result.status === 403) clear();
+        if (result.status === 401 || result.status === 403) handleAccessRevoked();
         return false;
       }
       applyResponse({ campAccess: result.body }, result.body?.readId || access.readId);
@@ -519,7 +529,10 @@
         cache: "no-store",
         headers: { "X-Profile-Key": profile.profileKey }
       });
-      if (!result.ok) return false;
+      if (!result.ok) {
+        if (result.status === 401 || result.status === 403) handleAccessRevoked();
+        return false;
+      }
       if (result.body?.owl) window.Hexadex?.setOwl?.(result.body.owl);
       savedTraits = result.body?.traits && typeof result.body.traits === "object" ? result.body.traits : {};
       traitsLoaded = true;
@@ -542,7 +555,13 @@
         headers: { "Content-Type": "application/json", "X-Profile-Key": profile.profileKey },
         body: JSON.stringify({ traits: traitsFromControls() })
       });
-      if (!result.ok) throw new Error("save failed");
+      if (!result.ok) {
+        if (result.status === 401 || result.status === 403) {
+          handleAccessRevoked();
+          return false;
+        }
+        throw new Error("save failed");
+      }
       if (result.body?.owl) window.Hexadex?.setOwl?.(result.body.owl);
       savedTraits = result.body?.traits || {};
       traitsLoaded = true;

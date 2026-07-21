@@ -10,6 +10,8 @@ const HEXLACES_PATH = fileURLToPath(new URL("../../hexlaces.js", import.meta.url
 const HEXLACES_SOURCE = readFileSync(HEXLACES_PATH, "utf8");
 const HEXADEX_PATH = fileURLToPath(new URL("../../hexadex.js", import.meta.url));
 const HEXADEX_SOURCE = readFileSync(HEXADEX_PATH, "utf8");
+const CAMP_ACCESS_PATH = fileURLToPath(new URL("../../camp-access.js", import.meta.url));
+const CAMP_ACCESS_SOURCE = readFileSync(CAMP_ACCESS_PATH, "utf8");
 // Both call window.fetchHexlaceApi (defined here), which itself defaults to
 // the bare global `fetch` unless a caller overrides it - the mock in a test
 // therefore has to sit on globalThis.fetch, not window.fetch.
@@ -121,6 +123,11 @@ export async function loadHexlaces() {
 export async function loadHexadex() {
   await importFresh(HEXLACE_API_SOURCE);
   await importFresh(HEXADEX_SOURCE);
+}
+
+export async function loadCampAccess() {
+  await importFresh(HEXLACE_API_SOURCE);
+  await importFresh(CAMP_ACCESS_SOURCE);
 }
 
 export function makeIdentity(overrides = {}) {
