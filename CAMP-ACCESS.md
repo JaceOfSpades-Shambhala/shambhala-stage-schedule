@@ -39,7 +39,7 @@ An admin opens **My Hexlace -> Admin options** and chooses the access for the ne
 
 The role is not encoded in either token. Admins can revoke a tag through `POST /camp/access/revoke`; a management control can be added later without changing the storage model.
 
-For most people, grant camp access with the one-use QR flow below and keep their NFC tag ordinary. Camp access belongs to the recipient device, not to the Owl. It reveals the otherwise-hidden Camp Hexadecibel rarity in the unified Owl customizer, while the existing physical-tag trade flow does not silently swap member/admin roles. Releasing a privileged Hexlace revokes its access; a newly issued privileged claim is required for the next owner.
+For most people, grant camp access with the one-use QR flow below and keep their NFC tag ordinary. Camp access belongs to the recipient device, not to the Owl. It reveals the otherwise-hidden Camp Hexadecibel rarity in the unified Owl customizer. Releasing a privileged Hexlace revokes its access; a newly issued privileged claim is required for the next owner.
 
 ## Adding access to an existing phone
 

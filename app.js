@@ -360,7 +360,7 @@
     const art = document.createElement("img");
     art.id = "stage-mark";
     art.className = "stage-mark";
-    art.src = `stage-names/${appState.stage}.png?v=73`;
+    art.src = `stage-names/${appState.stage}.png?v=75`;
     art.alt = stageLabel;
     art.width = 232;
     art.height = 93;
@@ -552,7 +552,7 @@
     else if (latitude && longitude) elements.campLocation.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   }
 
-  const SCHEDULE_ASSET = "schedule-metadata.js?v=73";
+  const SCHEDULE_ASSET = "schedule-metadata.js?v=75";
   const FRESHNESS_ASSET = "schedule-freshness.json";
   const FRESHNESS_KEY = "shambhala-schedule-refreshed-at";
   const FRESH_THRESHOLD_MS = 15 * 60 * 1000;
@@ -628,6 +628,10 @@
     updateAvailable = true;
     elements.updateBanner.hidden = false;
   }
+  // Exposed so any feature can prompt the same "tap to refresh" banner
+  // instead of inventing its own reload-and-retry messaging - e.g. camp
+  // access revocation, which is simplest to resolve with a full reload.
+  window.showUpdateBanner = showUpdateBanner;
 
   // The release number lives in a comment at the top of <body>; every deploy
   // bumps it, so comparing it against the live copy detects new app code the
@@ -713,7 +717,7 @@
     STAGES.forEach(stage => {
       if (stage.id === appState.stage) return;
       const img = new Image();
-      img.src = `stage-names/${stage.id}.png?v=73`;
+      img.src = `stage-names/${stage.id}.png?v=75`;
     });
   }, 1500);
   window.setInterval(renderLiveStatus, 30000);
@@ -733,6 +737,6 @@
   }
 
   if ("serviceWorker" in navigator) window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=73").then(registerPeriodicSync).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=75").then(registerPeriodicSync).catch(() => {});
   });
 })();

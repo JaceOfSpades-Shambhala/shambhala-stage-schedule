@@ -22,26 +22,36 @@
   });
 
   button.addEventListener("click", async () => {
-    // Refresh the 24-hour iOS handoff ticket immediately before installation.
-    // Other platforms simply resolve false and continue with their prompt.
-    const handoffReady = !isIOS || typeof window.prepareHexlaceHandoff !== "function" || await window.prepareHexlaceHandoff();
-    if (isIOS && !handoffReady) {
-      if (hint) {
-        hint.textContent = "Connect to the internet once before installing so your Hexlace and saved sets can transfer.";
-        hint.hidden = false;
+    // A double-tap while the handoff refresh is still in flight must not
+    // start a second, overlapping attempt - two concurrent calls each
+    // reading and writing the same hint/button state produced the wrong
+    // final visibility depending on which one resolved last.
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+      // Refresh the 24-hour iOS handoff ticket immediately before installation.
+      // Other platforms simply resolve false and continue with their prompt.
+      const handoffReady = !isIOS || typeof window.prepareHexlaceHandoff !== "function" || await window.prepareHexlaceHandoff();
+      if (isIOS && !handoffReady) {
+        if (hint) {
+          hint.textContent = "Connect to the internet once before installing so your Hexlace and saved sets can transfer.";
+          hint.hidden = false;
+        }
+        return;
       }
-      return;
+      if (hint) hint.textContent = manualInstallHint;
+      if (deferredPrompt) {
+        const promptEvent = deferredPrompt;
+        deferredPrompt = null;
+        promptEvent.prompt();
+        const choice = await promptEvent.userChoice;
+        if (choice.outcome === "accepted") button.hidden = true;
+        return;
+      }
+      if ((isIOS || isFirefoxAndroid) && hint) hint.hidden = !hint.hidden;
+    } finally {
+      button.disabled = false;
     }
-    if (hint) hint.textContent = manualInstallHint;
-    if (deferredPrompt) {
-      const promptEvent = deferredPrompt;
-      deferredPrompt = null;
-      promptEvent.prompt();
-      const choice = await promptEvent.userChoice;
-      if (choice.outcome === "accepted") button.hidden = true;
-      return;
-    }
-    if ((isIOS || isFirefoxAndroid) && hint) hint.hidden = !hint.hidden;
   });
 
   window.addEventListener("appinstalled", () => {

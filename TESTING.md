@@ -50,23 +50,17 @@ checklist rather than fragile simulated tests.
 9. Scan one giveaway first on phone A while it is offline, then scan and publish
    from phone B while it is online. Reconnect phone A within seven days and
    confirm A becomes the owner and can publish without a revision-conflict loop.
-10. With two owned Hexlaces that each have a Hex Owl online, enter **Trade Hexlaces** on both phones and
-    tap each physical tag to the other phone. Confirm that neither a one-sided
-    tap nor one confirmation changes ownership; after both confirm, verify each
-    phone publishes its saved sets to the tag it received and displays the Owl
-    attached to that received Hexlace. Confirm there is no option to keep the
-    previous Owl. Repeat with one phone offline and confirm the trade option is
-    not shown.
-11. Release an owned Hexlace, verify the releasing phone keeps its saved sets,
+10. Release an owned Hexlace, verify the releasing phone keeps its saved sets,
     profile, and Hex Owl, then scan the unchanged physical tag on an unowned
     phone and confirm it can be named and claimed. Release and reclaim on the
     original profile and verify the exact Owl seed/number returns rather than a
-    new one being assigned.
-12. Create a display name with no saved sets and confirm no Hex Owl appears.
+    new one being assigned. To exchange two physical tags, each owner releases
+    their own and retaps the newly unclaimed Hexlace the other released.
+11. Create a display name with no saved sets and confirm no Hex Owl appears.
     Save one set, publish, and confirm exactly one Owl appears. Rename the user,
     reload, transfer into the installed app, and confirm the SVG and number stay
     identical at 48px, 64px, and the full My Hexlace size.
-13. Open the [live Hex Owl playground](https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/hex-owl-playground.html)
+12. Open the [live Hex Owl playground](https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/hex-owl-playground.html)
     (or `/hex-owl-playground.html` from a local server), generate at least 24
     random Owls, and check
     that every variation contains the exact supplied Owl anatomy: the layered
@@ -80,13 +74,13 @@ checklist rather than fragile simulated tests.
     release, then pinch-zoom the 320px preview and contact sheet repeatedly;
     no rectangular blocks, horizontal strips, or disappearing Owl fragments
     should appear at any zoom level.
-14. Tap a physical Hexlace and confirm its Owl appears once in the Hexadex with
+13. Tap a physical Hexlace and confirm its Owl appears once in the Hexadex with
     name, number, collection date, and only broad `Shambhala 2026` context. Tap
     it again to confirm deduplication. Open the ordinary QR/share URL and confirm
     the set list is collected but the Owl is not. Repeat offline and verify the
     tap queues, survives reload, and syncs once online.
-15. Rewrite one legacy `?f=<id>` physical Hexlace using **Write my tag**. Confirm
-    old set-list sharing still works before the rewrite and tap-only Hexadex/trade
+14. Rewrite one legacy `?f=<id>` physical Hexlace using **Write my tag**. Confirm
+    old set-list sharing still works before the rewrite and tap-only Hexadex
     behavior begins only after the new `&tap=` URL is written.
 
 ## Deployment

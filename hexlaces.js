@@ -14,9 +14,7 @@
   const PING_KEY = "shambhala-2026-ping";
   const HANDOFF_COOKIE = "shambhala-2026-hexlace-handoff";
   const HANDOFF_REDEMPTION_KEY = "shambhala-2026-hexlace-handoff-redemption";
-  const TRADE_MODE_KEY = "shambhala-2026-hexlace-trade-mode";
   const HANDOFF_MAX_AGE_SECONDS = 24 * 60 * 60;
-  const TRADE_MAX_AGE_MS = 15 * 60 * 1000;
   const API_TIMEOUT_MS = 12000;
   const STAGES = [
     { id: "amp", label: "AMP" },
@@ -92,15 +90,6 @@
     releaseOpen: document.querySelector("#hexlace-release-open"),
     releaseDialog: document.querySelector("#hexlace-release-dialog"),
     releaseConfirm: document.querySelector("#hexlace-release-confirm"),
-    swapOpen: document.querySelector("#hexlace-swap-open"),
-    swapDialog: document.querySelector("#hexlace-swap-dialog"),
-    swapCreate: document.querySelector("#hexlace-swap-create"),
-    swapAccept: document.querySelector("#hexlace-swap-accept"),
-    swapCreateButton: document.querySelector("#hexlace-swap-create-button"),
-    swapStatus: document.querySelector("#hexlace-swap-status"),
-    swapCancel: document.querySelector("#hexlace-swap-cancel"),
-    swapAcceptButton: document.querySelector("#hexlace-swap-accept-button"),
-    swapAcceptCopy: document.querySelector("#hexlace-swap-accept-copy"),
     editor: document.querySelector("#hexlace-editor"),
     editorPrompt: document.querySelector("#hexlace-editor-prompt"),
     nameInput: document.querySelector("#hexlace-name-input"),
@@ -126,7 +115,6 @@
   let handoffPreparedThisPage = false;
   let pullingOwner = false;
   let connectCode = "";
-  let tradePollTimer = 0;
   let collectedRenderSignature = "";
   let comparedReadId = "";
   let compareDayIndex = 0;
@@ -134,9 +122,6 @@
   // Unambiguous alphabet (no 0/O/1/l/I), matching the Worker's id style.
   const KEY_ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
 
-  function isCampOwl(owl) {
-    return owl?.tier === "camp-hexadecibel" || owl?.version === 3;
-  }
   function randomKey(length) {
     const bytes = crypto.getRandomValues(new Uint8Array(length));
     let out = "";
@@ -193,6 +178,23 @@
     } catch {
       return false;
     }
+  }
+
+  // Both checks compare a stale pre-await snapshot against what's actually in
+  // storage now. Divergence covers anything that should stop an in-flight
+  // remote-derived write from applying at all (release swapping in a
+  // different identity, or a plain local edit setting dirty). The narrower
+  // goneOrReplaced check omits the dirty case, for call sites
+  // that still need to persist their own outcome (e.g. a fresh revision
+  // number) even when a newer edit is independently pending publish.
+  function identityDivergedFrom(expected) {
+    const current = loadIdentity();
+    return !current || current.readId !== expected.readId || current.dirty;
+  }
+
+  function identityGoneOrReplaced(expected) {
+    const current = loadIdentity();
+    return !current || current.readId !== expected.readId;
   }
 
   function storeJson(key, value) {
@@ -632,6 +634,10 @@
         headers: { "Content-Type": "application/json", "X-Write-Key": identity.writeKey },
         body: JSON.stringify({ name: identity.name, sets: mySets(), ping: myPing(), friends: friendIds(), revision: identity.revision, force: options.force === true, ...owlRequestCredentials() })
       });
+      // The Hexlace may have been released while this request was in flight.
+      // Never resurrect a stale identity or stomp whatever now legitimately
+      // occupies IDENTITY_KEY.
+      if (identityGoneOrReplaced(identity)) return false;
       if (result.ok) {
         applyOwlMetadata(identity, result.body);
         identity.dirty = false;
@@ -648,6 +654,11 @@
           identity.conflict = false;
           delete identity.conflictRevision;
           queueFriendCollectionSync(FRIEND_SYNC_RETRY_MS);
+        } else if ((loadIdentity()?.revision || 0) >= result.body.currentRevision) {
+          // A concurrent publish call already resolved this exact conflict and
+          // saved the newer state; don't overwrite it with our stale view.
+          renderMine();
+          return false;
         } else {
           identity.conflict = true;
           identity.conflictRevision = result.body.currentRevision;
@@ -666,8 +677,10 @@
       renderMine();
       return result.ok;
     } catch {
-      identity.dirty = true;
-      saveIdentity(identity);
+      if (!identityGoneOrReplaced(identity)) {
+        identity.dirty = true;
+        saveIdentity(identity);
+      }
     }
     renderMine();
     return false;
@@ -850,16 +863,6 @@
         headers: { "X-Write-Key": identity.writeKey }
       });
       if (!result.ok) {
-        if (result.status === 409 && result.body?.transferredTo) {
-          const moved = applySwapTransfer(result.body.transferredTo, result.body.revision);
-          if (moved) {
-            try { localStorage.removeItem(TRADE_MODE_KEY); } catch {}
-            stopTradePolling();
-            feedback("Hexlaces traded. Publishing your saved sets to your new tag.");
-            window.setTimeout(() => publish({ force: true }), 0);
-          }
-          return moved;
-        }
         if (result.status === 403 || result.status === 404) {
           identity.invalid = true;
           saveIdentity(identity);
@@ -867,6 +870,9 @@
         }
         return false;
       }
+      // A planner/ping edit, a friend scan, or a release during this fetch
+      // must stop this pre-fetch snapshot from being applied at all.
+      if (identityDivergedFrom(identity)) return false;
       const remoteRevision = Number(result.body?.revision);
       applyOwlMetadata(identity, result.body);
       if (!Number.isSafeInteger(remoteRevision) || remoteRevision <= (identity.revision || 1)) {
@@ -877,7 +883,11 @@
       if (!storeJson(SETS_KEY, Array.isArray(result.body.sets) ? result.body.sets : [])) return false;
       const remotePing = result.body.ping?.type === "set" && isCancelledSet(result.body.ping) ? null : result.body.ping || null;
       if (!storeJson(PING_KEY, remotePing)) return false;
-      if (!restoreFriendIds(result.body.friends)) return false;
+      // Union with whatever is locally collected right now (not the pre-fetch
+      // snapshot) so a friend scanned during this fetch isn't dropped just
+      // because the server doesn't know about it yet.
+      const remoteFriendIds = Array.isArray(result.body.friends) ? result.body.friends : [];
+      if (!restoreFriendIds([...remoteFriendIds, ...friendIds()])) return false;
       identity.name = result.body.name || identity.name;
       identity.revision = remoteRevision;
       identity.invalid = false;
@@ -907,9 +917,9 @@
         headers: { "X-Write-Key": identity.writeKey }
       });
       if (!result.ok) return false;
-      // A friend removal during this fetch marks the identity dirty; merging
-      // the pre-removal server list now would resurrect the removed friend.
-      if (loadIdentity()?.dirty) return false;
+      // A friend removal (or a release) during this fetch must stop this
+      // pre-fetch snapshot from being merged in at all.
+      if (identityDivergedFrom(identity)) return false;
       const remoteRevision = Number(result.body?.revision);
       if (!Number.isSafeInteger(remoteRevision) || remoteRevision < 1) return false;
 
@@ -973,198 +983,6 @@
       feedback("Couldn't release this Hexlace — you need an internet connection.");
     } finally {
       elements.releaseConfirm.disabled = false;
-    }
-  }
-
-  function loadTradeMode() {
-    try {
-      const value = JSON.parse(localStorage.getItem(TRADE_MODE_KEY) || "null");
-      if (!value || !Number.isFinite(value.startedAt) || Date.now() - value.startedAt > TRADE_MAX_AGE_MS) {
-        localStorage.removeItem(TRADE_MODE_KEY);
-        return null;
-      }
-      return value;
-    } catch {
-      return null;
-    }
-  }
-
-  function saveTradeMode(value) {
-    return storeJson(TRADE_MODE_KEY, value);
-  }
-
-  function stopTradePolling() {
-    window.clearTimeout(tradePollTimer);
-    tradePollTimer = 0;
-  }
-
-  function renderTradeDialog(mode = loadTradeMode()) {
-    const online = navigator.onLine !== false;
-    const identity = loadIdentity();
-    const campOwl = isCampOwl(identity?.owl);
-    if (elements.swapOpen) elements.swapOpen.hidden = !online || !identity || identity.isPhysical === false || campOwl;
-    if (!mode) return;
-    elements.swapCreate.hidden = Boolean(mode.matched);
-    elements.swapAccept.hidden = !mode.matched;
-    elements.swapAcceptButton.disabled = !online || Boolean(mode.confirmed);
-    if (!online) {
-      elements.swapStatus.textContent = "Trade paused — reconnect to continue.";
-    } else if (mode.targetReadId) {
-      elements.swapStatus.textContent = mode.confirmed
-        ? "You confirmed. Waiting for your friend to confirm on their phone."
-        : "Your tap is recorded. Waiting for your friend to tap your Hexlace.";
-    } else {
-      elements.swapStatus.textContent = "Trade mode is on. Now tap your friend's Hexlace to this phone.";
-    }
-  }
-
-  function startTradeMode() {
-    const identity = loadIdentity();
-    if (navigator.onLine === false || !identity || identity.isPhysical === false || isCampOwl(identity.owl)) return;
-    const mode = { startedAt: Date.now(), targetReadId: "", matched: false, confirmed: false };
-    saveTradeMode(mode);
-    renderTradeDialog(mode);
-    showDialog(elements.swapDialog);
-  }
-
-  async function recordTradeTap(targetReadId, targetTapToken) {
-    const identity = loadIdentity();
-    const mode = loadTradeMode();
-    if (!identity || !mode || navigator.onLine === false || targetReadId === identity.readId) return false;
-    try {
-      const result = await api(`/lists/${identity.readId}/trade`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Write-Key": identity.writeKey },
-        body: JSON.stringify({ targetReadId, targetTapToken })
-      });
-      if (!result.ok) {
-        feedback("Couldn't record that trade tap — check your signal and try again.");
-        return true;
-      }
-      mode.targetReadId = targetReadId;
-      mode.targetName = result.body?.targetName || "your friend";
-      mode.matched = result.body?.matched === true;
-      saveTradeMode(mode);
-      renderTradeDialog(mode);
-      showDialog(elements.swapDialog);
-      if (mode.matched) feedback(`Matched with ${mode.targetName}. Both people must confirm.`);
-      else feedback("Tap recorded. Waiting for your friend to tap your Hexlace.");
-      pollTradeStatus(1500);
-      return true;
-    } catch {
-      feedback("Couldn't record that trade tap — check your signal and try again.");
-      return true;
-    }
-  }
-
-  function applySwapTransfer(newReadId, revision, metadata = null) {
-    const identity = loadIdentity();
-    if (!identity || !newReadId || newReadId === identity.readId) return false;
-    const previousReadId = identity.readId;
-    const entries = loadCollected().filter(entry => entry.readId !== newReadId);
-    if (!entries.some(entry => entry.readId === previousReadId)) {
-      entries.push({ readId: previousReadId, name: "Swapped Hexlace", sets: [], ping: null, pending: true });
-    }
-    saveCollected(entries);
-    identity.readId = newReadId;
-    identity.revision = Number.isSafeInteger(revision) && revision > 0 ? revision : 1;
-    identity.dirty = true;
-    identity.invalid = false;
-    identity.conflict = false;
-    delete identity.conflictRevision;
-    if (metadata) applyOwlMetadata(identity, metadata);
-    else {
-      delete identity.owl;
-      window.Hexadex?.clearOwl?.();
-    }
-    if (!saveIdentity(identity)) return false;
-    collectedRenderSignature = "";
-    friendOpenState.clear();
-    renderCollected();
-    window.dispatchEvent(new CustomEvent("hexlace-friends-changed"));
-    renderMine();
-    return true;
-  }
-
-  async function confirmTrade() {
-    const identity = loadIdentity();
-    const mode = loadTradeMode();
-    if (!identity || !mode?.matched || navigator.onLine === false) return;
-    elements.swapAcceptButton.disabled = true;
-    try {
-      const result = await api(`/lists/${identity.readId}/trade/confirm`, {
-        method: "POST",
-        headers: { "X-Write-Key": identity.writeKey }
-      });
-      if (!result.ok) {
-        feedback(result.status === 409 ? "The other phone is no longer matched for this trade." : "Couldn't confirm the trade — check your signal.");
-        return;
-      }
-      if (result.body?.completed && result.body?.readId) {
-        if (!applySwapTransfer(result.body.readId, result.body.revision, result.body)) {
-          feedback("The trade completed, but this phone couldn't save it. Keep this page open and try again.");
-          return;
-        }
-        localStorage.removeItem(TRADE_MODE_KEY);
-        stopTradePolling();
-        elements.swapDialog?.close();
-        feedback("Hexlaces traded. Publishing your saved sets to your new tag.");
-        await publish({ force: true });
-        refreshCollected(true);
-        return;
-      }
-      mode.confirmed = true;
-      saveTradeMode(mode);
-      renderTradeDialog(mode);
-      feedback("Confirmed. Waiting for your friend to confirm.");
-      pollTradeStatus(1000);
-    } catch {
-      feedback("Couldn't confirm the trade — check your signal and try again.");
-    } finally {
-      elements.swapAcceptButton.disabled = navigator.onLine === false || Boolean(loadTradeMode()?.confirmed);
-    }
-  }
-
-  async function pollTradeStatus(delay = 0) {
-    stopTradePolling();
-    tradePollTimer = window.setTimeout(async () => {
-      const identity = loadIdentity();
-      const mode = loadTradeMode();
-      if (!identity || !mode || navigator.onLine === false) return;
-      try {
-        const result = await api(`/lists/${identity.readId}/trade`, {
-          cache: "no-store",
-          headers: { "X-Write-Key": identity.writeKey }
-        });
-        if (result.status === 409 && result.body?.transferredTo) {
-          if (applySwapTransfer(result.body.transferredTo, result.body.revision)) {
-            localStorage.removeItem(TRADE_MODE_KEY);
-            elements.swapDialog?.close();
-            feedback("Hexlaces traded. Publishing your saved sets to your new tag.");
-            await publish({ force: true });
-            refreshCollected(true);
-          }
-          return;
-        }
-        if (result.ok && result.body) {
-          mode.matched = result.body.matched === true;
-          mode.confirmed = result.body.confirmed === true;
-          mode.targetName = result.body.targetName || mode.targetName;
-          saveTradeMode(mode);
-          renderTradeDialog(mode);
-        }
-      } catch {}
-      if (loadTradeMode()) pollTradeStatus(2000);
-    }, delay);
-  }
-
-  async function cancelTrade() {
-    const identity = loadIdentity();
-    const mode = loadTradeMode();
-    stopTradePolling();
-    localStorage.removeItem(TRADE_MODE_KEY);
-    if (identity && mode?.targetReadId && navigator.onLine !== false) {
-      api(`/lists/${identity.readId}/trade/cancel`, { method: "POST", headers: { "X-Write-Key": identity.writeKey } }).catch(() => {});
     }
   }
 
@@ -1660,10 +1478,6 @@
   elements.giveawayShare.addEventListener("click", () => { if (giveawayLink) shareOrCopy(giveawayLink, "A Hexlace for you"); });
   elements.releaseOpen?.addEventListener("click", () => showDialog(elements.releaseDialog));
   elements.releaseConfirm?.addEventListener("click", releaseHexlace);
-  elements.swapOpen?.addEventListener("click", startTradeMode);
-  elements.swapCreateButton?.addEventListener("click", startTradeMode);
-  elements.swapAcceptButton?.addEventListener("click", confirmTrade);
-  elements.swapCancel?.addEventListener("click", cancelTrade);
   elements.comparePrevious?.addEventListener("click", () => {
     compareDayIndex = Math.max(0, compareDayIndex - 1);
     renderComparison();
@@ -1733,7 +1547,9 @@
   renderMine();
   renderCollected();
   handleIncomingLink();
-  try { localStorage.removeItem(TRADE_MODE_KEY); } catch {}
+  // One-time cleanup of any leftover trade-mode state from a phone that still
+  // has the removed trade feature's UI cached from an earlier version.
+  try { localStorage.removeItem("shambhala-2026-hexlace-trade-mode"); } catch {}
   flushPendingClaim();
   syncMine();
   window.setTimeout(() => refreshCollected(false), 2500);

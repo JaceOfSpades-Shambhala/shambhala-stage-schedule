@@ -286,12 +286,10 @@ test("pre-v55 Durable Object records without a claim remain physical Hexlaces", 
     claim: null,
     handoffs: {},
     redirects: {},
-    appliedTrades: {},
     profileId: null,
     profileKey: null,
     owl: null,
     tapToken: null,
-    trade: null,
     expiresAt: null,
     snapshotDirty: false
   };
@@ -332,102 +330,6 @@ test("an owner can release the existing physical tag for the next scanner", asyn
   }), env);
   assert.deepEqual(await claimed.json(), { ok: true, accepted: true, revision: 2 });
   assert.equal(await env.LISTS.get(`auth:${readId}`), "next-owner-write-key");
-});
-
-test("physical Hexlace trades require reciprocal taps and both confirmations", async () => {
-  const env = makeDurableEnv();
-  const first = await worker.fetch(makeRequest("/lists", {
-    method: "POST",
-    body: JSON.stringify({ name: "Alex", sets: [] })
-  }), env).then(response => response.json());
-  const second = await worker.fetch(makeRequest("/lists", {
-    method: "POST",
-    body: JSON.stringify({ name: "Blair", sets: [] })
-  }), env).then(response => response.json());
-
-  const firstTap = await worker.fetch(makeRequest(`/lists/${first.readId}/trade`, {
-    method: "POST",
-    headers: { "X-Write-Key": first.writeKey },
-    body: JSON.stringify({ targetReadId: second.readId })
-  }), env);
-  assert.equal((await firstTap.json()).matched, false);
-
-  const premature = await worker.fetch(makeRequest(`/lists/${first.readId}/trade/confirm`, {
-    method: "POST",
-    headers: { "X-Write-Key": first.writeKey }
-  }), env);
-  assert.equal(premature.status, 409);
-
-  const reciprocalTap = await worker.fetch(makeRequest(`/lists/${second.readId}/trade`, {
-    method: "POST",
-    headers: { "X-Write-Key": second.writeKey },
-    body: JSON.stringify({ targetReadId: first.readId })
-  }), env);
-  assert.equal((await reciprocalTap.json()).matched, true);
-
-  const firstStatus = await worker.fetch(makeRequest(`/lists/${first.readId}/trade`, {
-    headers: { "X-Write-Key": first.writeKey }
-  }), env);
-  assert.equal((await firstStatus.json()).matched, true);
-
-  const firstConfirm = await worker.fetch(makeRequest(`/lists/${first.readId}/trade/confirm`, {
-    method: "POST",
-    headers: { "X-Write-Key": first.writeKey }
-  }), env);
-  assert.deepEqual(await firstConfirm.json(), { completed: false });
-
-  const secondConfirm = await worker.fetch(makeRequest(`/lists/${second.readId}/trade/confirm`, {
-    method: "POST",
-    headers: { "X-Write-Key": second.writeKey }
-  }), env);
-  assert.deepEqual(await secondConfirm.json(), { completed: true, readId: first.readId, revision: 1 });
-
-  const firstPhoneRedirect = await worker.fetch(makeRequest(`/lists/${first.readId}/owner`, {
-    headers: { "X-Write-Key": first.writeKey }
-  }), env);
-  assert.equal(firstPhoneRedirect.status, 409);
-  assert.equal((await firstPhoneRedirect.json()).transferredTo, second.readId);
-
-  const firstPhoneNewTag = await worker.fetch(makeRequest(`/lists/${second.readId}/owner`, {
-    headers: { "X-Write-Key": first.writeKey }
-  }), env);
-  assert.equal(firstPhoneNewTag.status, 200);
-  const secondPhoneNewTag = await worker.fetch(makeRequest(`/lists/${first.readId}/owner`, {
-    headers: { "X-Write-Key": second.writeKey }
-  }), env);
-  assert.equal(secondPhoneNewTag.status, 200);
-});
-
-test("simultaneous trade confirmations settle without cross-coordinator deadlock", async () => {
-  const env = makeDurableEnv();
-  const first = await worker.fetch(makeRequest("/lists", {
-    method: "POST", body: JSON.stringify({ name: "A", sets: [] })
-  }), env).then(response => response.json());
-  const second = await worker.fetch(makeRequest("/lists", {
-    method: "POST", body: JSON.stringify({ name: "B", sets: [] })
-  }), env).then(response => response.json());
-  await worker.fetch(makeRequest(`/lists/${first.readId}/trade`, {
-    method: "POST", headers: { "X-Write-Key": first.writeKey }, body: JSON.stringify({ targetReadId: second.readId, targetTapToken: second.tapToken })
-  }), env);
-  await worker.fetch(makeRequest(`/lists/${second.readId}/trade`, {
-    method: "POST", headers: { "X-Write-Key": second.writeKey }, body: JSON.stringify({ targetReadId: first.readId, targetTapToken: first.tapToken })
-  }), env);
-
-  const [firstConfirm, secondConfirm] = await Promise.all([
-    worker.fetch(makeRequest(`/lists/${first.readId}/trade/confirm`, { method: "POST", headers: { "X-Write-Key": first.writeKey } }), env),
-    worker.fetch(makeRequest(`/lists/${second.readId}/trade/confirm`, { method: "POST", headers: { "X-Write-Key": second.writeKey } }), env)
-  ]);
-  const confirmations = [await firstConfirm.json(), await secondConfirm.json()];
-  assert.equal(confirmations.some(result => result.completed === true), true);
-
-  const firstMoved = await worker.fetch(makeRequest(`/lists/${second.readId}/owner`, {
-    headers: { "X-Write-Key": first.writeKey }
-  }), env);
-  const secondMoved = await worker.fetch(makeRequest(`/lists/${first.readId}/owner`, {
-    headers: { "X-Write-Key": second.writeKey }
-  }), env);
-  assert.equal(firstMoved.status, 200);
-  assert.equal(secondMoved.status, 200);
 });
 
 test("Durable Object revision checks allow exactly one concurrent owner update", async () => {
@@ -965,50 +867,6 @@ test("release keeps the user's Owl and reclaiming the Hexlace restores that same
   assert.equal(await env.OWL_NUMBERS.instances.get("global").ctx.storage.get("counter"), 1);
 });
 
-test("trading physical Hexlaces always trades their attached Hex Owls", async () => {
-  const env = makeOwlEnv();
-  const first = await worker.fetch(makeRequest("/lists", {
-    method: "POST", body: JSON.stringify({ name: "Alex", sets: [QUALIFYING_SET], physical: true })
-  }), env).then(response => response.json());
-  const second = await worker.fetch(makeRequest("/lists", {
-    method: "POST", body: JSON.stringify({ name: "Blair", sets: [QUALIFYING_SET], physical: true })
-  }), env).then(response => response.json());
-  assert.notEqual(first.owl.seed, second.owl.seed);
-
-  const sharedLinkIsNotATap = await worker.fetch(makeRequest(`/lists/${first.readId}/trade`, {
-    method: "POST", headers: { "X-Write-Key": first.writeKey }, body: JSON.stringify({ targetReadId: second.readId })
-  }), env);
-  assert.equal(sharedLinkIsNotATap.status, 403);
-
-  await worker.fetch(makeRequest(`/lists/${first.readId}/trade`, {
-    method: "POST", headers: { "X-Write-Key": first.writeKey }, body: JSON.stringify({ targetReadId: second.readId, targetTapToken: second.tapToken })
-  }), env);
-  await worker.fetch(makeRequest(`/lists/${second.readId}/trade`, {
-    method: "POST", headers: { "X-Write-Key": second.writeKey }, body: JSON.stringify({ targetReadId: first.readId, targetTapToken: first.tapToken })
-  }), env);
-  await worker.fetch(makeRequest(`/lists/${first.readId}/trade/confirm`, {
-    method: "POST", headers: { "X-Write-Key": first.writeKey }
-  }), env);
-  const finished = await worker.fetch(makeRequest(`/lists/${second.readId}/trade/confirm`, {
-    method: "POST", headers: { "X-Write-Key": second.writeKey }
-  }), env).then(response => response.json());
-  assert.equal(finished.completed, true);
-  assert.deepEqual(finished.owl, first.owl);
-
-  const firstOwner = await worker.fetch(makeRequest(`/lists/${second.readId}/owner`, {
-    headers: { "X-Write-Key": first.writeKey }
-  }), env).then(response => response.json());
-  const secondOwner = await worker.fetch(makeRequest(`/lists/${first.readId}/owner`, {
-    headers: { "X-Write-Key": second.writeKey }
-  }), env).then(response => response.json());
-  assert.deepEqual(firstOwner.owl, second.owl);
-  assert.deepEqual(secondOwner.owl, first.owl);
-  const firstPhysicalTag = await worker.fetch(makeRequest(`/lists/${first.readId}`), env).then(response => response.json());
-  const secondPhysicalTag = await worker.fetch(makeRequest(`/lists/${second.readId}`), env).then(response => response.json());
-  assert.deepEqual(firstPhysicalTag.owl, first.owl);
-  assert.deepEqual(secondPhysicalTag.owl, second.owl);
-});
-
 test("Hexadex collection requires a physical tap and preserves first-collected metadata", async () => {
   const env = makeOwlEnv();
   const collector = await worker.fetch(makeRequest("/lists", {
@@ -1200,22 +1058,6 @@ test("camp access grants hashed roles, protects admin APIs, and permits own-Owl 
     }
   }), env);
   assert.equal(memberProfile.status, 200);
-
-  const campSourceTrade = await worker.fetch(makeRequest(`/lists/${memberTag.readId}/trade`, {
-    method: "POST",
-    headers: { "X-Write-Key": "member-write-key-123456789" },
-    body: JSON.stringify({ targetReadId: admin.readId, targetTapToken: admin.tapToken })
-  }), env);
-  assert.equal(campSourceTrade.status, 409);
-  assert.match((await campSourceTrade.json()).error, /Camp Hexadecibel Owls cannot be traded/);
-
-  const campTargetTrade = await worker.fetch(makeRequest(`/lists/${admin.readId}/trade`, {
-    method: "POST",
-    headers: { "X-Write-Key": admin.writeKey },
-    body: JSON.stringify({ targetReadId: memberTag.readId, targetTapToken: memberClaimBody.tapToken })
-  }), env);
-  assert.equal(campTargetTrade.status, 409);
-  assert.match((await campTargetTrade.json()).error, /Camp Hexadecibel Owls cannot be traded/);
 
   const memberAccess = await worker.fetch(makeRequest("/camp/access", {
     headers: { Authorization: `Bearer ${memberAccessKey}` }
