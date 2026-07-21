@@ -430,6 +430,60 @@ test("simultaneous trade confirmations settle without cross-coordinator deadlock
   assert.equal(secondMoved.status, 200);
 });
 
+test("a second trade between the same two Hexlaces re-applies instead of replaying the first trade's cached result", async () => {
+  const env = makeDurableEnv();
+  const first = await worker.fetch(makeRequest("/lists", {
+    method: "POST", body: JSON.stringify({ name: "Alex", sets: [] })
+  }), env).then(response => response.json());
+  const second = await worker.fetch(makeRequest("/lists", {
+    method: "POST", body: JSON.stringify({ name: "Blair", sets: [] })
+  }), env).then(response => response.json());
+
+  async function trade(keyOnFirst, keyOnSecond) {
+    await worker.fetch(makeRequest(`/lists/${first.readId}/trade`, {
+      method: "POST", headers: { "X-Write-Key": keyOnFirst }, body: JSON.stringify({ targetReadId: second.readId })
+    }), env);
+    await worker.fetch(makeRequest(`/lists/${second.readId}/trade`, {
+      method: "POST", headers: { "X-Write-Key": keyOnSecond }, body: JSON.stringify({ targetReadId: first.readId })
+    }), env);
+    await worker.fetch(makeRequest(`/lists/${first.readId}/trade/confirm`, {
+      method: "POST", headers: { "X-Write-Key": keyOnFirst }
+    }), env);
+    return worker.fetch(makeRequest(`/lists/${second.readId}/trade/confirm`, {
+      method: "POST", headers: { "X-Write-Key": keyOnSecond }
+    }), env).then(response => response.json());
+  }
+
+  const firstTrade = await trade(first.writeKey, second.writeKey);
+  assert.equal(firstTrade.completed, true);
+
+  // After trade #1, each original key now authenticates against the OTHER tag.
+  assert.equal((await worker.fetch(makeRequest(`/lists/${second.readId}/owner`, { headers: { "X-Write-Key": first.writeKey } }), env)).status, 200);
+  assert.equal((await worker.fetch(makeRequest(`/lists/${first.readId}/owner`, { headers: { "X-Write-Key": second.writeKey } }), env)).status, 200);
+
+  // Trade #2: the CURRENT holders (Blair now controls "first", Alex now
+  // controls "second") trade the same two physical tags back. A stale,
+  // pair-only idempotency key would replay trade #1's cached result here
+  // and leave both participants locked out of both tags instead.
+  const secondTrade = await trade(second.writeKey, first.writeKey);
+  assert.equal(secondTrade.completed, true);
+
+  const blairOnSecond = await worker.fetch(makeRequest(`/lists/${second.readId}/owner`, { headers: { "X-Write-Key": second.writeKey } }), env);
+  const alexOnFirst = await worker.fetch(makeRequest(`/lists/${first.readId}/owner`, { headers: { "X-Write-Key": first.writeKey } }), env);
+  assert.equal(blairOnSecond.status, 200, "Blair's key must work on tag \"second\" after trading it away from \"first\"");
+  assert.equal(alexOnFirst.status, 200, "Alex's key must work on tag \"first\" after trading it away from \"second\"");
+
+  // Each key's now-stale tag correctly redirects to where that key actually
+  // lives instead of granting (or permanently refusing) access - a flat 403
+  // here would itself indicate the redirect bookkeeping broke, not a pass.
+  const blairStuckOnFirst = await worker.fetch(makeRequest(`/lists/${first.readId}/owner`, { headers: { "X-Write-Key": second.writeKey } }), env);
+  const alexStuckOnSecond = await worker.fetch(makeRequest(`/lists/${second.readId}/owner`, { headers: { "X-Write-Key": first.writeKey } }), env);
+  assert.equal(blairStuckOnFirst.status, 409);
+  assert.equal((await blairStuckOnFirst.json()).transferredTo, second.readId);
+  assert.equal(alexStuckOnSecond.status, 409);
+  assert.equal((await alexStuckOnSecond.json()).transferredTo, first.readId);
+});
+
 test("Durable Object revision checks allow exactly one concurrent owner update", async () => {
   const env = makeDurableEnv();
   const created = await worker.fetch(makeRequest("/lists", {

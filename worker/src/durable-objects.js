@@ -468,7 +468,10 @@ export class HexlaceCoordinator {
       startedAt: nowMs(this.env),
       expiresAt: nowMs(this.env) + TRADE_TTL_MS,
       matched: false,
-      confirmed: false
+      confirmed: false,
+      // Unique per attempt so a later, unrelated trade between this same pair
+      // of tags can never replay a prior trade's cached applied-trade result.
+      attemptId: randomHex(8)
     };
     await this.saveRecord();
     const response = await namedStub(this.env.HEXLACES, body.targetReadId).fetch(new Request("https://hexlace.internal/trade/match", {
@@ -528,6 +531,12 @@ export class HexlaceCoordinator {
     const targetReadId = this.record.trade.targetReadId;
     const tradeId = [this.record.readId, targetReadId].sort().join(":");
     if (this.record.readId !== tradeId.slice(0, tradeId.indexOf(":"))) return json({ error: "Wrong trade coordinator." }, 409);
+    // The applied-trade idempotency key must identify this one trade attempt,
+    // not just this pair of tags - otherwise a later, unrelated trade between
+    // the same two physical tags would replay the first trade's cached result
+    // instead of actually applying. Capture it before this.record.trade is
+    // cleared below.
+    const attemptId = this.record.trade.attemptId;
     const selfRevision = Number.isSafeInteger(this.record.list.revision) ? this.record.list.revision : 1;
     const response = await namedStub(this.env.HEXLACES, targetReadId).fetch(new Request("https://hexlace.internal/trade/apply", {
       method: "POST",
@@ -538,7 +547,7 @@ export class HexlaceCoordinator {
         requesterAuth: this.record.auth,
         requesterProfileId: this.record.profileId,
         requesterProfileKey: this.record.profileKey,
-        tradeId
+        tradeId: attemptId
       })
     }));
     if (response.status === 202) return json({ completed: false }, 202);
@@ -554,7 +563,7 @@ export class HexlaceCoordinator {
     this.record.handoffs = {};
     await this.commit();
     try {
-      await adoptProfileOwl(this.env, this.record.profileId, this.record.profileKey, this.record.owl, this.record.readId, tradeId);
+      await adoptProfileOwl(this.env, this.record.profileId, this.record.profileKey, this.record.owl, this.record.readId, attemptId);
     } catch (error) {
       console.error("Hex Owl profile reconciliation failed after trade", error);
     }
