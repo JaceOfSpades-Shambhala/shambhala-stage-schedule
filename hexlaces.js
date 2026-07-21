@@ -907,6 +907,9 @@
         headers: { "X-Write-Key": identity.writeKey }
       });
       if (!result.ok) return false;
+      // A friend removal during this fetch marks the identity dirty; merging
+      // the pre-removal server list now would resurrect the removed friend.
+      if (loadIdentity()?.dirty) return false;
       const remoteRevision = Number(result.body?.revision);
       if (!Number.isSafeInteger(remoteRevision) || remoteRevision < 1) return false;
 
@@ -1420,6 +1423,9 @@
           feedback("Friend restored.");
         });
         saveCollected(previousEntries.filter(other => other.readId !== entry.readId));
+        // A removal must publish as an owner edit. The quiet scan sync merges
+        // the server's friend list back in, which would restore this friend.
+        markDirtyAndPublishSoon(0);
         friendCollectionChanged();
         friendOpenState.delete(entry.readId);
         [...friendDayOpenState.keys()].filter(key => key.startsWith(`${entry.readId}:`)).forEach(key => friendDayOpenState.delete(key));
