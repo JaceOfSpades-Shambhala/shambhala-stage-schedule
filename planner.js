@@ -43,7 +43,8 @@
     pingLocationOptions: document.querySelector("#planner-ping-location-options"),
     pingDurationOptions: document.querySelector("#planner-ping-duration-options"),
     pingDurationLabel: document.querySelector("#planner-ping-duration-label"),
-    pingSetInstruction: document.querySelector("#planner-ping-set-instruction")
+    pingSetInstruction: document.querySelector("#planner-ping-set-instruction"),
+    pingSelectCancel: document.querySelector("#planner-ping-select-cancel")
   };
   if (!elements.panel || !elements.scheduleList) return;
 
@@ -644,6 +645,11 @@
       row.tabIndex = 0;
       row.setAttribute("role", "button");
       row.setAttribute("aria-label", `Set a ping for ${item.artist} at ${titleCaseStage(item.stageId)}, ${item.time}`);
+      const chip = document.createElement("span");
+      chip.className = "ping-choice-badge";
+      chip.textContent = "Tap to ping";
+      chip.setAttribute("aria-hidden", "true");
+      meta.append(chip);
       const choose = () => {
         selectingPingSet = false;
         setSetPing(item);
@@ -761,15 +767,31 @@
     if (typeof elements.shareDialog?.showModal === "function") elements.shareDialog.showModal();
     else elements.shareDialog?.setAttribute("open", "");
   });
+  function cancelPingSetSelection(message) {
+    selectingPingSet = false;
+    // Full render so rows drop their choice highlighting, not just the ping box.
+    renderPlanner();
+    if (message) setFeedback(message);
+  }
+
   elements.pingLocation.addEventListener("click", () => {
     pingPickerOpen = !pingPickerOpen;
     pendingLocation = "";
-    selectingPingSet = false;
-    renderPlannerPing();
+    if (selectingPingSet) cancelPingSetSelection();
+    else renderPlannerPing();
     window.requestAnimationFrame(() => {
       if (pingPickerOpen) elements.pingLocationOptions.querySelector("button")?.focus();
       else elements.pingLocation.focus();
     });
+  });
+  elements.pingSelectCancel?.addEventListener("click", () => {
+    cancelPingSetSelection("Ping selection cancelled.");
+    window.requestAnimationFrame(() => elements.pingLocation.focus());
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape" || !selectingPingSet) return;
+    cancelPingSetSelection("Ping selection cancelled.");
+    window.requestAnimationFrame(() => elements.pingLocation.focus());
   });
   elements.pingLocationOptions.addEventListener("click", event => {
     const setButton = event.target.closest("[data-ping-select-set]");

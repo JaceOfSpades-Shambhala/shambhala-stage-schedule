@@ -534,10 +534,15 @@ body {
 
 .planner-ping-picker { border-radius: 12px; }
 .planner-ping-options .planner-action { min-height: 44px; }
-.planner-ping-choose-set { border-color: color-mix(in srgb, var(--accent) 52%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
-.planner-ping-set-instruction { margin: 0; padding: .65rem .75rem; border: 1px solid color-mix(in srgb, var(--accent) 48%, transparent); border-radius: 12px; color: var(--ink); background: color-mix(in srgb, var(--accent) 9%, transparent); font-size: .78rem; font-weight: 750; }
-.planner-set.is-ping-choice { cursor: pointer; box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.planner-set.is-ping-choice:hover, .planner-set.is-ping-choice:focus-visible { background: color-mix(in srgb, var(--accent) 15%, transparent); outline: 3px solid var(--focus); outline-offset: 2px; }
+.planner-ping-choose-set { border-color: color-mix(in srgb, var(--green) 55%, transparent); background: color-mix(in srgb, var(--green) 10%, transparent); }
+.planner-ping-set-instruction { display: flex; align-items: center; gap: .6rem; margin: 0; padding: .65rem .75rem; border: 1px dashed color-mix(in srgb, var(--green) 60%, transparent); border-radius: 12px; color: var(--ink); background: color-mix(in srgb, var(--green) 10%, transparent); font-size: .78rem; font-weight: 750; }
+.planner-ping-set-instruction-text { flex: 1; }
+.planner-ping-select-cancel { flex: none; min-height: 44px; }
+.planner-set.is-ping-choice { cursor: pointer; outline: 2px dashed color-mix(in srgb, var(--green) 70%, transparent); outline-offset: -2px; box-shadow: none; background: color-mix(in srgb, var(--green) 9%, transparent); }
+.planner-set.is-ping-choice:hover { background: color-mix(in srgb, var(--green) 16%, transparent); }
+.planner-set.is-ping-choice:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; background: color-mix(in srgb, var(--green) 16%, transparent); }
+.planner-set.is-ping-choice .planner-time { color: var(--ink); }
+.ping-choice-badge { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--green) 20%, transparent); color: var(--green); font-size: .6rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 
 .planner-set { grid-template-columns: 76px minmax(0, 1fr) auto; min-height: 52px; padding-block: 8px; }
 .planner-set-now { box-shadow: inset 4px 0 0 var(--accent); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 18%, transparent), rgba(255, 255, 255, .025)); }

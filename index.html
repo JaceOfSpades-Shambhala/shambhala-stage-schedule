@@ -143,7 +143,10 @@
             <button class="planner-action" type="button" data-ping-minutes="90">90 min</button>
           </div>
         </div>
-        <p id="planner-ping-set-instruction" class="planner-ping-set-instruction" role="status" hidden>Choose a saved set below. Tap anywhere on its row to share that meeting point.</p>
+        <div id="planner-ping-set-instruction" class="planner-ping-set-instruction" hidden>
+        <span class="planner-ping-set-instruction-text" role="status">Tap one of the highlighted sets in your list above to share it as your meeting point.</span>
+        <button id="planner-ping-select-cancel" class="planner-action planner-ping-select-cancel" type="button">Cancel</button>
+      </div>
         <div id="planner-ping-current" class="planner-ping-current" hidden>
           <div class="planner-ping-copy">
             <span id="planner-ping-state" class="planner-ping-state"></span>
