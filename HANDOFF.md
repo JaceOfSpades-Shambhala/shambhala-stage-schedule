@@ -1,6 +1,6 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v76**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v77**.
 
 ## What this is
 
@@ -47,7 +47,7 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (v76 at the time of writing). The pieces that must stay in sync:
+Every site release bumps ONE version number everywhere (v77 at the time of writing). The pieces that must stay in sync:
 
 - `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
 - `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
@@ -130,6 +130,16 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 - [ ] Write camp pendants with each person's `?f=` link before the festival (NFC Tools app, or Android in-app button)
 
 ## Version history (condensed)
+
+v77 fixes camp Hex Owl customization: selecting the Camp Hexadecibel
+rarity no longer forces the seeded UV roll onto every dropdown. The
+seeded camp roll still comes from the frozen V3 grammar with unchanged
+weights, but customizer overrides now resolve freestyle against the
+merged public-plus-camp catalogue, and a merged V4 camp renderer draws
+public treatments (brows, eyes, beaks, markings, auras, ring modes,
+lasers) visibly on the camp frame alongside UV colours. Camp-only values
+stay exclusive to the camp tier without being compulsory for it. v76 makes
+the planner's ping set selection cancelable and visually distinct.
 
 v75 removes the trade-between-tags feature entirely (both the Worker's
 `/trade/*` endpoints and the client's swap-dialog handshake) - exchanging

@@ -15,7 +15,7 @@
   const PUBLIC_TIER = "public";
   const CAMP_TIER = "camp-hexadecibel";
   const HEX_SEED = /^[0-9a-f]{32}$/i;
-  const OWL_ASSET = "./hex-owl-base.svg?v=76";
+  const OWL_ASSET = "./hex-owl-base.svg?v=77";
   const SHARED_MARK_ID = "hex-owl-shared-mark";
   const BROW_MARK_IDS = {
     lower: SHARED_MARK_ID + "-brow-lower",
