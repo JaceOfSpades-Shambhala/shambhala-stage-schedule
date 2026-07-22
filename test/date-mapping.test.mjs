@@ -157,17 +157,24 @@ test("Monday morning remains Sunday until 10 AM", () => {
   assert.equal(getCurrentScheduleDay("living-room", mondayMorning), "Sunday");
 });
 
-test("Rusko's cancelled slot is a gap with Truth next", () => {
+test("Benga fills Rusko's former AMP slot, now playing with Truth next", () => {
   const status = getNowPlayingStatus("amp", now("2026-07-25", "00:15"));
-  assert.equal(status.type, "cancelled");
-  assert.equal(status.cancelled.artist, "RUSKO");
+  assert.equal(status.type, "active");
+  assert.equal(status.current.artist, "BENGA");
   assert.equal(status.next.artist, "TRUTH B2B PAV4N");
 });
 
-test("Whethan's cancelled slot is a gap with JKYL & HYDE next", () => {
+test("Ravenscoon fills Inzo's former AMP slot, now playing with Liquid Stranger next", () => {
+  const status = getNowPlayingStatus("amp", now("2026-07-25", "23:15"));
+  assert.equal(status.type, "active");
+  assert.equal(status.current.artist, "RAVENSCOON");
+  assert.equal(status.next.artist, "LIQUID STRANGER");
+});
+
+test("Cool Customer fills Whethan's former AMP slot, now playing with JKYL & HYDE next", () => {
   const status = getNowPlayingStatus("amp", now("2026-07-26", "01:45"));
-  assert.equal(status.type, "cancelled");
-  assert.equal(status.cancelled.artist, "WHETHAN");
+  assert.equal(status.type, "active");
+  assert.equal(status.current.artist, "COOL CUSTOMER");
   assert.equal(status.next.artist, "JKYL & HYDE");
 });
 
