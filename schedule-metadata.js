@@ -1,13 +1,13 @@
 // Machine-readable provenance and supplemental details that are not represented
 // by the base schedule's start-time-only rows.
-window.SCHEDULE_VERSION = "July 17 - Whethan and Rusko cancelled; Sunday Grove circus acts added";
+window.SCHEDULE_VERSION = "July 22 - AMP replacements: Benga for Rusko, Cool Customer for Whethan, Ravenscoon for Inzo";
 window.SCHEDULE_SOURCE = {
   title: "Shambhala 2026 Set Times",
   kind: "official downloadable schedule",
   url: "https://www.shambhalamusicfestival.com/lineup",
   dataFile: "schedule-data.js",
-  reviewed: "2026-07-17",
-  note: "Base start times come from the downloadable schedule. July 17 cancellations use artist announcements, and the Sunday Grove circus slot comes from the festival app schedule. Final-stage end times below are inferred from the printed schedule bars."
+  reviewed: "2026-07-22",
+  note: "Base start times come from the downloadable schedule. July 17 cancellations use artist announcements, and the Sunday Grove circus slot comes from the festival app schedule. July 22 AMP replacements (Benga for Rusko, Cool Customer for Whethan, Ravenscoon for Inzo) were announced via the official Shambhala Instagram story. Final-stage end times below are inferred from the printed schedule bars."
 };
 
 // Cancellation records overlay the original schedule rows so existing saved-set
@@ -26,6 +26,13 @@ window.SCHEDULE_CANCELLATIONS = Object.freeze([
     time: "1:30 AM",
     artist: "WHETHAN",
     source: "https://edmidentity.com/2026/07/16/whethan-shambhala-oliver-tree-funeral/"
+  }),
+  Object.freeze({
+    day: "Saturday",
+    stageId: "amp",
+    time: "11:00 PM",
+    artist: "INZO",
+    source: "https://www.instagram.com/shambhalamf/"
   })
 ]);
 

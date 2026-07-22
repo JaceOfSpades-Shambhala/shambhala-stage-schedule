@@ -9,20 +9,24 @@ vm.runInNewContext(fs.readFileSync("schedule-metadata.js", "utf8"), context);
 
 const { SCHEDULE_DATA: data, SCHEDULE_CANCELLATIONS: cancellations, ScheduleStatus: status } = context.window;
 
-test("only Rusko and Whethan are marked cancelled", () => {
+test("Rusko, Whethan, and Inzo are marked cancelled", () => {
   assert.deepEqual(
     JSON.parse(JSON.stringify(cancellations.map(({ day, stageId, time, artist }) => ({ day, stageId, time, artist })))),
     [
       { day: "Friday", stageId: "amp", time: "12:00 AM", artist: "RUSKO" },
-      { day: "Saturday", stageId: "amp", time: "1:30 AM", artist: "WHETHAN" }
+      { day: "Saturday", stageId: "amp", time: "1:30 AM", artist: "WHETHAN" },
+      { day: "Saturday", stageId: "amp", time: "11:00 PM", artist: "INZO" }
     ]
   );
   assert.equal(status.isCancelled({ day: "Friday", stageId: "amp", time: "12:00 AM", artist: "RUSKO" }), true);
   assert.equal(status.isCancelled({ day: "Saturday", stageId: "amp", time: "1:30 AM", artist: "WHETHAN" }), true);
+  assert.equal(status.isCancelled({ day: "Saturday", stageId: "amp", time: "11:00 PM", artist: "INZO" }), true);
 });
 
-test("INZO remains scheduled", () => {
-  assert.equal(status.isCancelled({ day: "Saturday", stageId: "amp", time: "11:00 PM", artist: "INZO" }), false);
+test("Ravenscoon replaces the cancelled INZO", () => {
+  assert.equal(status.isCancelled({ day: "Saturday", stageId: "amp", time: "11:00 PM", artist: "INZO" }), true);
+  assert.equal(status.isCancelled({ day: "Saturday", stageId: "amp", time: "11:00 PM", artist: "RAVENSCOON" }), false);
+  assert.ok(data.Saturday.amp.some(([time, artist]) => time === "11:00 PM" && artist === "RAVENSCOON"));
 });
 
 test("Sunday Grove includes the circus slot and omits the unnamed intermission DJ", () => {
