@@ -196,6 +196,18 @@ test("Hex Owl and Hexadex discovery UI stays wired to the chosen handoff", async
   assert.match(css, /body \{[\s\S]*background: radial-gradient\(circle at 50% -12%, color-mix\(in srgb, var\(--accent\) 13%, #17192b\) 0, #111321 38%, #090a12 100%\)/);
 });
 
+test("the floating username reminder stays wired to the real Set a username button", async () => {
+  const [html, hexlaces, styles] = await Promise.all([read("index.html"), read("hexlaces.js"), read("styles.css")]);
+  assert.match(html, /id="username-reminder"[^>]*hidden/);
+  assert.ok(html.indexOf('id="username-reminder"') > html.indexOf("</main>"), "The reminder must float outside the page flow.");
+  // It must press the real button, not open a second name editor of its own.
+  assert.match(hexlaces, /elements\.usernameReminder\?\.addEventListener\("click", \(\) => \{[\s\S]*?elements\.enable\.click\(\)/);
+  assert.match(hexlaces, /const needed = !isVisibleIdentity\(loadIdentity\(\)\) && mySets\(\)\.length > 0 && !editorMode;/);
+  assert.match(hexlaces, /window\.addEventListener\("setlist-changed", \(\) => \{[\s\S]*?renderUsernameReminder\(\);/);
+  assert.match(styles, /\.username-reminder \{[^}]*position: fixed/);
+  assert.match(styles, /body\.has-username-reminder \.undo-toast \{ bottom: 8\.9rem; \}/);
+});
+
 test("production freeze hotfix safeguards stay wired", async () => {
   const [html, app, planner, serviceWorker, styles, config, readme, hexadex, worker, coordinator] = await Promise.all([
     read("index.html"), read("app.js"), read("planner.js"), read("sw.js"), read("styles.css"),
