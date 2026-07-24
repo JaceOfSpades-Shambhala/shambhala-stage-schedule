@@ -96,6 +96,7 @@
     nameInput: document.querySelector("#hexlace-name-input"),
     nameSave: document.querySelector("#hexlace-name-save"),
     nameCancel: document.querySelector("#hexlace-name-cancel"),
+    usernameReminder: document.querySelector("#username-reminder"),
     feedback: document.querySelector("#hexlace-feedback")
   };
   if (!elements.myPanel || !elements.panel) return;
@@ -530,9 +531,22 @@
     }
   }
 
+  // The Set a username button sits inside My Set List, which is collapsed by
+  // default, so someone who has just saved their first set never sees it. This
+  // floating cue is the prompt they do see. It only ever hands off to that
+  // same button, so there is no second name-entry path to keep in step.
+  function renderUsernameReminder() {
+    if (!elements.usernameReminder) return;
+    const needed = !isVisibleIdentity(loadIdentity()) && mySets().length > 0 && !editorMode;
+    elements.usernameReminder.hidden = !needed;
+    // Lifts the bottom-anchored banners and the end of the page clear of it.
+    document.body?.classList.toggle("has-username-reminder", needed);
+  }
+
   function renderMine() {
     const identity = loadIdentity();
     const visibleIdentity = isVisibleIdentity(identity);
+    renderUsernameReminder();
     if (identity && !window.Hexadex?.loadProfile?.()) window.Hexadex?.saveFromResponse?.(identity);
     window.Hexadex?.renderOwn?.(identity?.name || "");
     syncMyPanelOpen();
@@ -1442,6 +1456,17 @@
   // --- Wiring ---------------------------------------------------------------
 
   elements.enable.addEventListener("click", () => openEditor("enable", "What username should friends see?", ""));
+  elements.usernameReminder?.addEventListener("click", () => {
+    // My Set List is a collapsed <details>, so the section has to be open
+    // before the editor it contains can be scrolled to or typed into.
+    const plannerPanel = document.querySelector("#planner");
+    if (plannerPanel) plannerPanel.open = true;
+    // Press the real button rather than re-opening the editor here, so the
+    // reminder cannot drift from whatever Set a username does.
+    elements.enable.click();
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    elements.editor?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+  });
   elements.bringOver.addEventListener("click", () => {
     elements.connectEditor.hidden = false;
     elements.connectInput.focus();
@@ -1499,6 +1524,10 @@
   }
 
   window.addEventListener("setlist-changed", () => {
+    // markDirtyAndPublishSoon returns early with no identity - which is
+    // exactly when saving a first set has to raise the reminder - so this
+    // render cannot be left to it.
+    renderUsernameReminder();
     markDirtyAndPublishSoon();
     collectedRenderSignature = "";
     renderCollected();
