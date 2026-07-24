@@ -9,7 +9,7 @@
   If googleMapsUrl is filled in, it wins over latitude/longitude.
 */
 window.CAMP_LOCATION = {
-  latitude: "49.106210",
-  longitude: "-117.270188",
+  latitude: "49.1055374",
+  longitude: "-117.2676031",
   googleMapsUrl: ""
 };
