@@ -47,13 +47,7 @@ export const PAGES_FILES = [
   "favicon-32.png",
   "favicon.ico",
   "icon-192.png",
-  "icon-512.png",
-
-  // Standalone Owl trait/seed gallery. Linked publicly from README and cached
-  // as an OPTIONAL_ASSET. Kept public for now: the trait catalogue it renders
-  // already ships in hex-owl.js, which is a CORE asset, so withholding the
-  // page would not withhold the data.
-  "hex-owl-playground.html"
+  "icon-512.png"
 ];
 
 export const PAGES_DIRS = [
@@ -61,12 +55,16 @@ export const PAGES_DIRS = [
   "stage-names"
 ];
 
-// Referenced at runtime but intentionally absent from the repository.
-// sw.js:5 and app.js:575 point at ./schedule-freshness.json, which nothing
-// generates; both call sites already tolerate the 404 through the freshness
-// fallback path. Listed here so the artifact test does not flag a dangling
-// reference that predates the Pages boundary and is unrelated to it.
-export const KNOWN_ABSENT_REFERENCES = [
+// Cache Storage keys the service worker synthesises at runtime. These look like
+// asset paths but are never network resources, so they must not be published
+// and must not be treated as dangling references.
+//
+// schedule-freshness.json is written by markScheduleFresh() in sw.js, which
+// constructs a Response in memory and cache.put()s it under this key; app.js
+// reads it back with caches.match(), never fetch(). It backs the FRESH /
+// UPDATED N MIN AGO / OFFLINE indicator, and app.js falls back to the cached
+// schedule-metadata.js date header when the key is absent.
+export const SYNTHETIC_CACHE_KEYS = [
   "schedule-freshness.json"
 ];
 

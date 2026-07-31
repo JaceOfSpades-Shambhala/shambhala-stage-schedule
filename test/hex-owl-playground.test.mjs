@@ -7,9 +7,14 @@ const hexadexUrl = new URL("../hexadex.js", import.meta.url);
 const readmeUrl = new URL("../README.md", import.meta.url);
 const livePlaygroundUrl = "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/hex-owl-playground.html";
 
-test("Hex Owl playground is discoverable from the README", async () => {
+test("Hex Owl playground is documented as a local-only developer tool", async () => {
   const readme = await readFile(readmeUrl, "utf8");
-  assert.match(readme, new RegExp(`\\[open the live playground\\]\\(${livePlaygroundUrl.replaceAll(".", "\\.")}\\)`));
+  // The playground is deliberately excluded from the published site, so the
+  // README must not advertise a live URL for it.
+  assert.doesNotMatch(readme, new RegExp(livePlaygroundUrl.replaceAll(".", "\\.")));
+  assert.match(readme, /hex-owl-playground\.html/);
+  assert.match(readme, /not deployed/i);
+  assert.match(readme, /localhost:8000\/hex-owl-playground\.html/);
 });
 
 test("Hex Owl playground options pair readable text with an opaque background", async () => {

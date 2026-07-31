@@ -29,7 +29,6 @@ test("release assets and service-worker precache use one version and include bot
   assert.match(serviceWorker, /hexlace-compare\.js\?v=78/);
   assert.match(serviceWorker, /hex-owl\.js\?v=78/);
   assert.match(serviceWorker, /hex-owl-base\.svg\?v=78/);
-  assert.match(serviceWorker, /hex-owl-playground\.html/);
   assert.match(serviceWorker, /hexadex\.js\?v=78/);
   assert.match(hexOwl, /hex-owl-base\.svg\?v=78/);
   assert.match(playground, /hex-owl\.js\?v=78/);
@@ -223,8 +222,9 @@ test("production freeze hotfix safeguards stay wired", async () => {
 
   const coreAssets = serviceWorker.match(/const CORE_ASSETS = \[([\s\S]*?)\];/)?.[1] || "";
   const optionalAssets = serviceWorker.match(/const OPTIONAL_ASSETS = \[([\s\S]*?)\];/)?.[1] || "";
-  assert.doesNotMatch(coreAssets, /hex-owl-playground|InterVariable-Italic/);
-  assert.match(optionalAssets, /hex-owl-playground/);
+  // The playground is a developer tool: not deployed, so not precached either.
+  assert.doesNotMatch(serviceWorker, /hex-owl-playground/);
+  assert.doesNotMatch(coreAssets, /InterVariable-Italic/);
   assert.match(optionalAssets, /InterVariable-Italic/);
   assert.match(serviceWorker, /if \(!response\?\.ok\) throw new Error/);
   assert.match(serviceWorker, /if \(changed && !await refreshSchedule\(\) && cachedScheduleAsset\) return cachedScheduleAsset/);

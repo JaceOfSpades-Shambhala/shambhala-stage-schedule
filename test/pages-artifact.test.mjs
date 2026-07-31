@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   PAGES_FILES,
   PAGES_DIRS,
-  KNOWN_ABSENT_REFERENCES,
+  SYNTHETIC_CACHE_KEYS,
   PROHIBITED_PATTERNS
 } from "../scripts/pages-manifest.mjs";
 
@@ -14,7 +14,7 @@ const read = file => readFile(new URL(file, root), "utf8");
 const allowed = path =>
   PAGES_FILES.includes(path) ||
   PAGES_DIRS.some(dir => path.startsWith(`${dir}/`)) ||
-  KNOWN_ABSENT_REFERENCES.includes(path);
+  SYNTHETIC_CACHE_KEYS.includes(path);
 
 // Normalize a runtime reference to a repository-relative path, or null when it
 // is not a local asset (external URL, in-page anchor, data URI).
@@ -46,7 +46,8 @@ test("every runtime asset reference is published by the Pages allowlist", async 
       assert.ok(
         allowed(path),
         `${source} references "${path}", which scripts/pages-manifest.mjs does not publish. ` +
-        `Add it to PAGES_FILES/PAGES_DIRS, or to KNOWN_ABSENT_REFERENCES if it is deliberately absent.`
+        `Add it to PAGES_FILES/PAGES_DIRS, or to SYNTHETIC_CACHE_KEYS if it is a Cache Storage ` +
+        `key the service worker writes rather than a file it fetches.`
       );
     }
   }
@@ -78,7 +79,11 @@ test("previously published internal files stay out of the artifact", () => {
     "package.json",
     "worker/src/index.js",
     "worker/src/durable-objects.js",
-    "scripts/validate-schedule.mjs"
+    "scripts/validate-schedule.mjs",
+    // Developer tool. Retained in the repository for local trait work, but
+    // deliberately not deployed — it exposes the seed/trait/palette system in
+    // an explorable form.
+    "hex-owl-playground.html"
   ];
   for (const path of mustNotPublish) {
     assert.ok(
