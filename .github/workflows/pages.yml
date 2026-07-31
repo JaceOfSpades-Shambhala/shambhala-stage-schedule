@@ -3,6 +3,11 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: [main]
+  # Validation-only on pull requests: worker-validation and test run, every
+  # deploy job is skipped. Without this, a change is first exercised by CI at
+  # the moment it lands on main.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -10,8 +15,10 @@ permissions:
   pages: write
   id-token: write
 
+# Keyed per pull request so a PR run can never cancel an in-flight main deploy.
+# Pushing twice to the same PR still supersedes the older run.
 concurrency:
-  group: pages
+  group: pages-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -46,6 +53,7 @@ jobs:
   worker-deploy:
     name: Deploy verified Hexlace Worker
     needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: hexlace-worker
@@ -60,6 +68,7 @@ jobs:
 
   deploy:
     needs: [test, worker-deploy]
+    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -86,6 +95,7 @@ jobs:
   release-health:
     name: Verify live release and Hexlace API
     needs: deploy
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
