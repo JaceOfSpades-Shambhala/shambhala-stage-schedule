@@ -32,7 +32,6 @@ const CORE_ASSETS = [
 // Cache them opportunistically so one transient image failure cannot prevent
 // the whole offline app from installing.
 const OPTIONAL_ASSETS = [
-  "./hex-owl-playground.html",
   "./fonts/InterVariable-Italic.woff2?v=78",
   "./wordmark.svg?v=78",
   "./stage-names/amp.png?v=78",

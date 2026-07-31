@@ -134,7 +134,8 @@ test("a successful network response remains preferred", async () => {
 test("a failed optional precache asset does not block the offline shell install", async () => {
   const added = await runInstall({ rejectedOptionalAsset: "./stage-names/amp.png?v=78" });
   assert.ok(added.includes("./index.html"));
-  assert.ok(added.includes("./hex-owl-playground.html"));
+  // The playground is a local-only developer tool and is not precached.
+  assert.equal(added.includes("./hex-owl-playground.html"), false);
   assert.ok(added.includes("./camp-access.js?v=78"));
   assert.ok(added.includes("./hexlaces.js?v=78"));
   assert.ok(added.includes("./hexlace-compare.js?v=78"));

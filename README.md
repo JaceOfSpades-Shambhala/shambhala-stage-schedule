@@ -8,7 +8,13 @@ Live site:
 https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/
 ```
 
-Hex Owl visual playground: [open the live playground](https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/hex-owl-playground.html). It is a standalone developer tool for previewing deterministic Owl seeds, traits, palettes, and contact sheets.
+Hex Owl visual playground: `hex-owl-playground.html` is a standalone developer tool for previewing deterministic Owl seeds, traits, palettes, and contact sheets. It is **not deployed** — it is deliberately excluded from the published site so the seed/trait/palette system is not offered in an explorable form. Run it locally from the repository root:
+
+```sh
+python3 -m http.server 8000   # then open http://localhost:8000/hex-owl-playground.html
+```
+
+It loads `hex-owl.js` and `hex-owl-base.svg` by relative path, so it must be served from the repository root rather than opened as a `file://` URL.
 
 The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v78 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
@@ -80,7 +86,7 @@ Shared links and QR codes use `?f=<readId>`. Physical Hexlaces use `?f=<readId>&
 - `app.js` — tabs, search, Now Playing, preview mode, update checks, service-worker registration
 - `planner.js` — My Set List planner, overlap detection, day grouping
 - `hexlaces.js` — live sharing: identity, publishing, collecting, claims, releases, pings, and friend comparison
-- `hex-owl-base.svg` / `hex-owl.js` / `hex-owl-playground.html` — exact supplied Owl vector, frozen deterministic overlay renderer, and standalone seed/trait gallery
+- `hex-owl-base.svg` / `hex-owl.js` / `hex-owl-playground.html` — exact supplied Owl vector, frozen deterministic overlay renderer, and standalone seed/trait gallery (the playground is a local-only developer tool; see above)
 - `hexadex.js` — private profile cache, tap-only collection queue, Hexadex grid, and reveal UI
 - `qrcode.js` — vendored qrcode-generator 1.4.4 (pinned)
 - `install.js` — Add to Home Screen behavior
