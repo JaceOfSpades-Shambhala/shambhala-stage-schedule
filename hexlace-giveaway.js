@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // Keep the giveaway UI responsive when a request is aborted by the bounded
 // API timeout. A timeout is indistinguishable from a weak-signal failure to a
 // user, so callers receive a normal failed result and can offer a retry.

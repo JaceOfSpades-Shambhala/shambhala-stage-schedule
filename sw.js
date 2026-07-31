@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 const CACHE_NAME = "stage-schedule-v78";
 const CACHE_PREFIX = "stage-schedule-v";
 const NETWORK_TIMEOUT_MS = 3500;

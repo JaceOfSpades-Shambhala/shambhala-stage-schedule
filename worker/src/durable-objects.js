@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 const TTL_SECONDS = 60 * 24 * 60 * 60;
 const HANDOFF_TTL_SECONDS = 24 * 60 * 60;
 const CLAIM_CONTENTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;

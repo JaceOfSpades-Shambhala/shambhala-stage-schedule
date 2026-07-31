@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // Pure comparison helpers kept separate from the UI so shared-set matching can
 // be tested without a browser or access to Hexlace storage.
 (() => {

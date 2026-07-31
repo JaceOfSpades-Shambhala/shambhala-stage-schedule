@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // Stage the public GitHub Pages artifact into dist/.
 //
 // The workflow used to upload the repository root, which published HANDOFF.md,

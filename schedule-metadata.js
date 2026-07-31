@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // Machine-readable provenance and supplemental details that are not represented
 // by the base schedule's start-time-only rows.
 window.SCHEDULE_VERSION = "July 22 - AMP replacements: Benga for Rusko, Cool Customer for Whethan, Ravenscoon for Inzo";

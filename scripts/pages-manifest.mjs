@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // The single source of truth for what GitHub Pages publishes.
 //
 // This is an ALLOWLIST on purpose. Anything not named here stays private by
@@ -13,6 +18,10 @@
 //   - styles.css @font-face sources
 
 export const PAGES_FILES = [
+  // Published deliberately: the terms should be readable at the point someone
+  // would copy from the deployed site, not only in the repository.
+  "LICENSE",
+
   // Shell
   ".nojekyll",
   "index.html",

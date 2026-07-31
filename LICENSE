@@ -1,0 +1,73 @@
+Copyright (c) 2026 Jace Jacques. All rights reserved.
+
+PROPRIETARY SOFTWARE LICENSE
+
+This software and its associated documentation, design, and original assets
+(the "Software") are the proprietary and confidential property of the copyright
+holder. The Software is made publicly readable on GitHub for transparency and
+for the operation of GitHub Pages. Public visibility is not a grant of any
+license.
+
+NO LICENSE IS GRANTED. Except as expressly permitted in writing by the
+copyright holder, you may NOT:
+
+  1. copy, reproduce, or redistribute the Software or any part of it;
+  2. modify, adapt, translate, or create derivative works from it;
+  3. use it, in whole or in part, in any product, service, or project,
+     whether commercial or non-commercial;
+  4. reverse engineer, decompile, or disassemble any compiled or minified
+     portion of it, except where that restriction is prohibited by law;
+  5. remove, obscure, or alter any copyright, trademark, or attribution
+     notice contained in it;
+  6. sublicense, sell, lease, rent, or otherwise transfer any rights in it.
+
+Viewing the Software on GitHub, and the forking permitted by the GitHub Terms
+of Service, do not grant any of the rights withheld above. Loading the deployed
+website in a web browser is permitted for ordinary personal use of that website
+and grants no other rights.
+
+THIRD-PARTY COMPONENTS
+
+This repository contains material that is NOT owned by the copyright holder and
+is NOT covered by this license. Each remains subject to its own terms, and
+nothing in this license enlarges or restricts your rights in it:
+
+  - fonts/InterVariable.woff2, fonts/InterVariable-Italic.woff2
+    The Inter typeface, Copyright (c) 2016 The Inter Project Authors, licensed
+    under the SIL Open Font License, Version 1.1. The full licence text is
+    bundled alongside the fonts at fonts/OFL.txt.
+
+  - qrcode.js
+    qrcode-generator 1.4.4, Copyright (c) 2009 Kazuhiko Arase, licensed under
+    the MIT License. The original notice is retained at the top of that file.
+
+  - hex-owl-base.svg, wordmark.svg, stage-names/*.png, and other festival
+    artwork and marks
+    Owned by their respective rights holders and used here without any grant of
+    rights to third parties. No license to these is offered or implied.
+
+  - schedule-data.js, schedule-metadata.js
+    Set times and artist names are factual information about a third-party
+    event, compiled from publicly published sources noted in those files.
+
+TRADEMARKS
+
+No trademark rights are granted by this license. "Shambhala", "Shambhala Music
+Festival", stage names, artist names, and associated logos and artwork are the
+property of their respective owners. This project is an unaffiliated,
+fan-made work and is not endorsed by, sponsored by, or associated with the
+festival or any artist.
+
+NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+CONTACT
+
+For licensing enquiries, including permission to use any part of the Software,
+contact the copyright holder through the repository's GitHub account.

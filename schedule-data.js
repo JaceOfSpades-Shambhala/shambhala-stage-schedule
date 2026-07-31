@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 /* 2026 Shambhala set times. Sources: official downloadable schedule and Festival Dust set-time view, accessed July 2, 2026. */
 // Change SCHEDULE_VERSION with every schedule edit - the app compares it against
 // the copy it has loaded and shows a "tap to refresh" banner when it differs.

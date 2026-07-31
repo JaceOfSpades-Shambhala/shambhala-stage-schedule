@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // Shambhala set-list sharing API — Durable Objects coordinate ownership and
 // mutations while KV serves read-optimized public snapshots so a person can
 // publish their set list under a permanent, unguessable read id (carried on an
