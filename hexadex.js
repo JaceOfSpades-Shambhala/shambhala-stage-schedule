@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // Private Hex Owl profile and Hexadex UI. Hexadex entries are only submitted
 // when a tap-specific token was read from a physical Hexlace; ordinary shared
 // links still collect set lists, but never add an Owl to the Hexadex.

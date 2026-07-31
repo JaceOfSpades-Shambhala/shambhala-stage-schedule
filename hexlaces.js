@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // Hexlaces - live set-list sharing. Each person's NFC tag (or QR code) carries
 // a permanent read-only link (?f=<readId>). Opening it collects that person's
 // list into the "Friends' sets collected" panel, refreshed whenever there's signal.

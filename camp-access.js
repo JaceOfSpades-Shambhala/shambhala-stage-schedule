@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // Accountless camp access. A device generates its own opaque bearer key; the
 // Worker stores only its hash and assigns a member/admin role when a privileged
 // Hexlace claim is accepted. Admin UI stays hidden until the Worker confirms

@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // A single bounded request helper keeps Hexlace writes retryable on unreliable
 // festival networks. Callers retain their local dirty/pending state on errors.
 (() => {

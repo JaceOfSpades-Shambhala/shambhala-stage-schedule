@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // Hex Owl renderer. V1/V2/V3 remain frozen compatibility grammars while every
 // current Owl uses one V4 identity contract with a public or Camp Hexadecibel
 // rarity tier.

@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // Keep artist search forgiving when a phone keyboard cannot easily enter
 // letters used in an artist's name. NFD handles combining marks; this map
 // covers distinct Latin letters that do not decompose, such as ø and ł.

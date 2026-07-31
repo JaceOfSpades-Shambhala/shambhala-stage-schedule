@@ -1,3 +1,8 @@
+// Copyright (c) 2026 Jace Jacques. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, modification, or
+// distribution of this file, via any medium, is strictly prohibited.
+// See LICENSE at the repository root.
+
 // Preview mode is intentionally limited to the festival window. Malformed
 // query strings must fall back to the real Salmo, BC clock instead of creating
 // impossible "now playing" timestamps.
