@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' data: blob:; style-src 'unsafe-inline' data: blob:; img-src data: blob:; font-src data: blob:; connect-src 'self' data: blob:; frame-src 'self' data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>Hexlace Platform Documents</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #10111f;
+      color: #f8f7ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    body {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      background: radial-gradient(circle at 25% 0%, #252956 0, #111321 42%, #090a12 100%);
+    }
+
+    header {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      min-height: 3.75rem;
+      padding: 0.65rem max(0.8rem, env(safe-area-inset-left));
+      border-bottom: 1px solid rgba(255, 255, 255, 0.13);
+      background: rgba(16, 17, 31, 0.96);
+      box-shadow: 0 0.35rem 1.2rem rgba(0, 0, 0, 0.24);
+    }
+
+    .brand {
+      margin-right: auto;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    nav {
+      display: flex;
+      gap: 0.45rem;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 999px;
+      padding: 0.56rem 0.85rem;
+      background: rgba(255, 255, 255, 0.06);
+      color: #c8c6dc;
+      font: 700 0.82rem/1 inherit;
+      cursor: pointer;
+    }
+
+    button:hover,
+    button:focus-visible {
+      border-color: #ec8cba;
+      color: #f8f7ff;
+      outline: none;
+    }
+
+    button[aria-selected="true"] {
+      border-color: #ec8cba;
+      background: #ec8cba;
+      color: #161120;
+    }
+
+    main {
+      position: relative;
+      min-height: 0;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #fff;
+    }
+
+    #status {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+      background: #10111f;
+      color: #c8c6dc;
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    #status[hidden] { display: none; }
+
+    #status strong {
+      display: block;
+      margin-bottom: 0.45rem;
+      color: #f8f7ff;
+      font-size: 1.05rem;
+    }
+
+    @media (max-width: 620px) {
+      header {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      nav,
+      button { width: 100%; }
+
+      nav { gap: 0.4rem; }
+    }
+
+    @media print {
+      header { display: none; }
+      body { display: block; }
+      main, iframe { height: 100vh; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Hexlace Platform Documents</div>
+    <nav aria-label="Choose a document">
+      <button type="button" data-doc="overview">Platform overview</button>
+      <button type="button" data-doc="summary">One-page summary</button>
+    </nav>
+  </header>
+  <main>
+    <div id="status" role="status" aria-live="polite">Opening private document…</div>
+    <iframe id="viewer" title="Hexlace document" sandbox="allow-scripts allow-modals allow-downloads"></iframe>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const DOCUMENTS = Object.freeze({
+        overview: {
+          file: "overview.enc",
+          title: "Hexlace Platform Overview"
+        },
+        summary: {
+          file: "summary.enc",
+          title: "Hexlace One-Page Summary"
+        }
+      });
+
+      const status = document.querySelector("#status");
+      const viewer = document.querySelector("#viewer");
+      const buttons = [...document.querySelectorAll("[data-doc]")];
+      let importedKey;
+      let requestNumber = 0;
+
+      const showStatus = (heading, detail = "") => {
+        status.hidden = false;
+        status.innerHTML = "";
+        const strong = document.createElement("strong");
+        strong.textContent = heading;
+        status.append(strong);
+        if (detail) status.append(document.createTextNode(detail));
+      };
+
+      const decodeBase64Url = value => {
+        if (!/^[A-Za-z0-9_-]{43}$/.test(value)) {
+          throw new Error("This link is missing its private access key.");
+        }
+        const base64 = value.replace(/-/g, "+").replace(/_/g, "/") + "=";
+        return Uint8Array.from(atob(base64), character => character.charCodeAt(0));
+      };
+
+      const getKey = () => {
+        if (!importedKey) {
+          const keyBytes = decodeBase64Url(location.hash.slice(1));
+          importedKey = crypto.subtle.importKey(
+            "raw",
+            keyBytes,
+            { name: "AES-GCM" },
+            false,
+            ["decrypt"]
+          );
+        }
+        return importedKey;
+      };
+
+      const selectedDocument = () => {
+        const requested = new URLSearchParams(location.search).get("doc");
+        return Object.hasOwn(DOCUMENTS, requested) ? requested : "overview";
+      };
+
+      const setSelectedButton = selected => {
+        for (const button of buttons) {
+          button.setAttribute("aria-selected", String(button.dataset.doc === selected));
+        }
+      };
+
+      const decrypt = async file => {
+        const response = await fetch(file, { cache: "no-store", credentials: "omit" });
+        if (!response.ok) throw new Error("The encrypted document could not be downloaded.");
+
+        const payload = new Uint8Array(await response.arrayBuffer());
+        if (payload.byteLength <= 28) throw new Error("The encrypted document is incomplete.");
+
+        const key = await getKey();
+        return crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: payload.slice(0, 12) },
+          key,
+          payload.slice(12)
+        );
+      };
+
+      const openDocument = async selected => {
+        const currentRequest = ++requestNumber;
+        const documentInfo = DOCUMENTS[selected];
+        setSelectedButton(selected);
+        showStatus("Opening private document…");
+
+        try {
+          const plaintext = await decrypt(documentInfo.file);
+          if (currentRequest !== requestNumber) return;
+
+          viewer.title = documentInfo.title;
+          viewer.srcdoc = new TextDecoder().decode(plaintext);
+          document.title = `${documentInfo.title} — Private link`;
+          status.hidden = true;
+        } catch (error) {
+          if (currentRequest !== requestNumber) return;
+          viewer.removeAttribute("srcdoc");
+          showStatus(
+            "This private link could not be opened.",
+            error instanceof Error ? ` ${error.message}` : " The access key may be invalid."
+          );
+        }
+      };
+
+      const selectDocument = selected => {
+        const url = new URL(location.href);
+        url.searchParams.set("doc", selected);
+        history.replaceState(null, "", url);
+        void openDocument(selected);
+      };
+
+      for (const button of buttons) {
+        button.addEventListener("click", () => selectDocument(button.dataset.doc));
+      }
+
+      window.addEventListener("hashchange", () => {
+        importedKey = undefined;
+        void openDocument(selectedDocument());
+      });
+
+      void openDocument(selectedDocument());
+    })();
+  </script>
+</body>
+</html>

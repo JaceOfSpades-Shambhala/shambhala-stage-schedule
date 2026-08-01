@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import {
   PAGES_FILES,
@@ -94,5 +94,22 @@ test("previously published internal files stay out of the artifact", () => {
       !PAGES_DIRS.some(dir => path.startsWith(`${dir}/`)),
       `"${path}" is published via the allowlisted directory it sits under.`
     );
+  }
+});
+
+test("shared Hexlace documents publish only an encrypted viewer bundle", async () => {
+  const shareDir = "shared/3fae95f605cf4fc0eaabd3dea3a86da5";
+  const files = (await readdir(new URL(`../${shareDir}/`, import.meta.url))).sort();
+
+  assert.deepEqual(files, ["index.html", "overview.enc", "summary.enc"]);
+
+  const viewer = await read(`${shareDir}/index.html`);
+  assert.match(viewer, /name="robots" content="noindex, nofollow, noarchive/);
+  assert.match(viewer, /location\.hash\.slice\(1\)/);
+
+  for (const file of ["overview.enc", "summary.enc"]) {
+    const payload = await readFile(new URL(`../${shareDir}/${file}`, import.meta.url));
+    assert.ok(payload.length > 28, `${file} must contain an IV, ciphertext and GCM tag`);
+    assert.notEqual(payload.subarray(12, 27).toString("utf8").toLowerCase(), "<!doctype html>");
   }
 });

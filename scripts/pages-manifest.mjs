@@ -61,7 +61,11 @@ export const PAGES_FILES = [
 
 export const PAGES_DIRS = [
   "fonts",
-  "stage-names"
+  "stage-names",
+
+  // Link-only documents. The repository stores only AES-GCM ciphertext; the
+  // decryption key is carried in the URL fragment and never sent to GitHub.
+  "shared/3fae95f605cf4fc0eaabd3dea3a86da5"
 ];
 
 // Cache Storage keys the service worker synthesises at runtime. These look like
