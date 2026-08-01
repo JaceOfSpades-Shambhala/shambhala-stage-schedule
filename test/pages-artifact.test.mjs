@@ -106,6 +106,9 @@ test("shared Hexlace documents publish only an encrypted viewer bundle", async (
   const viewer = await read(`${shareDir}/index.html`);
   assert.match(viewer, /name="robots" content="noindex, nofollow, noarchive/);
   assert.match(viewer, /location\.hash\.slice\(1\)/);
+  assert.match(viewer, /const DOCUMENT_CANVAS_WIDTH = 900/);
+  assert.match(viewer, /Math\.min\(1, width \/ DOCUMENT_CANVAS_WIDTH\)/);
+  assert.match(viewer, /new ResizeObserver\(fitViewerToScreen\)/);
 
   for (const file of ["overview.enc", "summary.enc"]) {
     const payload = await readFile(new URL(`../${shareDir}/${file}`, import.meta.url));

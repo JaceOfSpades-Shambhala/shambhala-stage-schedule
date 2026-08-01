@@ -82,6 +82,7 @@
     main {
       position: relative;
       min-height: 0;
+      overflow: hidden;
     }
 
     iframe {
@@ -89,6 +90,7 @@
       height: 100%;
       border: 0;
       background: #fff;
+      transform-origin: top left;
     }
 
     #status {
@@ -129,6 +131,11 @@
       header { display: none; }
       body { display: block; }
       main, iframe { height: 100vh; }
+      iframe {
+        width: 100% !important;
+        height: 100vh !important;
+        transform: none !important;
+      }
     }
   </style>
 </head>
@@ -162,9 +169,31 @@
 
       const status = document.querySelector("#status");
       const viewer = document.querySelector("#viewer");
+      const viewerArea = document.querySelector("main");
       const buttons = [...document.querySelectorAll("[data-doc]")];
+      // Letter page (816 px) + component gutters + room for the iframe's
+      // vertical scrollbar, so a phone never gains a horizontal scrollbar.
+      const DOCUMENT_CANVAS_WIDTH = 900;
       let importedKey;
       let requestNumber = 0;
+
+      const fitViewerToScreen = () => {
+        const width = viewerArea.clientWidth;
+        const height = viewerArea.clientHeight;
+        if (!width || !height) return;
+
+        const scale = Math.min(1, width / DOCUMENT_CANVAS_WIDTH);
+        viewer.style.width = `${width / scale}px`;
+        viewer.style.height = `${height / scale}px`;
+        viewer.style.transform = `scale(${scale})`;
+      };
+
+      if ("ResizeObserver" in window) {
+        new ResizeObserver(fitViewerToScreen).observe(viewerArea);
+      } else {
+        window.addEventListener("resize", fitViewerToScreen);
+      }
+      fitViewerToScreen();
 
       const showStatus = (heading, detail = "") => {
         status.hidden = false;
