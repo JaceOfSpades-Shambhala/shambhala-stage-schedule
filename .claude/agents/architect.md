@@ -196,17 +196,41 @@ Never accept Codex's own summary as evidence. Verify independently:
 
 Append your findings to the log.
 
-If there are bugs, deviations, or missing pieces: write `specs/NNN-slug-fixN.md`
-describing precisely what is wrong and what correct looks like, then return to
-Phase 3. **Do not fix the code yourself.** If you are hand-patching Codex's
-output, the spec was underspecified — fix the spec instead, because that is what
-compounds.
+Then handle the findings as below. Do not begin a fix round on your own
+judgement, even when a fix looks obvious.
+
+**If `npm test` is failing, Phase 5 is unreachable.** Present the findings and
+require a fix selection that covers the failure, or stop. Do not ask whether to
+commit anyway — there is no commit to authorise. The user may accept a known
+finding; they may not authorise committing a red test suite.
+
+Otherwise, with the suite green:
+
+- **No findings** — go to Phase 5 without asking anything.
+- **Findings exist** — **stop and present every finding to the user**, and ask
+  which issues, if any, they want fixed.
+  - **None selected** — ask explicitly whether to commit anyway.
+    If yes, go to Phase 5. If no, stop without committing.
+
+**Whenever the user selects one or more issues, red suite or green** — write a
+single `specs/NNN-slug-fixN.md` covering every selected issue, describing
+precisely what is wrong and what correct looks like. Return to Phase 3,
+dispatching that fix spec in place of `specs/NNN-slug.md`. `N` counts fix
+rounds, not issues: one fix spec per round, however many issues it covers.
+
+Every finding the user does not select is declined: record it in the log as
+accepted-as-is, treat it as authorised for the eventual commit, and
+do not raise it again in later rounds. New findings from a fix round are
+presented normally.
+
+**Do not fix the code yourself.** If you are hand-patching Codex's output, the
+spec was underspecified — fix the spec instead, because that is what compounds.
 
 **Cap: 3 fix rounds.** Then stop and surface it to the user.
 
 ## Phase 5 — Commit for user review
 
-Once the review is clean:
+Once Phase 4 authorises the commit:
 
 ```
 git add <specific files>

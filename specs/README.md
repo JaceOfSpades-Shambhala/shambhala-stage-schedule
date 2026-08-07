@@ -10,8 +10,8 @@ Plans handed from the architect (Claude) to the executor (Codex).
 2. NEGOTIATE   Codex reviews it read-only               → APPROVED or CONCERNS
                Claude revises, re-submits (max 3 rounds)
 3. IMPLEMENT   Codex writes the code, runs npm test
-4. REVIEW      Claude reads the diff, runs the tests    → fix specs if needed
-               (max 3 fix rounds)
+4. REVIEW      Claude reads the diff, runs the tests    → stops, asks you
+               which issues to fix      (max 3 fix rounds)
 5. COMMIT      Claude commits to the session branch     → you review
 6. PUSH        Only on your explicit approval
 ```
