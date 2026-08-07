@@ -66,7 +66,7 @@ correct an assumption before it costs a round trip.
 Send the spec for review, implementation explicitly forbidden:
 
 ```
-codex exec --sandbox read-only "Read specs/NNN-slug.md and the code it references. Do NOT implement anything and do NOT edit any file. Review the plan critically. Reply with exactly 'APPROVED' on the first line if the spec is complete, unambiguous, and correct against the codebase. Otherwise reply 'CONCERNS' on the first line followed by a numbered list of specific questions, ambiguities, contradictions, or problems. Do not guess at intent - raise anything unclear."
+codex exec --sandbox read-only -c model_reasoning_effort="xhigh" -o specs/NNN-slug.review.md "Read specs/NNN-slug.md and the code it references. Do NOT implement anything and do NOT edit any file. Review the plan critically. Reply with exactly 'APPROVED' on the first line if the spec is complete, unambiguous, and correct against the codebase. Otherwise reply 'CONCERNS' on the first line followed by a numbered list of specific questions, ambiguities, contradictions, or problems. Do not guess at intent - raise anything unclear."
 ```
 
 - **CONCERNS** — append Codex's full response to the log. Answer every point by
@@ -84,7 +84,7 @@ plainly in the log. That is the process working.
 ## Phase 3 — Implement
 
 ```
-codex exec --sandbox workspace-write "Implement specs/NNN-slug.md exactly as written and agreed. Do not deviate, refactor, reformat, or add scope. Do not edit test files. Run npm test before reporting. If anything is unclear, stop and report rather than guessing."
+codex exec --sandbox workspace-write -c model_reasoning_effort="medium" "Implement specs/NNN-slug.md exactly as written and agreed. Do not deviate, refactor, reformat, or add scope. Do not edit test files. Run npm test before reporting. If anything is unclear, stop and report rather than guessing."
 ```
 
 Append Codex's report to the log.
