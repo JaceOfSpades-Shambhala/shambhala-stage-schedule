@@ -1,0 +1,32 @@
+{
+  "agent": "architect",
+  "permissions": {
+    "allow": [
+      "Bash(codex exec:*)",
+      "Bash(codex --version)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npm test)",
+      "Bash(npm run validate:schedule)",
+      "Bash(node --check:*)",
+      "Bash(node --test:*)",
+      "Bash(node scripts/:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git rebase:*)",
+      "Bash(git clean:*)",
+      "Bash(wrangler:*)",
+      "Bash(npx wrangler:*)",
+      "Bash(gh release:*)"
+    ]
+  }
+}
