@@ -42,11 +42,27 @@ that the task is too large or the goal is unclear — more rounds spend tokens
 without converging. Hitting a cap is a signal to split the spec or rethink it,
 not to raise the cap.
 
+## When Codex wedges
+
+Codex occasionally hangs at startup — the process launches but never begins a
+session. Claude dispatches every `codex exec` in the background with a 15-minute
+timeout, then checks within 60 seconds that a session rollout file appeared under
+`~/.codex/sessions`. A healthy run creates one within seconds; a wedged run never
+creates one at all. Claude kills and retries once, then escalates to you rather
+than implementing the spec itself.
+
+See "Dispatching Codex" in `.claude/agents/architect.md`.
+
 ## What deployment means here
 
-`.github/workflows/pages.yml` runs on push:
+`.github/workflows/pages.yml` triggers on `push` to `main`, on `pull_request`
+targeting `main`, and on manual `workflow_dispatch`:
 
-- **Any branch / PR** — Worker validation and tests only. Nothing deploys.
+- **A `claude/*` branch with no open PR** — **nothing runs.** Pushing a branch by
+  itself triggers no workflow at all. Validation requires an open PR against
+  `main`.
+- **Pull request into `main`** — Worker validation and tests only. Every deploy
+  job is skipped via `if: github.event_name != 'pull_request'`.
 - **`main`** — validation, tests, Cloudflare Worker deploy, GitHub Pages deploy,
   then a live release-health check.
 

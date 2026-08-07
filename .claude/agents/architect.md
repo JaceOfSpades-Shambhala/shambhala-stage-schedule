@@ -42,6 +42,97 @@ to look.
 
 ---
 
+# Dispatching Codex (Phases 2 and 3)
+
+Every `codex exec` call — review or implement — follows these rules. Codex can
+wedge at startup: the process launches, holds the terminal, and never begins a
+session. On spec 002 one such run sat for 39 minutes without ever creating a
+session rollout. It produced nothing and blocked everything. These rules exist so
+that failure costs about a minute instead of most of an hour.
+
+## Background dispatch
+
+**Never run `codex exec` in the foreground.** Always dispatch it in the
+background so it cannot block the session, and always wrap it in a hard timeout:
+
+```
+timeout 15m codex exec --sandbox ... 2>&1 | tee -a specs/NNN-slug.dispatch.log
+```
+
+Record the dispatch time in the spec log the moment you fire it:
+
+```
+## Round N — dispatched <phase> at <HH:MM:SS>
+```
+
+You need that timestamp to report elapsed time later, and to tell a slow run from
+a wedged one.
+
+## Liveness check (within 60 seconds of dispatch)
+
+A healthy Codex run writes a session rollout within seconds. A wedged run never
+writes one at all. That is the signal — not CPU, not output, not elapsed time.
+
+Rollouts are **date-nested**, so listing the sessions directory itself shows
+nothing. Use `find`:
+
+```
+find "$USERPROFILE/.codex/sessions" -name 'rollout-*.jsonl' -newermt '-90 seconds'
+```
+
+Run this about 60 seconds after dispatch.
+
+- **A new rollout appeared** — the run is alive. Let it work.
+- **No rollout at all** — the run is wedged. Kill it and retry once.
+
+### Killing a wedged run
+
+`kill` on the job's shell PID will not stop it. Codex runs as a Windows process,
+so you must kill the **Windows PID**, not the MSYS one. `ps -W` prints
+`PID PPID PGID WINPID TTY UID STIME COMMAND` — the Windows PID is **column 4**
+(`WINPID`):
+
+```
+ps -W | grep -i codex
+```
+
+Then, using that column-4 value:
+
+```
+taskkill //PID <winpid> //F
+```
+
+(The doubled slashes are MSYS path-mangling escapes; a single `/PID` will be
+rewritten into a path and fail.) Confirm with `ps -W | grep -i codex` before
+retrying.
+
+## Timeout and stall detection
+
+The `timeout 15m` wrapper is the outer bound. Also kill the run early if
+**15 minutes pass with both** of these true:
+
+- no new writes in the repo (`git status --porcelain` unchanged), and
+- no growth in the session rollout file (`wc -c` on it is unchanged).
+
+A run that is genuinely working moves at least one of those. A run that moves
+neither for 15 minutes is not going to finish.
+
+## Retry once, then escalate
+
+Retry a wedged or stalled dispatch **exactly once**. Never more. If the retry
+also fails to produce a rollout or also stalls, stop and surface it to the user
+with:
+
+- total elapsed time across both attempts,
+- **whether a session rollout was ever created** (this distinguishes a startup
+  wedge from a slow run), and
+- the tail of the dispatch log.
+
+Append all of it to the spec log. Do not implement the spec yourself to route
+around a wedged Codex — that breaks the one rule the whole loop rests on.
+
+---
+
 # The loop
 
 Six phases. Do not skip or reorder them.
@@ -63,7 +154,8 @@ correct an assumption before it costs a round trip.
 
 ## Phase 2 — Negotiate the plan with Codex
 
-Send the spec for review, implementation explicitly forbidden:
+Send the spec for review, implementation explicitly forbidden. Dispatch it per
+**Dispatching Codex** above — background, timed out, liveness-checked:
 
 ```
 codex exec --sandbox read-only -c model_reasoning_effort="xhigh" -o specs/NNN-slug.review.md "Read specs/NNN-slug.md and the code it references. Do NOT implement anything and do NOT edit any file. Review the plan critically. Reply with exactly 'APPROVED' on the first line if the spec is complete, unambiguous, and correct against the codebase. Otherwise reply 'CONCERNS' on the first line followed by a numbered list of specific questions, ambiguities, contradictions, or problems. Do not guess at intent - raise anything unclear."
@@ -82,6 +174,9 @@ If Codex raises a concern that reveals you misunderstood the codebase, say so
 plainly in the log. That is the process working.
 
 ## Phase 3 — Implement
+
+Dispatch per **Dispatching Codex** above — background, timed out,
+liveness-checked:
 
 ```
 codex exec --sandbox workspace-write -c model_reasoning_effort="medium" "Implement specs/NNN-slug.md exactly as written and agreed. Do not deviate, refactor, reformat, or add scope. Do not edit test files. Run npm test before reporting. If anything is unclear, stop and report rather than guessing."
@@ -141,10 +236,16 @@ git push origin <this session's branch>
 This will prompt for permission. That prompt is the deliberate final gate — do
 not attempt to work around it.
 
-Pushing a `claude/*` branch runs CI validation only and deploys nothing. Getting
-the work onto `main` is a merge the user performs afterwards, and **merging to
-`main` is what triggers production deployment**: Worker validation, tests,
-Cloudflare Worker deploy, GitHub Pages deploy, and a live release-health check.
+Pushing a `claude/*` branch **runs no CI at all.** `.github/workflows/pages.yml`
+triggers on `push` only for `main`, and on `pull_request` only for PRs targeting
+`main` — so a pushed branch with no open PR runs no workflow whatsoever. To get
+validation and tests on this branch, **open a PR against `main`**; that runs
+Worker validation and tests with every deploy job skipped.
+
+Getting the work onto `main` is a merge the user performs afterwards, and
+**merging to `main` is what triggers production deployment**: Worker validation,
+tests, Cloudflare Worker deploy, GitHub Pages deploy, and a live release-health
+check.
 
 Say this explicitly when you hand off. Never merge to `main` yourself unless the
 user asks in that turn, and never run `wrangler deploy` — CI owns deployment.
