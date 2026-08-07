@@ -4,8 +4,7 @@
 // See LICENSE at the repository root.
 
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import vm from "node:vm";
+import { createScriptContext, loadScriptInto } from "./load-globals.mjs";
 
 const DAYS = ["Thursday", "Friday", "Saturday", "Sunday"];
 const STAGES = new Set([
@@ -20,10 +19,10 @@ const STAGES = new Set([
 const TIME_PATTERN = /^(1[0-2]|[1-9]):([0-5]\d)\s(AM|PM)$/;
 
 function loadSchedule() {
-  const context = { window: {} };
-  vm.runInNewContext(fs.readFileSync("schedule-data.js", "utf8"), context);
+  const context = createScriptContext();
+  loadScriptInto(context, "schedule-data.js");
   const dataVersion = context.window.SCHEDULE_VERSION;
-  vm.runInNewContext(fs.readFileSync("schedule-metadata.js", "utf8"), context);
+  loadScriptInto(context, "schedule-metadata.js");
   assert.ok(context.window.SCHEDULE_VERSION, "SCHEDULE_VERSION is required.");
   assert.equal(context.window.SCHEDULE_VERSION, dataVersion, "schedule-data.js and schedule-metadata.js must use the same SCHEDULE_VERSION.");
   assert.ok(context.window.SCHEDULE_DATA, "SCHEDULE_DATA is required.");
