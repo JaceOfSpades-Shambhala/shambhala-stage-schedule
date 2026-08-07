@@ -97,6 +97,37 @@ Shared links and QR codes use `?f=<readId>`. Physical Hexlaces use `?f=<readId>&
 - `UPDATING.md` — how to push schedule changes during the festival
 - `HANDOFF.md` — full developer handoff: setup, deploy pipelines, release discipline, API reference, gotchas, roadmap
 
+## Module systems
+
+Two module systems coexist in this repository. Know which one a file is in
+before editing it.
+
+**Browser code uses globals.** `index.html` loads its scripts with plain
+`<script src="...">` tags; there is no `type="module"` anywhere in it. Root-level
+files such as `app.js`, `planner.js`, `schedule-data.js`, and `hexlaces.js`
+communicate by assigning to and reading from `window`:
+
+```js
+// schedule-data.js
+window.SCHEDULE_DATA = { ... };
+// app.js, later
+const data = window.SCHEDULE_DATA || {};
+```
+
+Adding an `export` statement to one of these root-level files is a syntax error
+and will break the site.
+
+**Node and Worker code uses ESM.** `worker/src/*.js`, `scripts/*.mjs`, and
+`test/*.mjs` use `import`/`export`, and `package.json` sets `"type": "module"`.
+
+To read a browser global from Node, use the `vm` pattern established in
+`scripts/validate-schedule.mjs` rather than introducing a bundler:
+
+```js
+const context = { window: {} };
+vm.runInNewContext(fs.readFileSync("schedule-data.js", "utf8"), context);
+```
+
 ## Updating camp coordinates from a phone
 
 Edit only `camp-location.js` in GitHub:
