@@ -199,7 +199,7 @@ Worth internalising before planning anything:
 | `schedule-data.js` is one line assigning `window.SCHEDULE_DATA` | Schedule is already data-driven. This step is 80% done. |
 | Stage list duplicated in 8 places | Highest-value early target. Details below. |
 | 75 hex colours in `styles.css`, 296 in JS | Theme extraction is big. Must be split across specs. |
-| `?v=78` cache-bust on every script and asset, mirrored in `sw.js` | Every spec touching assets must keep this in sync or the PWA serves stale files. |
+| `?v=79` cache-bust on every script and asset, mirrored in `sw.js` | Every spec touching assets must keep this in sync or the PWA serves stale files. |
 | Real test suite: `node --test` + `validate-schedule.mjs` | Your Verification sections can be genuine commands, not eyeballing. |
 
 ## The stage-list problem — start here
@@ -213,7 +213,7 @@ hexlaces.js:30                   (same array)
 hex-owl.js:97                    { id, name, source: "app-stage", sourceHex: "#90cd8d" }
 scripts/validate-schedule.mjs:17 (bare ID list)
 worker/src/index.js:59           VALID_STAGE_IDS = new Set([...])
-sw.js:47                         "./stage-names/secret-garden.png?v=78"
+sw.js:47                         "./stage-names/secret-garden.png?v=79"
 schedule-metadata.js             per-stage end times
 ```
 

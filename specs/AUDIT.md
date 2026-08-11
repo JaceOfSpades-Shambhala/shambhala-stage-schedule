@@ -1,3 +1,36 @@
+# Audit action summary — 2026-08-11
+
+Status: the user approved the three cleanup phases and they are implemented in
+the current local diff. Nothing has been committed, pushed, merged, or deployed.
+
+Plain-language verdict: the festival app remains broadly healthy and is not a
+rollback candidate. The Claude-to-Codex idea is usable as a supervised workflow
+after these controls are committed; it should not run unattended.
+
+## The seven confirmed findings and their action
+
+| Finding | Action taken locally | Status |
+|---|---|---|
+| Pages staging could delete the wrong directory | Builder now accepts only this repository's `dist`; a pure import-safe test covers rejection. | Resolved locally |
+| Final plan and dangerous commands could bypass the user | Final spec hash needs explicit approval; tracked `ask` rules override local allows. | Resolved locally |
+| Dispatch could mask failure or target unrelated Codex processes | One foreground call now owns its timeout, exit status, and final response; no PID/session scanning. | Resolved locally |
+| Work started without a clean isolated worktree and old worktrees accumulated | Future tasks must start in one clean linked worktree and end with verified removal and non-forced branch cleanup. | Resolved for future tasks |
+| Post-v78 changes reused the v78 PWA cache and weak Pages proof | Current release is v79 and Pages now verifies an exact commit SHA file. | Resolved locally |
+| The implementation prompt incorrectly prohibited legitimate test changes | Tests may change only when the approved spec names them, never simply to force a pass. | Resolved locally |
+| Specs, logs, and setup guides competed as sources of truth | One canonical guide and concise records replace the duplicate procedures; plugin dispatch is retired. Four raw dispatch logs were deleted. | Mostly resolved; two short review records await a keep/delete decision |
+
+## What still needs the user
+
+1. Decide whether to keep or delete the two untracked review records listed in
+   the final handoff, then review this local diff and decide whether to commit it.
+2. Later, explicitly approve any push or pull request. Merging to `main` deploys
+   production, so it remains a separate decision.
+3. After merge, remove the exact task worktree and its merged local branch using
+   the closeout steps in `docs/AGENT-LOOP-SETUP.md`.
+
+The original audit evidence follows. It describes the pre-fix state; it is kept
+for traceability, not as the current operating procedure.
+
 ## 1. Verdict
 
 **Salvageable, but not sound.** The application architecture does not need rebuilding; the review/verification control plane does.
@@ -252,4 +285,13 @@ unapprovable — contradicting spec 005's own verification. Spec 006's stated
 Phase 5 rationale was also factually wrong: Phase 5 contains no branch-creation
 command.
 
-No spec revised yet. Escalated to the user before further iteration.
+Historical state at the time of review: no spec had yet been revised, so work
+stopped for user approval. That approval was later given and the concerns were
+addressed in the current local implementation.
+
+## Final action list
+
+The code does not need a rollback or rewrite. The next useful action is to review
+and commit the targeted local diff. Push, PR, merge/deploy, and worktree cleanup
+remain explicit later approvals; no other item in this audit should be started
+without a separate scope decision.

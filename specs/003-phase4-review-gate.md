@@ -1,5 +1,8 @@
 # 003 — Phase 4 stops and asks before any fix round
 
+Status: historical. Its useful review gate is incorporated into the current
+bounded workflow in `.claude/agents/architect.md`.
+
 ## Goal
 
 After presenting review findings, the architect stops and asks the user which

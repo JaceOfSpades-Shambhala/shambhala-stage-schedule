@@ -67,20 +67,22 @@ assertion is genuinely wrong or obsolete, stop and report it. Do not change it o
 your own judgement. These assertions encode deliberate decisions and several
 guard against regressions that previously shipped.
 
-### Release version bumps touch ~10 files at once
+### Release version bumps touch multiple files at once
 
-The current release is **v78**. Every asset reference uses `?v=78`, and
-`test/release-integrity.test.mjs` hardcodes `78` in its assertions.
+The current release is **v79**. Every asset reference uses `?v=79`, and
+`test/release-integrity.test.mjs` hardcodes `79` in its assertions.
 
 A version bump must change **all** of these together:
 
-- `index.html` — the `<!-- v78 -->` marker and every `?v=` query
-- `sw.js` — the `stage-schedule-v78` cache name and every `?v=` query
+- `index.html` — the `<!-- v79 -->` marker and every `?v=` query
+- `sw.js` — the `stage-schedule-v79` cache name and every `?v=` query
 - `styles.css` — font `?v=` queries
 - `manifest.webmanifest`, `app.js`, `hex-owl.js`, `hex-owl-playground.html`
-- `README.md` — "authoritative deployed version ... v78"
-- `HANDOFF.md` — "current release **v78**"
+- `README.md` — "authoritative deployed version ... v79"
+- `HANDOFF.md` — current release references plus a new history entry
+- `AGENTS.md`, `docs/AGENT-LOOP-SETUP.md`, `docs/festival-platform-extraction.md`
 - `test/release-integrity.test.mjs` — the assertions themselves
+- `test/service-worker.test.mjs` — exact precache and refresh asset queries
 
 Miss one and `npm test` fails. Only bump the version when a spec tells you to.
 

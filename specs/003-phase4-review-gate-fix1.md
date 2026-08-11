@@ -1,5 +1,7 @@
 # 003-fix1 — Reflow one sentence so its verification grep can match
 
+Status: historical and superseded by the current architect workflow.
+
 ## Goal
 
 `grep -c "do not raise it again in later rounds" .claude/agents/architect.md`
