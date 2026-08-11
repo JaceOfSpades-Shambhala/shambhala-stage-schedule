@@ -1,47 +1,56 @@
 # NNN — <title>
 
-## Goal
+Status: draft
 
-<One sentence. What is true after this change that was not true before.>
+## Outcome
 
-## Context
+<One plain-language sentence describing what will be true after the change.>
 
-<Why this change. Anything the executor needs that is not in AGENTS.md. Keep it
-short — background, not narrative.>
+## Starting evidence
 
-## Files to change
+- Worktree: `<absolute linked-worktree path>`
+- Branch: `<task branch, never main>`
+- Starting commit: `<full SHA>`
+- Starting status: clean
+- Baseline tests: `<command and exact pass/fail result>`
 
-<Exhaustive. Anything not listed here must not be touched.>
+## Current problem
 
-- `path/to/file.js` — <what changes>
-- `path/to/other.js` — <what changes>
+<Concrete code or observed behaviour that justifies the change. Keep this
+evidence-focused and short.>
 
-## Changes
+## Files allowed to change
 
-<Precise enough that two competent developers would produce near-identical code.
-Name functions, signatures, and behaviour. Include exact strings where they
-matter. Reference existing patterns in the codebase by file and line where
-possible.>
+<Exhaustive. Any path not listed is out of scope.>
+
+- `path/to/file.js` — <required change>
+
+## Required behaviour
+
+<Precise behaviour, preserved behaviour, and any intentional compatibility
+constraints. Prefer observable outcomes over prescribed internal structure.>
 
 ## Out of scope
 
-<Explicitly name adjacent things NOT to touch. This section prevents more damage
-than any other. Examples: "Do not bump the release version." "Do not modify
-test/release-integrity.test.mjs." "Do not refactor the surrounding function.">
+<Name adjacent work that must not be included.>
 
 ## Verification
 
-<Exact commands and what passing looks like. At minimum `npm test`. Add a
-behavioural check where one is possible — something that would fail if the change
-were implemented wrongly but plausibly.>
+List fail-loud commands and the behaviour each proves. Do not mask an exit code
+with a later command, run destructive guard checks against real user paths, or
+use output counts that do not prove the requirement.
 
 ```
 npm test
 ```
 
-Expected: all tests pass.
+Expected: all tests pass, plus any task-specific assertion above.
+
+## User decisions
+
+<Record any material choice already made by the user.>
 
 ## Open questions
 
-<Leave empty when writing. Codex fills this during plan review; the architect
-resolves each one by revising the spec above, then clears this section.>
+<Claude resolves repository-answerable questions before Codex review. Leave only
+questions that require a material user choice; do not ask Codex to fill this.>

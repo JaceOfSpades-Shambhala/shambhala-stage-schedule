@@ -16,7 +16,7 @@ python3 -m http.server 8000   # then open http://localhost:8000/hex-owl-playgrou
 
 It loads `hex-owl.js` and `hex-owl-base.svg` by relative path, so it must be served from the repository root rather than opened as a `file://` URL.
 
-The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v78 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
+The authoritative deployed version is the `<!-- vNN -->` comment at the top of `<body>` in `index.html` (v79 at the time of writing). Release history and full developer docs live in [HANDOFF.md](HANDOFF.md); festival-time schedule editing is documented in [UPDATING.md](UPDATING.md).
 
 ## Current features
 

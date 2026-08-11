@@ -1,6 +1,6 @@
 # Developer Handoff — Shambhala 2026 Stage Schedule + Hexlaces
 
-Everything needed to continue this project from any computer. Written 2026-07-05, current release **v78**.
+Everything needed to continue this project from any computer. Written 2026-07-05, current release **v79**.
 
 ## What this is
 
@@ -47,21 +47,11 @@ curl -s "https://jaceofspades-shambhala.github.io/shambhala-stage-schedule/index
 
 ## Release discipline (IMPORTANT)
 
-Every site release bumps ONE version number everywhere (v78 at the time of writing). The pieces that must stay in sync:
-
-- `index.html`: every `?v=NN` and the `<!-- vNN -->` body comment (the update banner compares this marker!)
-- `sw.js`: `CACHE_NAME = "stage-schedule-vNN"` and every `?v=NN` in `ASSETS`
-- `app.js`: `SCHEDULE_ASSET = "schedule-metadata.js?v=NN"` and the `sw.js?v=NN` registration
-- `styles.css`, `hex-owl.js`, and `hex-owl-playground.html`: every asset `?v=NN`
-- `manifest.webmanifest`: icon `?v=NN`
-- `test/release-integrity.test.mjs` and `test/service-worker.test.mjs`: expected release numbers
-
-The sed incantation used for bumps (adjust numbers):
-```bash
-sed -i 's/?v=71/?v=72/g; s/<!-- v71 -->/<!-- v72 -->/' index.html
-sed -i 's/?v=71/?v=72/g' app.js styles.css manifest.webmanifest hex-owl.js hex-owl-playground.html
-sed -i 's/stage-schedule-v71/stage-schedule-v72/; s/?v=71/?v=72/g' sw.js
-```
+Every site release bumps ONE version number everywhere (v79 at the time of
+writing). The authoritative coordinated file list is in `AGENTS.md`; do not
+maintain a second checklist here. Preserve prior entries in the version history,
+update current-version references, and run `npm test` so the integrity and
+service-worker tests catch a partial bump.
 
 **Schedule-only edits during the festival do NOT bump `?v=`** — edit `schedule-data.js` and/or `schedule-metadata.js`, change the metadata `SCHEDULE_VERSION` string, and commit. Full instructions are in [UPDATING.md](UPDATING.md). Open PWAs poll every 5 min and show a "tap to refresh" banner for both schedule and app updates.
 
@@ -130,6 +120,12 @@ Serve the repo folder over localhost (any static server; a PowerShell `HttpListe
 - [ ] Write camp pendants with each person's `?f=` link before the festival (NFC Tools app, or Android in-app button)
 
 ## Version history (condensed)
+
+v79 rotates the PWA cache after the local-only Hex Owl playground was withdrawn
+from the published artifact, constrains Pages staging to `dist`, proves the exact
+Pages commit with `release-sha.txt`, and simplifies the Claude-to-Codex approval
+and worktree controls. Festival-facing schedule and Hexlace behaviour are
+unchanged.
 
 v78 is the festival production-reliability hotfix: saved-set times reconcile
 without changing their printed festival day; planner removal and Undo preserve

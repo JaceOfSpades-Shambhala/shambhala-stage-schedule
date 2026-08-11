@@ -2,3 +2,4 @@
 dist/
 .claude/worktrees/
 .claude/settings.local.json
+specs/*.dispatch.log

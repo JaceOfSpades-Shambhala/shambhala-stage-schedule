@@ -13,25 +13,26 @@ test("release assets and service-worker precache use one version and include bot
   ]);
   const releaseSources = [html, serviceWorker, css, manifest, app, hexOwl, playground];
   const referencedVersions = new Set(releaseSources.flatMap(source => [...source.matchAll(/\?v=(\d+)/g)].map(match => match[1])));
-  assert.deepEqual([...referencedVersions], ["78"], "Every release asset query must use exactly v78.");
-  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "78", "The Pages release marker must be v78.");
-  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "78", "The service-worker cache must be v78.");
-  assert.match(readme, /authoritative deployed version[^\n]*\bv78\b/i);
-  assert.match(handoff, /current release \*\*v78\*\*/i);
-  assert.match(handoff, /release bumps ONE version number everywhere \(v78 at the time of writing\)/);
-  assert.match(serviceWorker, /InterVariable\.woff2\?v=78/);
-  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=78/);
-  assert.match(css, /InterVariable\.woff2\?v=78/);
-  assert.match(css, /InterVariable-Italic\.woff2\?v=78/);
-  assert.match(serviceWorker, /schedule-metadata\.js\?v=78/);
-  assert.match(serviceWorker, /undo\.js\?v=78/);
-  assert.match(serviceWorker, /camp-access\.js\?v=78/);
-  assert.match(serviceWorker, /hexlace-compare\.js\?v=78/);
-  assert.match(serviceWorker, /hex-owl\.js\?v=78/);
-  assert.match(serviceWorker, /hex-owl-base\.svg\?v=78/);
-  assert.match(serviceWorker, /hexadex\.js\?v=78/);
-  assert.match(hexOwl, /hex-owl-base\.svg\?v=78/);
-  assert.match(playground, /hex-owl\.js\?v=78/);
+  assert.deepEqual([...referencedVersions], ["79"], "Every release asset query must use exactly v79.");
+  assert.equal(html.match(/<!--\s*v(\d+)\s*-->/)?.[1], "79", "The Pages release marker must be v79.");
+  assert.equal(serviceWorker.match(/stage-schedule-v(\d+)/)?.[1], "79", "The service-worker cache must be v79.");
+  assert.match(readme, /authoritative deployed version[^\n]*\bv79\b/i);
+  assert.match(handoff, /current release \*\*v79\*\*/i);
+  assert.match(handoff, /release bumps ONE version number everywhere \(v79 at the time of\s+writing\)/);
+  assert.match(handoff, /^v78 is the festival production-reliability hotfix:/m);
+  assert.match(serviceWorker, /InterVariable\.woff2\?v=79/);
+  assert.match(serviceWorker, /InterVariable-Italic\.woff2\?v=79/);
+  assert.match(css, /InterVariable\.woff2\?v=79/);
+  assert.match(css, /InterVariable-Italic\.woff2\?v=79/);
+  assert.match(serviceWorker, /schedule-metadata\.js\?v=79/);
+  assert.match(serviceWorker, /undo\.js\?v=79/);
+  assert.match(serviceWorker, /camp-access\.js\?v=79/);
+  assert.match(serviceWorker, /hexlace-compare\.js\?v=79/);
+  assert.match(serviceWorker, /hex-owl\.js\?v=79/);
+  assert.match(serviceWorker, /hex-owl-base\.svg\?v=79/);
+  assert.match(serviceWorker, /hexadex\.js\?v=79/);
+  assert.match(hexOwl, /hex-owl-base\.svg\?v=79/);
+  assert.match(playground, /hex-owl\.js\?v=79/);
 });
 
 test("schedule and overlap policy stay explicit", async () => {
@@ -65,10 +66,12 @@ test("schedule and overlap policy stay explicit", async () => {
   assert.doesNotMatch(planner, /renderUpNext|LIVE_GROUP_WINDOW_MINUTES/);
 });
 
-test("deployment checks verify the exact Pages marker and deployed Worker revision", async () => {
+test("deployment checks verify the exact Pages and Worker revisions", async () => {
   const workflow = await read(".github/workflows/pages.yml");
   assert.match(workflow, /expected_marker=\$\(grep -oE '<!-- v\[0-9\]\+ -->' index\.html\)/);
   assert.match(workflow, /grep -F "\$expected_marker"/);
+  assert.match(workflow, /release-sha\.txt/);
+  assert.match(workflow, /test "\$deployed_sha" = "\$GITHUB_SHA"/);
   assert.match(workflow, /wrangler@4 deploy --var BUILD_SHA:\$\{\{ github\.sha \}\}/);
   assert.match(workflow, /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
   assert.match(workflow, /\.build == \$sha/);

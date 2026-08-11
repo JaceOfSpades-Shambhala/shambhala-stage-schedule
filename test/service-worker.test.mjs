@@ -132,36 +132,36 @@ test("a successful network response remains preferred", async () => {
 });
 
 test("a failed optional precache asset does not block the offline shell install", async () => {
-  const added = await runInstall({ rejectedOptionalAsset: "./stage-names/amp.png?v=78" });
+  const added = await runInstall({ rejectedOptionalAsset: "./stage-names/amp.png?v=79" });
   assert.ok(added.includes("./index.html"));
   // The playground is a local-only developer tool and is not precached.
   assert.equal(added.includes("./hex-owl-playground.html"), false);
-  assert.ok(added.includes("./camp-access.js?v=78"));
-  assert.ok(added.includes("./hexlaces.js?v=78"));
-  assert.ok(added.includes("./hexlace-compare.js?v=78"));
-  assert.ok(added.includes("./hex-owl.js?v=78"));
-  assert.ok(added.includes("./hex-owl-base.svg?v=78"));
-  assert.ok(added.includes("./hexadex.js?v=78"));
-  assert.equal(added.includes("./stage-names/amp.png?v=78"), false);
-  assert.ok(added.includes("./stage-names/fractal-forest.png?v=78"));
+  assert.ok(added.includes("./camp-access.js?v=79"));
+  assert.ok(added.includes("./hexlaces.js?v=79"));
+  assert.ok(added.includes("./hexlace-compare.js?v=79"));
+  assert.ok(added.includes("./hex-owl.js?v=79"));
+  assert.ok(added.includes("./hex-owl-base.svg?v=79"));
+  assert.ok(added.includes("./hexadex.js?v=79"));
+  assert.equal(added.includes("./stage-names/amp.png?v=79"), false);
+  assert.ok(added.includes("./stage-names/fractal-forest.png?v=79"));
 });
 
 test("background refresh is schedule-only and cache cleanup is app-scoped", async () => {
   const source = await readFile(new URL("../sw.js", import.meta.url), "utf8");
-  assert.match(source, /REFRESH_ASSETS = \["\.\/schedule-data\.js\?v=78", "\.\/schedule-metadata\.js\?v=78"\]/);
+  assert.match(source, /REFRESH_ASSETS = \["\.\/schedule-data\.js\?v=79", "\.\/schedule-metadata\.js\?v=79"\]/);
   assert.match(source, /key\.startsWith\(CACHE_PREFIX\)/);
   assert.match(source, /OPTIONAL_CACHE_TIMEOUT_MS/);
   assert.match(source, /request\.mode === "navigate"/);
 });
 
 test("schedule refresh caches and marks fresh only when data and metadata both succeed", async () => {
-  const failed = await runScheduleRefresh({ failedAsset: "./schedule-metadata.js?v=78" });
+  const failed = await runScheduleRefresh({ failedAsset: "./schedule-metadata.js?v=79" });
   assert.deepEqual(failed, []);
 
   const succeeded = await runScheduleRefresh();
   assert.deepEqual(succeeded, [
-    "./schedule-data.js?v=78",
-    "./schedule-metadata.js?v=78",
+    "./schedule-data.js?v=79",
+    "./schedule-metadata.js?v=79",
     "./schedule-freshness.json"
   ]);
 });
